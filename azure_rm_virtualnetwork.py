@@ -38,6 +38,8 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+log_path = None
+
 def log(msg):
 #    print msg
 
