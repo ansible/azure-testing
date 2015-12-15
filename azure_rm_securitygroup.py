@@ -20,9 +20,10 @@
 #
 
 import ConfigParser
+import json 
 import os
-
 from os.path import expanduser
+import re
 
 
 DOCUMENTATION = '''
@@ -33,11 +34,12 @@ module: azure_rm_securitygroup
 HAS_AZURE = True
 HAS_REQUESTS = True
 LOG_PATH = "azure_rm_securitygroup.log"
+NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
 try:
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.mgmt.common import SubscriptionCloudCredentials
-    from azure.mgmt.network.networkresourceprovider import NetworkSecurityGroup, SecurityRule
+    from azure.mgmt.network.networkresourceprovider import NetworkSecurityGroup, SecurityRule, ResourceId
     import azure.mgmt.network
 except ImportError:
     HAS_AZURE = False
@@ -172,62 +174,73 @@ def get_credentials(params):
 
     return None
 
-def validate_rule(r):
-    if not r.get('name', None):
+def validate_rule(r, type=None):
+    name = r.get('name', None)
+    if not name:
         raise Exception("rule name attribute cannot be None.")
-    if not r.get('access', None):
+    if not NAME_PATTERN.match(name):
+        raise Exception("rule name must contain only word characters plus '.','-','_'")
+    
+    access = r.get('access', None)
+    if not access:
         raise Exception("rule access attribute cannot be None.")
-    if not r.get('priority', None):
+    if access not in ['Allow', 'Deny']:
+        raise Excpetion("rule access must be one of 'Allow', 'Deny'")
+
+    priority = r.get('priority',None)
+    if not priority:
         raise Exception("rule priority attribute cannot be None.")
-    priority = r['priority']
     if not isinstance(priority,(int,long)):
         raise Exception("rule priority attribute must be an integer.")
+    if type != 'default' and (priority < 100 or priority > 4096):
+        raise Exception("rule priority must be between 100 and 4096")
+    
     if not r.get('destination_address_prefix', None):
         raise Exception("rule destination_address_prefix attribute cannot be None.")
     if not r.get('source_address_prefix', None):
         raise Exception("rule source_address_prefix attribute cannot be None.")
     if not r.get('protocol', None):
         raise Exception("rule protocol attribute cannot be None.")
-    if not r.get('direction', None):
+    
+    direction = r.get('direction', None)
+    if not direction:
         raise Exception("rule direction attribute cannot be None.")
+    if not direction in ['Inbound','Outbound']:
+        raise Exception("rule direction must be one of 'Inbound', 'Outbound'")
+    
     if not r.get('source_port_range', None):
         raise Exception("rule source_port_range attribute cannot be None")
-    port = r['source_port_range']
-    if port != '*' and not isinstance(port,(int,long)):
-        raise Exception("rule source_port_range attribute must be '*' or an integer.")
     if not r.get('destination_port_range', None):
         raise Exception("rule destination_port_range attribute cannot be None")
-    port = r['destination_port_range']
-    if port != '*' and not isinstance(port,(int,long)):
-        raise Exception("rule destination_port_range must be '*' or an integer.")
-
+    
 
 def compare_rules(r, rule):
     matched = False
+    changed = False
     if r['name'] == rule['name']:
         matched = True
         if rule.get('description', None) != r['description']:
-            matched = True
+            changed = True
             r['description'] = rule['description']
         if rule['protocol'] != r['protocol']:
-            matched = True
+            changed = True
             r['protocol'] = rule['protocol']
         if rule['source_port_range'] != r['source_port_range']:
-            matched = True
+            changed = True
             r['source_port_range'] = rule['source_port_range']
         if rule['destination_port_range'] != r['destination_port_range']:
-            matched = True
+            changed = True
             r['destination_port_range'] = rule['destination_port_range']
         if rule['access'] != r['access']:
-            matched = True
+            changed = True
             r['access'] = rule['access']
         if rule['priority'] != r['priority']:
-            matched = True
+            changed = True
             r['priority'] = rule['priority']
         if rule['direction'] != r['direction']:
-            matched = True
+            changed = True
             r['direction'] = rule['direction']
-    return matched
+    return (matched, changed)
 
 def create_rule_instance(rule):
     rule_instance = SecurityRule()
@@ -244,8 +257,7 @@ def create_rule_instance(rule):
     return rule_instance
 
 
-#def module_impl(resource_group, name, state, location, virtual_network_name, address_prefix_cidr, subscription_id, auth_tenant_id, auth_endpoint, auth_client_id, auth_client_secret, check_mode):
-def module_impl(resource_group, nsg_name, state, location, rules, default_rules, creds, purge=False, check_mode=False):
+def module_impl(resource_group, nsg_name, state, location, rules, default_rules, subnets, network_interfaces, tags, creds, purge=False, check_mode=False):
 
     if not HAS_AZURE:
         raise Exception("The Azure python sdk is not installed (try 'pip install azure')")  
@@ -270,7 +282,10 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
     
     if not nsg_name:
         raise Exception("name parameter cannot be None")
-    
+
+    if not NAME_PATTERN.match(nsg_name):
+        raise Exception("Security group name must contain only word characters plus '.','-','_'")
+            
     if rules:
         try:
             for r in rules:
@@ -281,12 +296,13 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
     if default_rules:
         try:
             for r in rules:
-                validate_rule(r)       
+                validate_rule(r,'default')       
         except Exception as e:
             raise Exception("Error in default rules: %s" % e.args[0])    
     try:
         response = network_client.network_security_groups.get(resource_group, nsg_name)
         if state == 'present':
+            # capture all the details now, so we can create a check_mode response
             results['id'] = response.network_security_group.id
             results['name'] = response.network_security_group.name
             results['type'] = response.network_security_group.type
@@ -323,6 +339,17 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                     direction = rule.direction
                 ))
 
+            results['network_interfaces'] = []
+            for interface in response.network_security_group.network_interfaces:
+                results['network_interfaces'].append(interface.id)
+            log('%d existing network interfaces' % len(results['network_interfaces']))
+
+            results['subnets'] = []
+            for subnet in response.network_security_group.subnets:
+                results['subnets'].append(subnet.id)
+                log('existing subnet id: %s' % subnet.id)
+            log('%d existing subnets' % len(results['subnets']))
+
         elif state == 'absent':
             results['changed'] = True
 
@@ -334,15 +361,19 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
 
     if state == 'present' and not results['changed']:
         # update the security group
+        log('Update security group %s' % nsg_name)
+        
         if rules:
             for rule in rules:
-                matched = False
+                rule_matched = False
                 for r in results['rules']:
-                    matched = compare_rules(r, rule)
-                    if matched:
+                    match, changed = compare_rules(r, rule)
+                    if changed:
                         results['changed'] = True
+                    if match:
+                        rule_matched = True
 
-                if not matched:
+                if not rule_matched:
                     results['changed'] = True
                     results['rules'].append(dict(
                         name = rule['name'],
@@ -356,15 +387,17 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                         priority = rule['priority'],
                         direction = rule['direction']
                     ))
+
         if default_rules:
             for rule in default_rules:
-                matched = False
+                rule_matched = False
                 for r in results['default_rules']:
-                    matched = compare_rules(r, rule)
-                    if matched:
+                    match, changed = compare_rules(r, rule)
+                    if changed:
                         results['changed'] = True
-                        
-                if not matched:
+                    if match:
+                        rule_matchd = True    
+                if not rule_matched:
                     results['changed'] = True
                     results['default_rules'].append(dict(
                         name = rule['name'],
@@ -378,100 +411,158 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                         priority = rule['priority'],
                         direction = rule['direction']
                     ))
-        
+
+        if subnets:
+            for subnet in subnets:
+                matched = False
+                for s in results['subnets']:
+                    if subnet == s:
+                        matched = True
+                if not matched:
+                    results['subnets'].append(subnet)
+                    results['changed'] = True
+
+        if network_interfaces:
+            for interface in network_interfaces:
+                matched = False
+                for i in results['network_interfaces']:
+                    if interface == i:
+                        matched = True
+                if not matched:
+                    results['network_interfaces'].append(interface)
+                    matched = True
+
+        if tags:
+            for tag_key in tags:
+                if results['tags'].get(tag_key, None):
+                    if results['tags'][tag_key] != tags[tag_key]:
+                        results['changed'] = True
+                        results['tags'][tag_key] = tags[tag_key]
+                else:
+                    results['changed'] = True
+                    results['tags'][tag_key] = tags[tag_key]
+
+
+        if location and location != results['location']:
+            results['changed'] = True
+            results['location'] = location
+
         if check_mode:
             return results
 
         try:
             parameters = NetworkSecurityGroup(default_security_rules=[], network_interfaces=[], security_rules=[], subnets=[], tags={})
             for rule in results['rules']:
-                parameters.security_rules.append(create_rule_instance(rule))
+                rule_inst = create_rule_instance(rule)
+                parameters.security_rules.append(rule_inst)
             for rule in results['default_rules']:
-                parameters.default_security_rules.append(create_rule_instance(rule))
+                rule_inst = create_rule_instance(rule)
+                parameters.default_security_rules.append(rule_inst)
+            for subnet in results['subnets']:
+                parameters.subnets.append(ResourceId(id=subnet))
+            for interface in results['network_interfaces']:
+                parameters.network_interfaces.append(ResourceId(id=interface))
             parameters.tags = results['tags']
             parameters.location = results['location']
-            response = network_client.network_security_groups.begin_create_or_updating(resource_group, nsg_name, parameters)
+            parameters.type = results['type']
+            parameters.id = results['id']
+            response = network_client.network_security_groups.create_or_update(resource_group, nsg_name, parameters)
+            results['status'] = response.status
         except AzureHttpError as e:
-            raise Exception(e['body'])
+            raise Exception(str(e.message))
 
 
     elif state == 'present' and results['changed']:
         # create the security group
+        log('Create security group %s' % nsg_name)
+        
         if not location:
             raise Exception("location cannot be None when creating a new security group.")
 
         results['name'] = nsg_name
         results['location'] = location
-        
+        results['rules'] = []
+        results['default_rules'] = []
+        results['subnets'] = []
+        results['network_interfaces'] = []
+        results['tags'] = []
+
         if rules:
-            results['rules'] = rules
-        
+            for rule in rules:
+                results['rules'].append(dict(
+                    name = rule['name'],
+                    description = rule.get('description', None),
+                    protocol = rule['protocol'],
+                    source_port_range = rule['source_port_range'],
+                    destination_port_range = rule['destination_port_range'],
+                    source_address_prefix = rule['source_address_prefix'],
+                    destination_address_prefix = rule['destination_address_prefix'],
+                    access = rule['access'],
+                    priority = rule['priority'],
+                    direction = rule['direction']
+                ))
         if default_rules:
-            results['default_rules'] = default_rules
+            for rule in default_rules:
+                results['default_rules'].append(dict(
+                    name = rule['name'],
+                    description = rule.get('description', None),
+                    protocol = rule['protocol'],
+                    source_port_range = rule['source_port_range'],
+                    destination_port_range = rule['destination_port_range'],
+                    source_address_prefix = rule['source_address_prefix'],
+                    destination_address_prefix = rule['destination_address_prefix'],
+                    access = rule['access'],
+                    priority = rule['priority'],
+                    direction = rule['direction']
+                ))
+        if subnets:
+            results['subnets'] = subnets
+        if network_interfaces:
+            results['network_interfaces'] = network_interfaces
+        if tags:
+            results['tags'] = tags
 
         if check_mode:
             return results
 
         try:
-            parameters = {}
-            if rules:
-                parameters['security_rules'] = rules
-            if default_rules:
-                parameters['default_security_rules'] = default_rules
-
+            parameters = NetworkSecurityGroup(default_security_rules=[], network_interfaces=[], security_rules=[], subnets=[], tags={})
+            for rule in results['rules']:
+                rule_inst = create_rule_instance(rule)
+                parameters.security_rules.append(rule_inst)
+            for rule in results['default_rules']:
+                rule_inst = create_rule_instance(rule)
+                parameters.default_security_rules.append(rule_inst)
+            for subnet in results['subnets']:
+                parameters.subnets.append(ResourceId(id=subnet))
+            for interface in results['network_interfaces']:
+                parameters.network_interfaces.append(ResourceId(id=interface))
+            parameters.tags = results['tags']
+            parameters.location = results['location']
+            response = network_client.network_security_groups.create_or_update(resource_group, nsg_name, parameters)
+            results['status'] = response.status
         except AzureHttpError as e:
-            raise Exception(e.body)
+            raise Exception(str(e.message))
 
-        response = network_client.network_security_groups.begin_create_or_updating(resource_group, nsg_name, parameters)
+        try:
+            # The above should create the security group, but it does not actually return the security group object.
+            # Retrieve the object so that we can include the new ID in results.
+            response = network_client.network_security_groups.get(resource_group, nsg_name)
+            results['id'] = response.network_security_group.id
+        except AzureHttpError as e:
+            raise Exception(str(e.message))
 
-        results[id] = response.network_security_group.id
-        results[type] = response.network_security_group.type
-       
+    elif state == 'absent' and results['changed']:
+        log('Delete security group %s' % nsg_name)
+        
+        if check_mode:
+            return results
 
-    # try:
-    #     log('fetching subnet...')
-    #     subnet_resp = network_client.subnets.get(resource_group, virtual_network_name, name)
-    #     # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
-    #     log('subnet exists...')
-    #     subnet = subnet_resp.subnet
-    #     if state == 'present':
-    #         results['id'] = subnet.id # store this early in case of check mode
-    #     # TODO: validate args
-    #         if subnet.address_prefix != address_prefix_cidr:
-    #             log("CHANGED: subnet address range does not match")
-    #             results['changed'] = True
-    #     elif state == 'absent':
-    #         log("CHANGED: subnet exists and state is 'absent'")
-    #         results['changed'] = True
-    # except AzureMissingResourceHttpError:
-    #     log('subnet does not exist')
-    #     if state == 'present':
-    #         log("CHANGED: subnet does not exist and state is 'present'")
-    #         results['changed'] = True
-
-    # if check_mode:
-    #     log('check mode, exiting early')
-    #     return results
-
-    # if results['changed']:
-    #     if state == 'present':
-
-    #         subnet = azure.mgmt.network.Subnet(
-    #             address_prefix=address_prefix_cidr
-    #         )
-    #         log('creating/updating subnet...')
-    #         subnet_resp = network_client.subnets.create_or_update(resource_group, virtual_network_name, name, subnet)
-    #         # TODO: check response for success
-
-    #         # TODO: optimize away in change case
-    #         subnet_resp = network_client.subnets.get(resource_group, virtual_network_name, name)
-
-    #         results['id'] = subnet_resp.subnet.id
-
-    #     elif state == 'absent':
-    #         log('deleting subnet...')
-    #         subnet_resp = network_client.subnets.delete(resource_group, virtual_network_name, name)
-    #         # TODO: check response
+        try:
+            response = network_client.network_security_groups.delete(resource_group, nsg_name)
+            results['status'] = response.status
+        except  AzureHttpError as e:
+            raise Exception(str(e.message))
 
     return results
 
@@ -490,6 +581,9 @@ def main():
             purge = dict(required=False, type='bool', default=False),
             rules = dict(required=False, type='list'),
             default_rules = dict(required=False, type='list'),
+            subnets = dict(required=False, type='list'),
+            network_interfaces = dict(required=False, type='list'),
+            tags = dict(required=False, type='list'),
         ),
         supports_check_mode=True
     )
@@ -501,14 +595,21 @@ def main():
     default_rules = module.params.get('default_rules')
     purge = module.params.get('purge')
     location = module.params.get('location')
+    subnets = module.params.get('subnets')
+    network_interfaces = module.params.get('network_interfaces')
+    tags = module.params.get('tags')
     check_mode = module.check_mode
 
-    creds = get_credentials(module.params)
+    try:
+        creds = get_credentials(module.params)
+    except Exception as e:
+        module.fail_json(msg=e.args[0])
+
     if not creds:
         module.fail_json(msg="Failed to get credentials. Either pass as parameters, set environment variables, or define a profile in ~/.azure/credientials.")
     
     try:
-        result = module_impl(resource_group, nsg_name, state, location, rules, default_rules, creds, purge, check_mode)
+        result = module_impl(resource_group, nsg_name, state, location, rules, default_rules, subnets, network_interfaces, tags, creds, purge, check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
