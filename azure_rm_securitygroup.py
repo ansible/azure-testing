@@ -256,19 +256,91 @@ def create_rule_instance(rule):
     rule_instance.direction = rule['direction']
     return rule_instance
 
+def create_rule_dict(rule):
+    return dict(
+        name = rule['name'],
+        description = rule.get('description', None),
+        protocol = rule['protocol'],
+        source_port_range = rule['source_port_range'],
+        destination_port_range = rule['destination_port_range'],
+        source_address_prefix = rule['source_address_prefix'],
+        destination_address_prefix = rule['destination_address_prefix'],
+        access = rule['access'],
+        priority = rule['priority'],
+        direction = rule['direction']
+    )
 
-def module_impl(resource_group, nsg_name, state, location, rules, default_rules, subnets, network_interfaces, tags, creds, purge=False, check_mode=False):
+def create_rule_dict_from_obj(rule):
+    return dict(
+        name = rule.name,
+        description = rule.description,
+        protocol = rule.protocol,
+        source_port_range = rule.source_port_range,
+        destination_port_range = rule.destination_port_range,
+        source_address_prefix = rule.source_address_prefix,
+        destination_address_prefix = rule.destination_address_prefix,
+        access = rule.access,
+        priority = rule.priority,
+        direction = rule.direction
+    )
+
+def list_network_security_groups(resource_group, network_client):
+    results = dict(
+        changed = False,
+        network_security_groups = []
+    )
+    try:
+        response = network_client.network_security_groups.list(resource_group)
+        for group in response.network_security_groups:
+            g = dict()
+            g['id'] = group.id
+            g['name'] = group.name
+            g['type'] = group.type
+            g['location'] = group.location
+            g['tags'] = group.tags
+            g['rules'] = []
+            for rule in group.security_rules:
+                g['rules'].append(create_rule_dict_from_obj(rule))
+            g['default_rules'] = []
+            for rule in group.default_security_rules:
+                g['default_rules'].append(create_rule_dict_from_obj(rule))
+            g['network_interfaces'] = []
+            for interface in group.network_interfaces:
+                g['network_interfaces'].append(interface.id)
+            g['subnets'] = []
+            for subnet in group.subnets:
+                g['subnets'].append(subnet.id)
+            results['network_security_groups'].append(g)  
+    except AzureHttpError as e:
+            raise Exception(str(e.message))
+    return results
+
+def module_impl(params, creds, check_mode=False):
 
     if not HAS_AZURE:
-        raise Exception("The Azure python sdk is not installed (try 'pip install azure')")  
+        raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
+
     if not HAS_REQUESTS:
         raise Exception("The requests python module is not installed (try 'pip install requests')")
 
-    #TODO: add automatic Microsoft.Network provider check/registration (only on failure?)
+    resource_group = params.get('resource_group')
+    nsg_name = params.get('name')
+    state = params.get('state')
+    rules = params.get('rules')
+    default_rules = params.get('default_rules')
+    location = params.get('location')
+    subnets = params.get('subnets')
+    network_interfaces = params.get('network_interfaces')
+    tags = params.get('tags')
+    purge_rules = params.get('purge_rules')
+    purge_default_rules = params.get('purge_default_rules')
+    purge_subnets = params.get('purge_subnets')
+    purge_network_interfaces = params.get('purge_network_interfaces')
+    gather_facts = params.get('gather_facts')
+    gather_list = params.get('gather_list')
+    
     results = dict(changed=False)
 
-    # TODO: validate arg shape (CIDR blocks, etc)
-    
     log("client_id: %s" % creds['client_id'])
     log("client_secret: %s" % creds['client_secret'])
     log("subscripition_id: %s" % creds['subscription_id'])
@@ -278,13 +350,17 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
     network_client = get_network_client(auth_endpoint, creds['subscription_id'], creds['client_id'], creds['client_secret'])
 
     if not resource_group:
-        raise Exception("resource_group parameter cannot be None")
+        raise Exception("Parameter error: resource_group cannot be None.")
     
+    if gather_list:
+        # gather facts for all NSGs in a given resource group and get out
+        return list_network_security_groups(resource_group, network_client)
+
     if not nsg_name:
-        raise Exception("name parameter cannot be None")
+        raise Exception("Parameter error: name cannot be None.")
 
     if not NAME_PATTERN.match(nsg_name):
-        raise Exception("Security group name must contain only word characters plus '.','-','_'")
+        raise Exception("Parameter error: name must contain only word characters and '.','-','_'")
             
     if rules:
         try:
@@ -301,8 +377,8 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
             raise Exception("Error in default rules: %s" % e.args[0])    
     try:
         response = network_client.network_security_groups.get(resource_group, nsg_name)
-        if state == 'present':
-            # capture all the details now, so we can create a check_mode response
+        if state == 'present' or gather_facts:
+            # capture all the details now, so we can create a check_mode or gather_facts response
             results['id'] = response.network_security_group.id
             results['name'] = response.network_security_group.name
             results['type'] = response.network_security_group.type
@@ -311,45 +387,20 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
             
             results['rules'] = []
             for rule in response.network_security_group.security_rules:
-                results['rules'].append(dict(
-                    name = rule.name,
-                    description = rule.description,
-                    protocol = rule.protocol,
-                    source_port_range = rule.source_port_range,
-                    destination_port_range = rule.destination_port_range,
-                    source_address_prefix = rule.source_address_prefix,
-                    destination_address_prefix = rule.destination_address_prefix,
-                    access = rule.access,
-                    priority = rule.priority,
-                    direction = rule.direction
-                ))
+                results['rules'].append(create_rule_dict_from_obj(rule))
 
             results['default_rules'] = []
             for rule in response.network_security_group.default_security_rules:
-                results['default_rules'].append(dict(
-                    name = rule.name,
-                    description = rule.description,
-                    protocol = rule.protocol,
-                    source_port_range = rule.source_port_range,
-                    destination_port_range = rule.destination_port_range,
-                    source_address_prefix = rule.source_address_prefix,
-                    destination_address_prefix = rule.destination_address_prefix,
-                    access = rule.access,
-                    priority = rule.priority,
-                    direction = rule.direction
-                ))
+                results['default_rules'].append(create_rule_dict_from_obj(rule))
 
             results['network_interfaces'] = []
             for interface in response.network_security_group.network_interfaces:
                 results['network_interfaces'].append(interface.id)
-            log('%d existing network interfaces' % len(results['network_interfaces']))
 
             results['subnets'] = []
             for subnet in response.network_security_group.subnets:
                 results['subnets'].append(subnet.id)
-                log('existing subnet id: %s' % subnet.id)
-            log('%d existing subnets' % len(results['subnets']))
-
+            
         elif state == 'absent':
             results['changed'] = True
 
@@ -357,7 +408,10 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
         if state == 'present':
             results['changed'] = True
 
-
+    if gather_facts:
+        results['changed'] = False
+        results['status'] = 'Succeeded'
+        return results
 
     if state == 'present' and not results['changed']:
         # update the security group
@@ -375,18 +429,14 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
 
                 if not rule_matched:
                     results['changed'] = True
-                    results['rules'].append(dict(
-                        name = rule['name'],
-                        description = rule.get('description', None),
-                        protocol = rule['protocol'],
-                        source_port_range = rule['source_port_range'],
-                        destination_port_range = rule['destination_port_range'],
-                        source_address_prefix = rule['source_address_prefix'],
-                        destination_address_prefix = rule['destination_address_prefix'],
-                        access = rule['access'],
-                        priority = rule['priority'],
-                        direction = rule['direction']
-                    ))
+                    results['rules'].append(create_rule_dict(rule))
+        if purge_rules:
+            new_rules = []
+            for rule in results['rules']:
+                for r in rules:
+                    if rule['name'] == r['name']:
+                        new_rules.append(rule)
+            results['rules'] = new_rules
 
         if default_rules:
             for rule in default_rules:
@@ -399,18 +449,16 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                         rule_matchd = True    
                 if not rule_matched:
                     results['changed'] = True
-                    results['default_rules'].append(dict(
-                        name = rule['name'],
-                        description = rule.get('description', None),
-                        protocol = rule['protocol'],
-                        source_port_range = rule['source_port_range'],
-                        destination_port_range = rule['destination_port_range'],
-                        source_address_prefix = rule['source_address_prefix'],
-                        destination_address_prefix = rule['destination_address_prefix'],
-                        access = rule['access'],
-                        priority = rule['priority'],
-                        direction = rule['direction']
-                    ))
+                    results['default_rules'].append(create_rule_dict(rule))
+        
+        if purge_default_rules:
+            new_default_rules = []
+            for rule in results['default_rules']:
+                for r in default_rules:
+                    if rule['name'] == r['name']:
+                        new_default_rules.append(rule)
+            results['default_rules'] = new_default_rules
+
 
         if subnets:
             for subnet in subnets:
@@ -422,6 +470,14 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                     results['subnets'].append(subnet)
                     results['changed'] = True
 
+        if purge_subnets:
+            new_subnets = []
+            for subnet in results['subnets']:
+                for s in subnets:
+                    if subnet == s:
+                        new_subnets.append(subnet)
+            results['subnets'] = new_subnets
+
         if network_interfaces:
             for interface in network_interfaces:
                 matched = False
@@ -431,6 +487,13 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
                 if not matched:
                     results['network_interfaces'].append(interface)
                     matched = True
+        if purge_subnets:
+            new_nics = []
+            for interface in results['network_interfaces']:
+                for i in network_interfaces:
+                    if interface == i:
+                        new_nics.append(interface)
+            results['network_interfaces'] = new_nics
 
         if tags:
             for tag_key in tags:
@@ -451,6 +514,7 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
             return results
 
         try:
+            # perform the update
             parameters = NetworkSecurityGroup(default_security_rules=[], network_interfaces=[], security_rules=[], subnets=[], tags={})
             for rule in results['rules']:
                 rule_inst = create_rule_instance(rule)
@@ -489,32 +553,10 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
 
         if rules:
             for rule in rules:
-                results['rules'].append(dict(
-                    name = rule['name'],
-                    description = rule.get('description', None),
-                    protocol = rule['protocol'],
-                    source_port_range = rule['source_port_range'],
-                    destination_port_range = rule['destination_port_range'],
-                    source_address_prefix = rule['source_address_prefix'],
-                    destination_address_prefix = rule['destination_address_prefix'],
-                    access = rule['access'],
-                    priority = rule['priority'],
-                    direction = rule['direction']
-                ))
+                results['rules'].append(create_rule_dict(rule))
         if default_rules:
             for rule in default_rules:
-                results['default_rules'].append(dict(
-                    name = rule['name'],
-                    description = rule.get('description', None),
-                    protocol = rule['protocol'],
-                    source_port_range = rule['source_port_range'],
-                    destination_port_range = rule['destination_port_range'],
-                    source_address_prefix = rule['source_address_prefix'],
-                    destination_address_prefix = rule['destination_address_prefix'],
-                    access = rule['access'],
-                    priority = rule['priority'],
-                    direction = rule['direction']
-                ))
+                results['default_rules'].append(create_rule_dict(rule))
         if subnets:
             results['subnets'] = subnets
         if network_interfaces:
@@ -569,35 +611,30 @@ def module_impl(resource_group, nsg_name, state, location, rules, default_rules,
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            profile = dict(required=False, type='str'),
-            subscription_id = dict(required=False, type='str'),
-            client_id = dict(required=False, type='str'),
-            client_secret = dict(required=False, type='str'),
-            tenant_id = dict(required=False, type='str'),
+            profile = dict(type='str'),
+            subscription_id = dict(type='str'),
+            client_id = dict(type='str'),
+            client_secret = dict(type='str'),
+            tenant_id = dict(type='str'),
             resource_group = dict(required=True, type='str'),
-            name = dict(required=True, type='str'),
+            name = dict(type='str'),
             state = dict(default='present', choices=['present', 'absent']),
-            location = dict(required=False, type='str'),
-            purge = dict(required=False, type='bool', default=False),
-            rules = dict(required=False, type='list'),
-            default_rules = dict(required=False, type='list'),
-            subnets = dict(required=False, type='list'),
-            network_interfaces = dict(required=False, type='list'),
-            tags = dict(required=False, type='list'),
+            location = dict(type='str'),
+            rules = dict(type='list'),
+            default_rules = dict(type='list'),
+            subnets = dict(type='list'),
+            network_interfaces = dict(type='list'),
+            tags = dict(type='list'),
+            purge_rules = dict(type='bool', default=False),
+            purge_default_rules = dict(type='bool', default=False),
+            purge_subnets = dict(type='bool', default=False),
+            purge_network_interfaces = dict(type='bool', default=False),
+            gather_facts = dict(type='bool', default=False),
+            gather_list = dict(type='bool', default=False),
         ),
         supports_check_mode=True
     )
 
-    resource_group = module.params.get('resource_group')
-    nsg_name = module.params.get('name')
-    state = module.params.get('state')
-    rules = module.params.get('rules')
-    default_rules = module.params.get('default_rules')
-    purge = module.params.get('purge')
-    location = module.params.get('location')
-    subnets = module.params.get('subnets')
-    network_interfaces = module.params.get('network_interfaces')
-    tags = module.params.get('tags')
     check_mode = module.check_mode
 
     try:
@@ -609,7 +646,7 @@ def main():
         module.fail_json(msg="Failed to get credentials. Either pass as parameters, set environment variables, or define a profile in ~/.azure/credientials.")
     
     try:
-        result = module_impl(resource_group, nsg_name, state, location, rules, default_rules, subnets, network_interfaces, tags, creds, purge, check_mode)
+        result = module_impl(module.params, creds, check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 

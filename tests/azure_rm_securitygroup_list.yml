@@ -1,0 +1,19 @@
+- name: azure_rm_securitygroup_list
+  hosts: localhost
+  tasks:
+    - name: Test gather_facts feature
+      azure_rm_securitygroup: 
+          resource_group: chouse
+          name: nsg-001
+          gather_facts: yes
+      register: group_facts
+
+    - debug: var=group_facts 
+
+    - name: Test gather_list feature
+      azure_rm_securitygroup: 
+          resource_group: chouse
+          gather_list: yes
+      register: list_facts 
+
+    - debug: var=list_facts 
