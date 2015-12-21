@@ -1,0 +1,19 @@
+---
+- name: Test azuzre_rm_storageaccount
+  hosts: localhost
+  tasks:
+     - name: Remove log file
+       file:
+           name: azure_rm_storageaccount.log
+           state: absent
+
+     - name: Try gathering facts  
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: chousestorageacct
+           gather_facts: yes
+           debug: yes
+       register: test_001 
+
+     - name: Debug
+       debug: var=test_001
