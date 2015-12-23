@@ -1,19 +1,103 @@
 ---
 - name: Test azuzre_rm_storageaccount
   hosts: localhost
+  vars:
+    debug_playbook: yes
+    new_account_name: "testaccount{{ 100 |random }}"
   tasks:
      - name: Remove log file
        file:
            name: azure_rm_storageaccount.log
            state: absent
 
-     - name: Try gathering facts  
+     - name: Test invalid account name
        azure_rm_storageaccount:
            resource_group: chouse
-           name: chousestorageacct
+           name: "invalid_char$"
+           state: present
+       register: invalid_name     
+       ignore_errors: yes  
+
+     - name: Assert task failed
+       assert: { that: "invalid_name['failed'] == True" }
+
+     - name: Delete storage account
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ new_account_name }}"
+           state: absent
+       register: test_004
+
+     - name: Assert delete succeeded
+       assert: { that: "test_004['status_code'] in [200,204]" }
+
+     - name: Create new storage account
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ test_004['name'] }}" 
+           location: eastus
+           account_type: Standard_LRS
+           state: present
+           debug: yes
+           tags:
+               test: test
+               galaxy: galaxy
+       register: test_005
+ 
+     - name: Debug
+       debug: var=test_005
+       when: debug_playbook
+
+     - name: Assert status succeeded and results include an Id value 
+       assert:
+         that:
+           - "test_005['status'] == 'Succeeded'"
+           - "test_005['id'] is defined"
+
+     - name: Gather facts
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ test_005['name'] }}"
            gather_facts: yes
            debug: yes
-       register: test_001 
+       register: gathered_facts
 
      - name: Debug
-       debug: var=test_001
+       debug: var=gathered_facts
+       when: debug_playbook
+     
+     - name: Assert facts are as expected 
+       assert:
+           that:
+               - "gathered_facts['id'] == test_005['id']"
+               - "gathered_facts['account_type'] == test_005['account_type']"
+
+     - name: Change account type 
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ test_005['name'] }}"
+           account_type: Premium_LRS
+       register: change_account
+       ignore_errors: yes 
+  
+     - name: Assert account type change failed 
+       assert: { that: "change_account['failed'] == True" }
+
+     - name: Change account type and add custom domain
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ test_005['name'] }}"
+           account_type: Standard_GRS
+           custom_domain:
+               name: "ansible.com"
+               use_sub_domain: no  
+           debug: yes
+       register: change_account
+       ignore_errors: true
+
+     - name: Debug
+       debug: var=change_account
+       when: debug_playbook
+
+     - name: Assert CNAME failure
+       assert: { that: "'custom domain name could not be verified' in  change_account['msg']" }
