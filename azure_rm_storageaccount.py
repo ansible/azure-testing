@@ -29,7 +29,101 @@ import time
 DOCUMENTATION = '''
 ---
 module: azure_rm_storageaccount
+short_description: Create, read, update and delete Azure storage accounts.
+description:
+    - Use to create and manage storage accounts within a given resource group. Use gather_facts option to get all the attributes, 
+      including endpoints and keys for a particular storage account, or use the gather_list option to gather facts for all storage 
+      accounts within a resource group.
+    - For authentication with Azure pass subscription_id, client_id, client_secret and tenant_id. Or, create a ~/.azure/credentials 
+      file with one or more profiles. When using a credentials file, if no profile option is provided, Azure modules look for a 
+      'default' profile. Each profile should include subscription_id, client_id, client_secret and tenant_id values.
+options:
+    profile:
+        description:
+            - security profile found in ~/.azure/credentials file
+        required: false
+        default: null
+    subscription_id:
+        description:
+            - Azure subscription Id that owns the resource group and storage accounts.
+        required: false
+        default: null
+    client_id:
+        description:
+            - Azure client_id used for authentication.
+        required: false
+        default: null
+    client_secret:
+        description:
+            - Azure client_secrent used for authentication.
+        required: false
+        default: null
+    tenant_id:
+        description:
+            - Azure tenant_id used for authentication.
+        required: false
+        default: null
+    resource_group:
+        description:
+            - name of resource group.
+        required: true
+        default: null
+    name:
+        description:
+            - name of the storage account.
+        required: true
+        default: null
+    state:
+        description:
+            - can be one of 'absent' or 'present'. When set to present the storage group will be created or updated. 
+              When set to absent the storage group will be deleted.
+        required: false
+        default: present
+    location:
+        description:
+            - name of the Azure location where the storage account will reside on creation. Required when the storage account
+              is created. Cannot be changed after storage account creation.
+        required: false
+        default: null
+    account_type:
+        desscription:
+            - type of storage account. Can be one of 'Premium_LRS', 'Standard_GRS', 'Standard_LRS', 'Standard_RAGRS',
+              'Standard_ZRS'. Required when creating a storage account. Note that StandardZRS and PremiumLRS accounts cannot be
+              changed to other account types, and other account types cannot be changed to StandardZRS or PremiumLRS.
+        required: false
+        default: null
+    custom_domain:
+        description:
+            - User domain assigned to the storage account. Must be a dictionary with 'name' and 'use_sub_domain' keys where 'name' 
+              is the CNAME source. Only one custom domain is supported per storage account at this time. To clear the existing custom 
+              domain, use an empty string for the custom domain name property.
+            - Can be added to an existing storage account. Will be ignored during storage account creation.
+        required: false
+        default: null
+    tags:
+        description:
+            - dictionary of key, value pairs to be assigned to the storage account. Can be included during both create and update
+              operations.
+        required: false
+        default: null
+    gather_facts:
+        description:
+            - Set to True to get all attributes including endpoints and keys for a given storage account. Expects resource_group
+              and name to be present.
+        required: false
+        default: false
+    gather_list:
+        description:
+            - Set to True to get all attributes for all storage accounts within a given resource group. Expects resource_group to be
+              present.
+        required: false
+        default: false
+    requirements:
+        - "python >= 2.7"
+        - "azure >= 1.0.2"
+    author: "Chris Houseknecht @chouseknecht"
 '''
+
 
 HAS_AZURE = True
 HAS_REQUESTS = True
@@ -173,7 +267,7 @@ def module_impl(rm, log, params, check_mode=False):
         log("custom_domain: %s" % str(custom_domain))
         if not isinstance(custom_domain, dict):
             raise Exception("Parameter Error: expecting custom_domain to be type of dictionary.")
-        if not custom_domain.get('name', None):
+        if custom_domain.get('name', None) is None:
             raise Exception("Parameter error: expecting custom_domain to have a name attribute of type string.")
         if custom_domain.get('use_sub_domain', None) is None:
             raise Exception("Parameter error: expecting custom_domain to have a use_sub_domain attribute of type boolean.")
