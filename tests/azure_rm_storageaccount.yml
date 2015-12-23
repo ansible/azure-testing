@@ -101,3 +101,20 @@
 
      - name: Assert CNAME failure
        assert: { that: "'custom domain name could not be verified' in  change_account['msg']" }
+
+     - name: List all storage accounts in resource group
+       azure_rm_storageaccount:
+           resource_group: chouse
+           gather_list: yes
+       register: gathered_list
+      
+     - name: Assert storage account list has a length > 0
+       assert: { that: "{{ gathered_list['storage_accounts'] | length }} > 0" }
+
+     - name: Delete test acccounts
+       azure_rm_storageaccount:
+           resource_group: chouse
+           name: "{{ item['name'] }}"
+           state: absent
+           debug: yes
+       with_items: "{{ gathered_list['storage_accounts'] }}"

@@ -40,7 +40,7 @@ try:
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.mgmt.storage.storagemanagement import AccountType, StorageAccountUpdateParameters, \
                                                      CustomDomain, StorageAccountCreateParameters, \
-                                                     OperationStatus
+                                                     OperationStatus, KeyName
 except ImportError:
     HAS_AZURE = False
 
@@ -48,6 +48,73 @@ try:
     import requests
 except ImportError:
     HAS_REQUESTS = False
+
+def list_storage_accounts(resource_group, storage_client, log):
+    '''
+    List storage accounts for a given resource group.
+    '''
+    results = dict(
+        changed=False,
+        storage_accounts=[]
+    )
+    log('Getting list of storage accounts for resource group %s' % resource_group)
+    try:
+        response = storage_client.storage_accounts.list_by_resource_group(resource_group)
+        for storage_account in response.storage_accounts:
+            s = {}
+            s['id'] = storage_account.id
+            s['name'] = storage_account.name
+            s['location'] = storage_account.location
+            s['resource_group'] = resource_group
+            s['type'] = storage_account.type
+            s['account_type'] = storage_account.account_type
+            s['provisioning_state'] = storage_account.provisioning_state
+            
+            s['custom_domain'] = None
+            if storage_account.custom_domain:
+                s['custom_domain'] = {
+                    'name': storage_account.custom_domain.name,
+                    'use_sub_domain': storage_account.custom_domain.use_sub_domain
+                }
+            
+            s['primary_location'] = storage_account.primary_location
+            
+            s['primary_endpoints'] = None
+            if storage_account.primary_endpoints:
+                s['primary_endpoints'] = {
+                    'blob': storage_account.primary_endpoints.blob,
+                    'queue': storage_account.primary_endpoints.queue,
+                    'table': storage_account.primary_endpoints.table
+                }
+
+            s['secondary_endpoints'] = None
+            if storage_account.secondary_endpoints:
+                s['secondary_endpoints'] = {
+                    'blob': storage_account.secondary_endpoints.blob,
+                    'queue': storage_account.secondary_endpoints.queue,
+                    'table': storage_account.secondary_endpoints.table
+                }
+        
+            s['secondary_location'] = storage_account.secondary_location
+            s['status_of_primary'] = storage_account.status_of_primary
+            s['status_of_secondary'] = storage_account.status_of_secondary
+        
+            s['tags'] = {}
+            if storage_account.tags:
+                s['tags'] = storage_account.tags
+
+            s['keys'] = {}
+            keys = storage_client.storage_accounts.list_keys(resource_group, storage_account.name)
+            s['keys'][KeyName.key1] = keys.storage_account_keys.key1
+            s['keys'][KeyName.key2] = keys.storage_account_keys.key2
+
+            results['storage_accounts'].append(s)
+
+    except AzureHttpError as e:
+        log('Error listing storage accounts for resource group %s' % resource_group)
+        raise Exception(str(e.message))
+
+    return results
 
 def check_account_type(type):
     valid_types = (
@@ -86,9 +153,9 @@ def module_impl(rm, log, params, check_mode=False):
     if not resource_group:
         raise Exception("Parameter error: resource_group cannot be None.")
     
-    #if gather_list:
-        # gather facts for all NSGs in a given resource group and get out
-        #return list_network_security_groups(resource_group, network_client)
+    if gather_list:
+        # gather facts for all storage accounts in a given resource group and get out
+        return list_storage_accounts(resource_group, storage_client, log)
 
     if not account_name:
         raise Exception("Parameter error: name cannot be None.")
@@ -158,6 +225,11 @@ def module_impl(rm, log, params, check_mode=False):
             results['tags'] = {}
             if response.storage_account.tags:
                 results['tags'] = response.storage_account.tags
+
+            results['keys'] = {}
+            keys = storage_client.storage_accounts.list_keys(resource_group, account_name)
+            results['keys'][KeyName.key1] = keys.storage_account_keys.key1
+            results['keys'][KeyName.key2] = keys.storage_account_keys.key2
         
         elif state == 'absent':
             log('State absent for account %s' % account_name)
@@ -313,6 +385,11 @@ def module_impl(rm, log, params, check_mode=False):
             results['secondary_location'] = response.storage_account.secondary_location
             results['status_of_primary'] = response.storage_account.status_of_primary
             results['status_of_secondary'] = response.storage_account.status_of_secondary
+
+            results['keys'] = {}
+            keys = storage_client.storage_accounts.list_keys(resource_group, account_name)
+            results['keys'][KeyName.key1] = keys.storage_account_keys.key1
+            results['keys'][KeyName.key2] = keys.storage_account_keys.key2
 
         except AzureHttpError as e:
             log('Error creating storage account.')
