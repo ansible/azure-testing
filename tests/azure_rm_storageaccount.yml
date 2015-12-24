@@ -3,7 +3,7 @@
   hosts: localhost
   vars:
     debug_playbook: yes
-    new_account_name: "testaccount{{ 100 |random }}"
+    new_account_name: "mystorage{{ 100 |random }}"
   tasks:
      - name: Remove log file
        file:
@@ -111,7 +111,7 @@
      - name: Assert storage account list has a length > 0
        assert: { that: "{{ gathered_list['storage_accounts'] | length }} > 0" }
 
-     - name: Delete test acccounts
+     - name: Delete acccounts - anything not in use will be deleted
        azure_rm_storageaccount:
            resource_group: chouse
            name: "{{ item['name'] }}"
