@@ -20,6 +20,7 @@
 #
 
 import ConfigParser
+import hashlib
 import json 
 import os
 from os.path import expanduser
@@ -50,8 +51,51 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+def path_check(path):
+    if os.path.exists(path):
+        return True
+    else:
+        return False
 
-def module_impl(rm, log, params, check_mode=False):
+def get_container_facts(bs, container_name):
+    container = None
+    try:
+        container = bs.get_container_properties(container_name)
+        container['meta_data'] = bs.get_container_metadata(container_name)
+    except AzureMissingResourceHttpError:
+        pass
+    return container
+
+def get_blob_facts(bs, container_name, blob_name):
+    blob = None
+    try: 
+        blob = bs.get_blob_properties(container_name, blob_name)
+    except AzureMissingResourceHttpError:
+        pass
+    return blob
+
+def put_block_blob(bs, container_name, blob_name, file_path, md5):
+    bs.put_block_blob_from_path(
+        container_name=container_name,
+        blob_name=blob_name,
+        file_path=file_path,
+        x_ms_blob_content_md5=md5,
+        max_connections=5
+    )
+
+def get_md5(file_path, block_size=2**20):
+    # hash sent to azure needs to be base64 encoded
+    # https://github.com/Azure/azure-storage-python/issues/11
+    md5 = hashlib.md5()
+    f = open(file_path, 'rb')
+    while True:
+        data = f.read(block_size)
+        if not data:
+            break
+        md5.update(data)
+    return md5.digest().encode('base64')[:-1] 
+
+def module_impl(rm, log, params, md5, check_mode=False):
 
     if not HAS_AZURE:
         raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
@@ -69,7 +113,8 @@ def module_impl(rm, log, params, check_mode=False):
     marker = params.get('marker')
     max_results = params.get('max_results')
     blob_name = params.get('blob_name')
-    file_path = prams.get('file_path')
+    file_path = params.get('file_path')
+    over_write = params.get('over_write')
 
     results = dict(changed=False)
 
@@ -94,7 +139,9 @@ def module_impl(rm, log, params, check_mode=False):
     results['resource_group'] = resource_group 
     results['container_name'] = container_name
 
+    # put (upload), get (download), geturl (return download url (Ansible 1.3+), getstr (download object as string (1.3+)), list (list keys (2.0+)), create (bucket), delete (bucket), and delobj (delete object)
     try:
+        log('Getting keys')
         keys = {}
         response = storage_client.storage_accounts.list_keys(resource_group, account_name)
         keys[KeyName.key1] = response.storage_account_keys.key1
@@ -104,55 +151,170 @@ def module_impl(rm, log, params, check_mode=False):
         raise Exception(str(e.message))
 
     try:
-        if mode in ['create','update','gather_facts']:
-            log('create container %s' % container_name)    
-            blob_service = BlobService(account_name, keys[KeyName.key1])
-            results['container'] = blob_service.get_container_properties(container_name)
-            results['container']['meta_data'] = blob_service.get_container_metadata(container_name)
-            # Add call to get_container_acl - if it would actually return results
-        elif mode == 'delete':
-            log('delete container %s' % container_name)
-            results['changed'] = True
-    except AzureMissingResourceHttpError:
-        log('container %s does not exist' % container_name)
-        if mode == 'create':
-            results['changed'] = True
+        log('Create blob service')
+        bs = BlobService(account_name, keys[KeyName.key1])
+    except Exception as e:
+        log('Error creating blob service.')
+        raise Exception(str(e.args[0]))
 
-    if mode == 'gather_facts':
-         results['changed'] = False
-         log('Stopping at gathering facts.')
-         return results
+    if mode == 'create':
+        container = get_container_facts(bs, container_name)
+        if container is not None:
+            # container exists
+            results['container'] = container
+            results['msg'] = "Container already exists."
+            return results
+        # create the container
+        if not check_mode:
+            log('Create container %s' % container_name)
+            bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
+            results['container'] = get_container_facts(bs, container_name)
+        results['msg'] = "Container created successfully."
+        results['changed'] = True
+        return results
 
-    if mode == 'update' or (mode == 'create' and not results['changed']):
-        # update the container
-        log('update container %s' % container_name)
+    if mode == 'update':
+        container = get_container_facts(bs, container_name)
+        if container is None:
+            # container does not exist
+            if not check_mode:
+                log('Create container %s' % container_name)
+                bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
+            results['changed'] = True
+            results['msg'] = 'Container created successfully.'
+            results['conainer'] = get_container_facts(bs, container_name)
+            return results     
+        # update existing container
+        results['msg'] = "Container not changed."
         if x_ms_meta_name_values:
-            log('set meta_name_values')
-            blob_service.set_container_metadata(container_name, x_ms_meta_name_values)
-
+            if not check_mode:
+                log('Update x_ms_meta_name_values for container %s' % container_name)
+                bs.set_container_metadata(container_name, x_ms_meta_name_values)
+            results['changed'] = True
+            results['msg'] = 'Container updated successfully.'
         if x_ms_blob_public_access:
             access = x_ms_blob_public_access
             if x_ms_blob_public_access == 'private':
                 access = None
-            log('set access to %s' % access)
-            blob_service.set_container_acl(container_name=container_name, x_ms_blob_public_access=access)
+            if not check_mode:
+                log('Set access to %s for container %s' % (access, container_name))
+                bs.set_container_acl(container_name=container_name, x_ms_blob_public_access=access)
+            results['changed'] = True
+            results['msg'] = 'Container updated successfully.'
+        results['conainer'] = get_container_facts(bs, container_name)
+        return results
 
-        results['container']['meta_data'] = blob_service.get_container_metadata(container_name)
-        # Add call to get_container_acl - if it would actually return results
+    if mode == 'delete':
+        container = get_container_facts(bs, container_name)
+        if container is None:
+            results['msg'] = "Container does not exist."
+            return results
+        if not check_mode:
+            log('Deleting container %s' % container_name)
+            bs.delete_container(container_name)
+        results['changed'] = True
+        results['msg'] = 'Container deleted successfully.'
+        return results
 
-    elif mode == 'create' and results['changed']:
-        # create the container
-        log('create container %s' % container_name)
-        blob_service.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
-        results['container'] = blob_service.get_container_properties(container_name)
-        results['container']['meta_data'] = blob_service.get_container_metadata(container_name)
-        # Add call to get_container_acl - if it would actually return results
+    if mode == 'delete_blob':
+        if blob_name is None:
+            raise Exception("Parameter error: blob_name cannot be None.")
+        
+        container = get_container_facts(bs, container_name)
+        if container is None:
+            raise Exception("Requested container %s does not exist." % container_name)
 
-    elif mode == 'delete' and results['changed']:
-        blob_service.delete_container(container_name)
+        if not check_mode:
+            log('Deleteing %s from container %s.' % (blob_name, container_name))
+            bs.delete_blob(container_name, blob_name)
+        
+        results['changed'] = True
+        results['msg'] = 'Blob successfully deleted.'
+        return results
 
-    elif mode == 'list':
-        response = blob_service.list_blobs(
+    if mode == 'put':
+        if blob_name is None:
+            raise Exception("Parameter error: blob_name cannot be None.")
+
+        if file_path is None:
+            raise Exception("Parameter error: file_path cannot be None.")
+
+        if not path_check(file_path):
+            raise Exception("File %s does not exist." % file_path)
+
+        container = get_container_facts(bs, container_name)
+        blob = None
+        if container is not None:
+            blob = get_blob_facts(bs, container_name, blob_name)
+
+        if container is not None and blob is not None:
+            # both container and blob already exist
+            md5_remote = blob['content-md5']
+            md5_local = get_md5(file_path)
+            results['container'] = container
+            results['blob'] = blob
+
+            if md5_local == md5_remote:
+                sum_matches = True
+                results['msg'] = 'File checksums match. File not uploaded.'
+                if over_write == 'always':
+                    if not check_mode:
+                        log('Uploading %s to container %s.' % (file_path, container_name))
+                        put_block_blob(bs, container_name, blob_name, file_path, md5_local)
+                        results['blob'] = get_blob_facts(bs, container_name, blob_name)
+                    results['changed'] = True
+                    results['msg'] = 'File successfully uploaded.'
+            else:
+                sum_matches = False
+                if over_write in ('always', 'different'):
+                    if not check_mode:
+                        log('Uploading %s to container %s.' % (file_path, container_name))
+                        put_block_blob(bs, container_name, blob_name, file_path, md5_local)
+                        results['blob'] = get_blob_facts(bs, container_name, blob_name)
+                    results['changed'] = True
+                    results['msg'] = 'File successfully uploaded.'
+                else:
+                    results['msg'] = "WARNING: Checksums do not match. Use overwrite parameter to force upload."
+            return results
+
+        if container is None:
+            # container does not exist. create container and upload.
+            if not check_mode:
+                log('Creating container %s.' % (file_path, container_name))
+                bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
+                log('Uploading %s to container %s.' % (file_path, container_name))
+                bs.put_block_blob_from_path(
+                    container_name,
+                    blob_name,
+                    file_path,
+                    max_connections=5
+                )
+                results['conainer'] = get_container_facts(bs, container_name)
+                results['blob'] = get_blob_facts(bs, container_name, blob_name)
+            results['changed'] = True
+            results['msg'] = 'Successfully created container and uploaded file.'
+            return results
+
+        if container is not None:
+            # container exists. just upload.
+            if not check_mode:
+                log('Uploading %s to container %s.' % (file_path, container_name))
+                bs.put_block_blob_from_path(
+                    container_name,
+                    blob_name,
+                    file_path,
+                    max_connections=5
+                )
+                results['blob'] = get_blob_facts(bs, container_name, blob_name)
+            results['changed'] = True
+            results['msg'] = 'Successfully updloaded file.'
+            return results
+
+    if mode == 'list':
+        container = get_container_facts(bs, container_name)
+        if container is None:
+            raise Exception("Requested container %s does not exist." % container_name)
+        response = bs.list_blobs(
             container_name,
             prefix,
             marker,
@@ -169,16 +331,7 @@ def module_impl(rm, log, params, check_mode=False):
                 blob_type = blob.properties.blob_type,
             )
             results['blobs'].append(b)
-
-    elif mode == 'put':
-        blob_service.put_block_blob_from_path(
-            container_name,
-            blob_name,
-            file_path,
-            max_connections=5
-        )
-
-    return results
+        return results
 
 def main():
     module = AnsibleModule(
@@ -198,10 +351,11 @@ def main():
             max_results = dict(type='int'),
             blob_name = dict(type='str'),
             file_path = dict(type='str'),
+            over_write= dict(type='str', aliases=['force'], default='always'),
             mode = dict(type='str'),
             debug = dict(type='bool', default=False)
         ),
-        supports_check_mode=False
+        supports_check_mode=True
     )
 
     check_mode = module.check_mode
@@ -218,7 +372,7 @@ def main():
         module.fail_json(msg=e.args[0])
 
     try:
-        result = module_impl(rm, log.log, module.params, check_mode)
+        result = module_impl(rm, log.log, module.params, module.md5, check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 

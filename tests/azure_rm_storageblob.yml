@@ -8,7 +8,7 @@
         file:
            name: azure_rm_storageblob.log
            state: absent
-
+      
       - name: Create container
         azure_rm_storageblob:
             resource_group: chouse
@@ -19,7 +19,10 @@
         register: create_facts
      
       - debug: var=create_facts
-      
+        when: debug_mode
+     
+      - assert: { that: "create_facts['container']['etag'] is defined" }
+     
       - name: Update container set acl
         azure_rm_storageblob:
             resource_group: chouse
@@ -29,6 +32,39 @@
             mode: update
             debug: yes
         register: update_facts    
-
+ 
       - debug: var=update_facts
+        when: debug_mode
+   
+      - assert: { that: "update_facts['changed'] == True" }
+      
+      - name: Force upload blob
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            mode: put
+            blob_name:
+            file_path: './files/Ratings.png'
+            debug: yes
+            force: always 
+        register: upload_facts 
 
+      - debug: var=upload_facts
+        when: debug_mode
+
+      - assert: { that: "upload_facts['changed'] == True" }
+
+      - name: Upload blob
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            mode: put
+            blob_name:
+            file_path: './files/Ratings.png'
+            debug: yes
+            over_write: different
+        register: upload_facts 
+
+      - assert: { that: "upload_facts['changed'] == False" }
