@@ -23,20 +23,36 @@
      
       - assert: { that: "create_facts['container']['etag'] is defined" }
      
-      - name: Update container set acl
+      - name: Update container set access to container
         azure_rm_storageblob:
             resource_group: chouse
             account_name: chouseblobs 
             container_name: my-blobs
-            x_ms_blob_public_access: container
+            x_ms_blob_public_access: private
             mode: update
             debug: yes
         register: update_facts    
+
+      - debug: var=update_facts
+        when: debug_mode
+
+      - assert: { that: "update_facts['changed'] == True" }
+
+      - name: Update container set signed permissions  
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            permissions: rw
+            hours: 12 
+            mode: update
+            debug: yes
+        register: update_facts
  
       - debug: var=update_facts
         when: debug_mode
-   
-      - assert: { that: "update_facts['changed'] == True" }
+      
+      - assert: { that: "'{{ update_facts.container.permissions[0].id }}' == 'my-blobs-rw'" }   
       
       - name: Force upload blob
         azure_rm_storageblob:
@@ -44,8 +60,12 @@
             account_name: chouseblobs
             container_name: my-blobs
             mode: put
-            blob_name:
+            blob_name: 'Ratings.png'
             file_path: './files/Ratings.png'
+            x_ms_blob_content_type: image/png
+            x_ms_meta_name_values:
+                val1: foo
+                val2: bar
             debug: yes
             force: always 
         register: upload_facts 
@@ -54,17 +74,172 @@
         when: debug_mode
 
       - assert: { that: "upload_facts['changed'] == True" }
-
+ 
       - name: Upload blob
         azure_rm_storageblob:
             resource_group: chouse
             account_name: chouseblobs
             container_name: my-blobs
             mode: put
-            blob_name:
+            blob_name: 'Ratings.png'
             file_path: './files/Ratings.png'
             debug: yes
-            over_write: different
+            overwrite: different
         register: upload_facts 
 
       - assert: { that: "upload_facts['changed'] == False" }
+
+      - name: Make url for Ratings.png  
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            mode: get_url 
+            blob_name: 'Ratings.png'
+            debug: yes
+        register: make_url_facts 
+
+      - debug: var=make_url_facts
+        when: debug_mode
+
+      - name: List blobs
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            mode: list
+            debug: yes
+        register: list_facts
+
+      - debug: var=list_facts
+        when: debug_mode
+
+      - name: Get token
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs  
+            blob_name: 'Ratings.png'
+            mode: get_token
+            hours: 24
+            permissions: 'rwd'
+            debug: yes
+        register: access_token
+
+      - debug: var=access_token
+        when: debug_mode
+
+      - assert: { that: "access_token['access_token'] is defined" }
+      
+      - name: Generate secure URL
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            blob_name: 'Ratings.png' 
+            mode: get_url
+            access_token: "{{ access_token['access_token'] }}"
+        register: secure_access
+
+      - assert: { that: "secure_access['url'] is defined" }
+
+      - name: Should not download file 
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            blob_name: 'Ratings.png'
+            mode: get
+            file_path: './files/Ratings.png'
+            overwrite: never
+        register: download_results
+
+      - debug: var=download_results 
+        when: debug_mode
+        
+      - assert: { that: "'identical' in  download_results['msg']" }
+
+      - file: path="/tmp/Ratings.png" state=absent
+
+      - name: Should download file 
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: my-blobs
+            blob_name: 'Ratings.png'
+            mode: get
+            file_path: '/tmp/Ratings.png'
+            overwrite: always
+        register: download_results
+
+      - assert: { that: "download_results['changed'] == True" }
+     
+      - find: paths='/tmp' patterns="Ratings.png"
+        register: find_results
+
+      - assert: { that: "find_results['matched'] == 1" }
+      
+      - name: Create a container with an object
+        azure_rm_storageblob:
+            resource_group: chouse 
+            account_name: chouseblobs 
+            container_name: newcontainer
+            blob_name: graylog.png
+            file_path: './files/graylog.png'
+            mode: put
+        register: new_container
+
+      - name: List contents of new container
+        azure_rm_storageblob:
+            resource_group: chouse 
+            account_name: chouseblobs 
+            container_name: newcontainer
+            mode: list
+        register: new_contents
+  
+      - assert: { that: "new_contents.blobs[0].name == 'graylog.png'" }
+
+      - name: Upload file to new container
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: newcontainer
+            blob_name: Ratings.png
+            file_path: './files/Ratings.png'
+            mode: put
+        register: new_container
+      
+      - name: List contents of new container
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: newcontainer
+            mode: list
+        register: new_contents
+
+      - assert: { that: "{{ new_contents.blobs | length }} == 2" }
+      
+      - name: Delete blob object
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: newcontainer
+            mode: delete_blob
+            blob_name: Ratings.png
+
+      - name: List contents of new container
+        azure_rm_storageblob:
+            resource_group: chouse
+            account_name: chouseblobs
+            container_name: newcontainer
+            mode: list
+        register: new_contents
+      
+      - assert: { that: "{{ new_contents.blobs | length }} == 1" }
+
+      - name: Delete new container
+        azure_rm_storageblob:
+            resource_group: chouse 
+            account_name: chouseblobs 
+            container_name: newcontainer
+            mode: delete 
