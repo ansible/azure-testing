@@ -401,7 +401,7 @@ def get_identifier(id, hours, days, permission):
     si.access_policy.permission = permission
     return si
 
-def module_impl(rm, log, params, md5, check_mode=False):
+def module_impl(rm, log, params, check_mode=False):
 
     if not HAS_AZURE:
         raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
@@ -802,10 +802,10 @@ def main():
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
-    #try:
-    result = module_impl(rm, log.log, module.params, module.md5, check_mode)
-    #except Exception as e:
-    #    module.fail_json(msg=e.args[0])
+    try:
+        result = module_impl(rm, log.log, module.params, check_mode)
+    except Exception as e:
+        module.fail_json(msg=e.args[0])
 
     module.exit_json(**result)
 

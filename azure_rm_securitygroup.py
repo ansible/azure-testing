@@ -29,6 +29,196 @@ import re
 DOCUMENTATION = '''
 ---
 module: azure_rm_securitygroup
+
+short_description: Create, read, update, delete Azure network security groups.
+
+description:
+    - A Network security group (NSG) contains Access Control List (ACL) rules that allow\deny network traffic to subnets or individual
+      network interfaces. An NSG is created with a set of default security rules and an empty set of security rules. Add rules to the
+      empty set of security rules to allow or deny traffic flow.
+    - Use this module to create and manage network security groups including adding security rules and modifying default rules. Add 
+      and remove subnets and network interfaces. Use gather_facts to get facts for an existing group or gather_list to get facts for 
+      all security groups within a resource group.
+    - For authentication with Azure pass subscription_id, client_id, client_secret and tenant_id. Or, create a ~/.azure/credentials 
+      file with one or more profiles. When using a credentials file, if no profile option is provided, Azure modules look for a 
+      'default' profile. Each profile should include subscription_id, client_id, client_secret and tenant_id values.
+
+options:
+    profile:
+        description:
+            - security profile found in ~/.azure/credentials file
+        required: false
+        default: null
+    subscription_id:
+        description:
+            - Azure subscription Id that owns the resource group and storage accounts.
+        required: false
+        default: null
+    client_id:
+        description:
+            - Azure client_id used for authentication.
+        required: false
+        default: null
+    client_secret:
+        description:
+            - Azure client_secrent used for authentication.
+        required: false
+        default: null
+    tenant_id:
+        description:
+            - Azure tenant_id used for authentication.
+        required: false
+        default: null
+    default_rules:
+        description:
+            - a list of default security rules. Each rule is a dictionary with the following keys: name, description, protocol, 
+              source_port_range, destination_port_range, source_address_prefix, destination_address_prefix, access,
+              priority and direction. See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more
+              details.
+        required: false
+        default: null
+    gather_facts:
+        description:
+            - set to true to get information about an existing NSG.
+        required: false
+        default: null
+    gather_list:
+        description:
+            - set to true to get information about all existing NSGs in a given resource group.
+        required: false
+        default: null
+    location:
+        description:
+            - set to the value of an Azure region such as 'eastus'. Required when creating an NSG.
+        required: false
+        default: null
+    name:
+        description:
+            - name of the NSG.
+        required: true
+        default: null
+    network_interfaces:
+        description:
+            - a list of network interface Id values to associate with the NSG.
+        required: false
+        default: null
+    purge_default_rules:
+        description:
+            - set to true if you want to remove all existing default security rules.
+        required: true
+        default: null
+    purge_network_interfaces:
+        description:
+            - set to true if yo want to remove all existing network interfaces.
+        required: true
+        default: null
+    purge_rules:
+        description:
+            - set to true if you want to remove all existing security rules.
+        required: true
+        default: null
+    purge_subnets:
+        description:
+            - set to true if you want to remove all existing subnets.
+        required: true
+        default: null
+    resource_group:
+        description:
+            - name of the resource group the NSG belongs to.
+        required: true
+        default: null
+    rules:
+        description:
+            - a custom set of security rules. Each rule is a dictionary with the following keys: name, description, protocol, 
+              source_port_range, destination_port_range, source_address_prefix, destination_address_prefix, access,
+              priority and direction. See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more
+              details.
+        required: true
+        default: null
+    state:
+        description:
+            - the state of the NSG. Set to 'present' to create or update an NSG. Set to 'absent' to remove an NSG.
+        required: true
+        default: null
+    subnets:
+        description:
+            - a list of subnet Id values to associate with the NSG.
+        required: false
+        default: null
+    tags:
+        description:
+            - dictionary of key/value pairs to associate with the NSG as metadata.
+        required: false
+        default: null
+
+requirements:
+    - "python >= 2.7"
+    - "azure >= 1.0.2"
+
+author: "Chris Houseknecht @chouseknecht"
+'''
+
+EXAMPLES = '''
+
+# Create a security group
+- azure_rm_securitygroup:
+      resource_group: mygroup
+      name: mysecgroup
+      location: 'eastus'
+      purge_rules: yes
+      rules:
+          - name: DenySSH
+            protocol: TCP
+            source_port_range: '*'
+            source_address_prefix: '*'
+            destination_address_prefix: '*'
+            destination_port_range: 22
+            access: Deny 
+            priority: 100
+            direction: Inbound 
+          - name: 'AllowSSH'
+            protocol: TCP
+            source_port_range: '*' 
+            source_address_prefix: '174.109.158.0/24'
+            destination_address_prefix: '*'
+            destination_port_range: 22
+            access: Allow
+            priority: 101
+            direction: Inbound
+      state: present
+
+# Update rules on existing security group
+- azure_rm_securitygroup:
+      resource_group: mygroup
+      name: mysecgroup
+      location: 'eastus'
+      rules:
+          - name: DenySSH
+            protocol: TCP
+            source_port_range: '*' 
+            source_address_prefix: '*'
+            destination_address_prefix: '*'
+            destination_port_range: 22-23
+            access: Deny
+            priority: 100
+            direction: Inbound 
+          - name: AllowSSHFromHome
+            protocol: TCP
+            source_port_range: '*' 
+            source_address_prefix: '174.109.158.0/24'
+            destination_address_prefix: '*'
+            destination_port_range: 22-23
+            access: Allow
+            priority: 102
+            direction: Inbound 
+      state: present
+
+# Delete security group
+- azure_rm_securitygroup:
+      resource_group: mygroup
+      name: mysecgroup 
+      state: absent
+
 '''
 
 HAS_AZURE = True
@@ -49,130 +239,6 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
-
-def log(msg):
-    #    print msg
-    if not LOG_PATH:
-        return
-    with open(LOG_PATH, "a") as logfile:
-        logfile.write("{0}\n".format(msg))
-
-def get_token_from_client_credentials(endpoint, client_id, client_secret):
-    payload = {
-        'grant_type': 'client_credentials',
-        'client_id': client_id,
-        'client_secret': client_secret,
-        'resource': 'https://management.core.windows.net/',
-    }
-    try:
-        response = requests.post(endpoint, data=payload).json()
-        if 'error_description' in response:
-           log('error: %s ' % response['error_description'])
-           raise Exception('Failed getting OAuth token: %s' % response['error_description'])
-    except Exception as e:
-        raise Exception(e)
-
-    return response['access_token']
-
-def get_network_client(endpoint, subscription_id, client_id, client_secret):
-    log('getting auth token...')
-
-    auth_token = get_token_from_client_credentials(
-        endpoint,
-        client_id,
-        client_secret
-    )
-
-    log('creating credential object...')
-
-    creds = SubscriptionCloudCredentials(subscription_id, auth_token)
-
-    log('creating ARM client...')
-
-    network_client = azure.mgmt.network.NetworkResourceProviderClient(creds)
-
-    return network_client
-
-def get_credentials_parser():
-    path = expanduser("~")    
-    path += "/.azure/credentials"
-    p = ConfigParser.ConfigParser()
-    try:
-        p.read(path)
-    except:
-        raise Exception("Failed to access %s. Check that the file exists and you have read access." % path)
-    return p 
-    
-
-def parse_creds(profile="default"):
-    parser = get_credentials_parser()
-    creds = dict(
-        subscription_id = "",
-        client_id = "",
-        client_secret = "",
-        tenant_id = ""
-    )
-    for key in creds:
-        try:
-            creds[key] = parser.get(profile, key, raw=True)       
-        except:
-            raise Exception("Failed to get %s for profile %s in ~/.azure/credentials" % (key, profile))
-    return creds
-
-def get_env_creds():
-    profile = os.environ.get('AZURE_PROFILE', None)
-    subscription_id = os.environ.get('AZURE_SUBSCRIPTION_ID', None)
-    client_id = os.environ.get('AZURE_CLIENT_ID', None)
-    client_secret = os.environ.get('AZURE_CLIENT_SECRET', None)
-    tenant_id = os.environ.get('AZURE_TENANT_ID', None)
-    if profile:
-        creds = parse_creds(profile)
-        return creds 
-    if subscription_id and client_id and client_secret and tenant_id:
-        creds = dict(
-            subscription_id = subscription_id,
-            client_id = client_id,
-            client_secret = client_secret,
-            tenant_id = tenant_id
-        )
-        return creds
-    return None
-
-def get_credentials(params):
-    # Get authentication credentials.
-    # Precedence: module parameters-> environment variables-> default profile in ~/.azure/credentials.
-    
-    profile = params.get('profile')
-    subscription_id = params.get('subscription_id')
-    client_id = params.get('client_id')
-    client_secret = params.get('client_id')
-    tenant_id = params.get('tenant_id')
-
-    # try module params
-    if profile:
-       creds = parse_creds(profile)
-       return creds
-    
-    if subscription_id and client_id and client_secret and tenant_id:
-       creds = dict(
-           subscription_id = subscription_id,
-           client_id = client_id,
-           client_secret = client_secret,
-           tenant_id = tenant_id
-       )
-       return creds
-    
-    # try environment
-    env_creds = get_env_creds()
-    if env_creds:
-        return env_creds
-
-    # try default profile from ~./azure/credentials
-    creds = parse_creds()
-    if creds:
-        return creds
-
-    return None
 
 def validate_rule(r, type=None):
     name = r.get('name', None)
@@ -213,7 +279,6 @@ def validate_rule(r, type=None):
     if not r.get('destination_port_range', None):
         raise Exception("rule destination_port_range attribute cannot be None")
     
-
 def compare_rules(r, rule):
     matched = False
     changed = False
@@ -315,7 +380,7 @@ def list_network_security_groups(resource_group, network_client):
             raise Exception(str(e.message))
     return results
 
-def module_impl(params, creds, check_mode=False):
+def module_impl(rm, log, params, check_mode=False):
 
     if not HAS_AZURE:
         raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
@@ -341,13 +406,7 @@ def module_impl(params, creds, check_mode=False):
     
     results = dict(changed=False)
 
-    log("client_id: %s" % creds['client_id'])
-    log("client_secret: %s" % creds['client_secret'])
-    log("subscripition_id: %s" % creds['subscription_id'])
-    log("check_mode: %s" % check_mode)
-    
-    auth_endpoint = "https://login.microsoftonline.com/%s/oauth2/token" % creds['tenant_id']
-    network_client = get_network_client(auth_endpoint, creds['subscription_id'], creds['client_id'], creds['client_secret'])
+    network_client = rm.get_network_client()
 
     if not resource_group:
         raise Exception("Parameter error: resource_group cannot be None.")
@@ -591,6 +650,19 @@ def module_impl(params, creds, check_mode=False):
             # Retrieve the object so that we can include the new ID in results.
             response = network_client.network_security_groups.get(resource_group, nsg_name)
             results['id'] = response.network_security_group.id
+            results['tags'] = response.network_security_group.tags
+            results['rules'] = []
+            for rule in response.network_security_group.security_rules:
+                results['rules'].append(create_rule_dict_from_obj(rule))
+            results['default_rules'] = []
+            for rule in response.network_security_group.default_security_rules:
+                results['default_rules'].append(create_rule_dict_from_obj(rule))
+            results['network_interfaces'] = []
+            for interface in response.network_security_group.network_interfaces:
+                results['network_interfaces'].append(interface.id)
+            results['subnets'] = []
+            for subnet in response.network_security_group.subnets:
+                results['subnets'].append(subnet.id)
         except AzureHttpError as e:
             raise Exception(str(e.message))
 
@@ -616,44 +688,51 @@ def main():
             client_id = dict(type='str'),
             client_secret = dict(type='str'),
             tenant_id = dict(type='str'),
-            resource_group = dict(required=True, type='str'),
-            name = dict(type='str'),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(type='str'),
-            rules = dict(type='list'),
             default_rules = dict(type='list'),
-            subnets = dict(type='list'),
-            network_interfaces = dict(type='list'),
-            tags = dict(type='list'),
-            purge_rules = dict(type='bool', default=False),
-            purge_default_rules = dict(type='bool', default=False),
-            purge_subnets = dict(type='bool', default=False),
-            purge_network_interfaces = dict(type='bool', default=False),
             gather_facts = dict(type='bool', default=False),
             gather_list = dict(type='bool', default=False),
+            location = dict(type='str'),
+            name = dict(type='str'),
+            network_interfaces = dict(type='list'),
+            purge_default_rules = dict(type='bool', default=False),
+            purge_network_interfaces = dict(type='bool', default=False),
+            purge_rules = dict(type='bool', default=False),
+            purge_subnets = dict(type='bool', default=False),
+            resource_group = dict(required=True, type='str'),
+            rules = dict(type='list'),
+            state = dict(default='present', choices=['present', 'absent']),
+            subnets = dict(type='list'),
+            tags = dict(type='dict'),
         ),
         supports_check_mode=True
     )
 
     check_mode = module.check_mode
+    debug = module.params.get('debug')
 
+    if debug:
+        log = azure_rm_log(LOG_PATH)
+    else:
+        log = azure_rm_log()
+    
     try:
-        creds = get_credentials(module.params)
+        rm = azure_rm_resources(module.params, log.log)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
-    if not creds:
-        module.fail_json(msg="Failed to get credentials. Either pass as parameters, set environment variables, or define a profile in ~/.azure/credientials.")
-    
     try:
-        result = module_impl(module.params, creds, check_mode)
+        result = module_impl(rm, log.log, module.params, check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
     module.exit_json(**result)
 
 # import module snippets
-from ansible.module_utils.basic import *  # noqa
+from ansible.module_utils.basic import *
+
+# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
+# found in local lib/ansible/module_utils
+from ansible.module_utils.azure_rm_common import *
 
 if __name__ == '__main__':
     main()

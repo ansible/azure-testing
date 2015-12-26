@@ -181,9 +181,7 @@ class azure_rm_resources(object):
 
         self.log('Getting storage client')
         
-        auth_token = self.__get_token_from_client_credentials(
-            
-        )
+        auth_token = self.__get_token_from_client_credentials()
 
         self.log('Creating credential object...')
 
@@ -205,11 +203,7 @@ class azure_rm_resources(object):
         
         self.log('Getting network client')
 
-        auth_token = self.__get_token_from_client_credentials(
-            self.endpoint,
-            self.credentials['client_id'],
-            self.credentials['client_secret']
-        )
+        auth_token = self.__get_token_from_client_credentials()
 
         self.log('Creating credential object...')
 
