@@ -774,7 +774,7 @@ def main():
             hours = dict(type='int', default=0),
             marker = dict(type='str'),
             max_results = dict(type='int'),
-            mode = dict(type='str'),
+            mode = dict(type='str', choices=['create', 'update', 'delete', 'get', 'put', 'list', 'get_url', 'get_token', 'delete_blob']),
             overwrite = dict(type='str', aliases=['force'], default='always'),
             permissions = dict(type='str'),
             prefix = dict(type='str'),

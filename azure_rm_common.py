@@ -31,6 +31,7 @@ try:
     import azure.mgmt.network
     from azure.mgmt.resource import ResourceManagementClient
     from azure.mgmt.storage import StorageManagementClient
+    from azure.mgmt.resource import ResourceManagementClient
 except ImportError:
     HAS_AZURE = False
 
@@ -214,4 +215,19 @@ class azure_rm_resources(object):
         network_client = azure.mgmt.network.NetworkResourceProviderClient(creds)
 
         return network_client
+
+    def get_rm_client(self):
+        self.log('Getting resource manager client')
+
+        auth_token = self.__get_token_from_client_credentials()
+
+        self.log('Creating credential object...')
+
+        creds = SubscriptionCloudCredentials(self.credentials['subscription_id'], auth_token)
+
+        self.log('Creating ARM client...')
+
+        resource_client = ResourceManagementClient(creds)
+
+        return resource_client
 

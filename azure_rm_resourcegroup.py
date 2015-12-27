@@ -24,6 +24,7 @@ module: azure_rm_resourcegroup
 '''
 HAS_AZURE = True
 HAS_REQUESTS = True
+LOG_PATH = "azure_rm_resourcegroup.log"
 
 try:
     from azure.common import AzureMissingResourceHttpError
@@ -38,47 +39,7 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
-log_path = None
-
-def log(msg):
-#    print msg
-
-    if not log_path:
-        return
-    with open(log_path, "a") as logfile:
-        logfile.write("{0}\n".format(msg))
-
-def get_token_from_client_credentials(endpoint, client_id, client_secret):
-    payload = {
-        'grant_type': 'client_credentials',
-        'client_id': client_id,
-        'client_secret': client_secret,
-        'resource': 'https://management.core.windows.net/',
-    }
-    response = requests.post(endpoint, data=payload).json()
-    return response['access_token']
-
-def get_rm_client(endpoint, subscription_id, client_id, client_secret):
-    log('getting auth token...')
-
-    auth_token = get_token_from_client_credentials(
-        endpoint,
-        client_id,
-        client_secret
-    )
-
-    log('creating credential object...')
-
-    creds = SubscriptionCloudCredentials(subscription_id, auth_token)
-
-    log('creating ARM client...')
-
-    resource_client = ResourceManagementClient(creds)
-
-    return resource_client
-
-
-def module_impl(name, state, location, subscription_id, auth_tenant_id, auth_endpoint, auth_client_id, auth_client_secret, check_mode=False):
+def module_impl(rm, log, name, state, location, check_mode=False):
     if not HAS_AZURE:
         raise Exception("The Azure python sdk is not installed (try 'pip install azure'")
     if not HAS_REQUESTS:
@@ -86,7 +47,7 @@ def module_impl(name, state, location, subscription_id, auth_tenant_id, auth_end
 
     results = dict(changed=False)
 
-    resource_client = get_rm_client(auth_endpoint, subscription_id, auth_client_id, auth_client_secret)
+    resource_client = rm.get_rm_client()
 
     try:
         log('fetching resource group...')
@@ -139,36 +100,48 @@ def main():
             name = dict(required=True),
             state = dict(default='present', choices=['present', 'absent']),
             location = dict(required=True),
-            log_path = dict(default=None),
-
+            
             # TODO: implement tags
             # TODO: implement object security
 
             # common/auth args
-            # TODO: move to a shared definition
-            subscription_id = dict(required=True), # TODO: False after .azure/env stuff is here
-            auth_tenant_id = dict(required=True), # TODO: False after .azure/env stuff is here
-            auth_client_id = dict(required=True, no_log=True), # TODO: False after .azure/env stuff is here
-            auth_client_secret = dict(required=True, no_log=True), # TODO: False after .azure/env stuff is here
+            profile = dict(type='str'),
+            subscription_id = dict(type='str'),
+            client_id = dict(type='str'),
+            client_secret = dict(type='str'),
+            tenant_id = dict(type='str'),
+            debug = dict(type='bool', default=False),
         ),
         supports_check_mode = True
     )
-
+    
     p = module.params
 
-    # allow these to come from env and .azure/credentials
-    subscription_id = p['subscription_id']
-    auth_tenant_id = p['auth_tenant_id']
-    auth_endpoint='https://login.microsoftonline.com/{0}/oauth2/token'.format(auth_tenant_id)
-    auth_client_id = p['auth_client_id']
-    auth_client_secret = p['auth_client_secret']
+    check_mode = module.check_mode
+    debug = module.params.get('debug')
 
-    log_path = p['log_path']
-
-    res = module_impl(p.get('name'), p.get('state'), p.get('location'), subscription_id, auth_tenant_id, auth_endpoint, auth_client_id, auth_client_secret, module.check_mode)
+    if debug:
+        log = azure_rm_log(LOG_PATH)
+    else:
+        log = azure_rm_log()
+    
+    try:
+        rm = azure_rm_resources(module.params, log.log)
+    except Exception as e:
+        module.fail_json(msg=e.args[0])
+    
+    try:
+        res = module_impl(rm, log.log, p.get('name'), p.get('state'), p.get('location'), module.check_mode)
+    except:
+        raise
 
     module.exit_json(**res)
 
 from ansible.module_utils.basic import *
+
+# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
+# found in local lib/ansible/module_utils
+from ansible.module_utils.azure_rm_common import *
+
 main()
 
