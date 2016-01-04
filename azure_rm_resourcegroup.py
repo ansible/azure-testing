@@ -94,25 +94,19 @@ def module_impl(rm, log, name, state, location, check_mode=False):
     return results
 
 def main():
-    global log_path
-    module = AnsibleModule(
-        argument_spec = dict(
-            name = dict(required=True),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(required=True),
-            
-            # TODO: implement tags
-            # TODO: implement object security
+    
+    module_args = dict(
+        name = dict(required=True),
+        state = dict(default='present', choices=['present', 'absent']),
+        location = dict(required=True),
+        
+        # TODO: implement tags
+        # TODO: implement object security
+    )
 
-            # common/auth args
-            profile = dict(type='str'),
-            subscription_id = dict(type='str'),
-            client_id = dict(type='str'),
-            client_secret = dict(type='str'),
-            tenant_id = dict(type='str'),
-            debug = dict(type='bool', default=False),
-        ),
-        supports_check_mode = True
+    module = azure_module(
+        argument_spec=module_args,
+        supports_check_mode=True
     )
     
     p = module.params
@@ -121,12 +115,12 @@ def main():
     debug = module.params.get('debug')
 
     if debug:
-        log = azure_rm_log(LOG_PATH)
+        log = AzureLog(LOG_PATH)
     else:
-        log = azure_rm_log()
+        log = AzureLog()
     
     try:
-        rm = azure_rm_resources(module.params, log.log)
+        rm = AzureRM(module.params, log.log)
     except Exception as e:
         module.fail_json(msg=e.args[0])
     

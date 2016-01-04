@@ -42,7 +42,7 @@ except ImportError:
 
 
 
-class azure_rm_log(object):
+class AzureLog(object):
     def __init__(self, log_path=None):
         self.log_path = log_path
 
@@ -54,7 +54,7 @@ class azure_rm_log(object):
             logfile.write("{0}\n".format(msg))
 
 
-class azure_rm_resources(object):
+class AzureRM(object):
 
     def __init__(self, params, log):
         if not HAS_AZURE:
@@ -230,4 +230,29 @@ class azure_rm_resources(object):
         resource_client = ResourceManagementClient(creds)
 
         return resource_client
+
+
+AZURE_COMMON_ARGS = dict(
+    profile=dict(type='str'),
+    subscription_id=dict(type='str'),
+    client_id=dict(type='str'),
+    client_secret=dict(type='str'),
+    tenant_id=dict(type='str'),
+    debug=dict(type='bool', default=False),
+)
+
+def azure_module(**kwargs):
+    '''
+    Append the common args to the argument_spec
+    '''
+    argument_spec = dict()
+    argument_spec.update(AZURE_COMMON_ARGS)
+    if kwargs.get('argument_spec'):
+        argument_spec.update(kwargs['argument_spec'])
+    kwargs['argument_spec'] = argument_spec
+    #kwargs['check_invalid_arguments'] = False
+    
+    module = AnsibleModule(**kwargs)
+
+    return module
 

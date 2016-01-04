@@ -507,24 +507,21 @@ def module_impl(rm, log, params, check_mode=False):
     return results
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
-            profile = dict(type='str'),
-            subscription_id = dict(type='str'),
-            client_id = dict(type='str'),
-            client_secret = dict(type='str'),
-            tenant_id = dict(type='str'),
-            resource_group = dict(required=True, type='str'),
-            name = dict(type='str'),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(type='str'),
-            tags = dict(type='dict'),
-            account_type = dict(type='str'),
-            custom_domain = dict(type='dict'),
-            gather_facts = dict(type='bool', default=False),
-            gather_list = dict(type='bool', default=False),
-            debug = dict(type='bool', default=False),
-        ),
+    
+    module_args = dict(
+        resource_group = dict(required=True, type='str'),
+        name = dict(type='str'),
+        state = dict(default='present', choices=['present', 'absent']),
+        location = dict(type='str'),
+        tags = dict(type='dict'),
+        account_type = dict(type='str'),
+        custom_domain = dict(type='dict'),
+        gather_facts = dict(type='bool', default=False),
+        gather_list = dict(type='bool', default=False),
+    )
+
+    module = azure_module(
+        argument_spec=module_args,
         supports_check_mode=True
     )
 
@@ -532,12 +529,12 @@ def main():
     debug = module.params.get('debug')
 
     if debug:
-        log = azure_rm_log(LOG_PATH)
+        log = AzureLog(LOG_PATH)
     else:
-        log = azure_rm_log()
+        log = AzureLog()
     
     try:
-        rm = azure_rm_resources(module.params, log.log)
+        rm = AzureRM(module.params, log.log)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 

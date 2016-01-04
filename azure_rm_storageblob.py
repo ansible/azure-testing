@@ -757,35 +757,31 @@ def module_impl(rm, log, params, check_mode=False):
         return results
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
-            profile = dict(type='str'),
-            subscription_id = dict(type='str'),
-            client_id = dict(type='str'),
-            client_secret = dict(type='str'),
-            tenant_id = dict(type='str'),
-            access_token = dict(type='str'),
-            account_name = dict(required=True, type='str'),
-            blob_name = dict(type='str'),
-            container_name = dict(required=True, type='str'),
-            days = dict(type='int', default=0),
-            debug = dict(type='bool', default=False),
-            file_path = dict(type='str'),
-            hours = dict(type='int', default=0),
-            marker = dict(type='str'),
-            max_results = dict(type='int'),
-            mode = dict(type='str', choices=['create', 'update', 'delete', 'get', 'put', 'list', 'get_url', 'get_token', 'delete_blob']),
-            overwrite = dict(type='str', aliases=['force'], default='always'),
-            permissions = dict(type='str'),
-            prefix = dict(type='str'),
-            resource_group = dict(required=True, type='str'),
-            x_ms_blob_cache_control = dict(type='str'),
-            x_ms_blob_content_encoding = dict(type='str'),
-            x_ms_blob_content_language = dict(type='str'),
-            x_ms_blob_content_type = dict(type='str'),
-            x_ms_blob_public_access = dict(type='str', choices=['blob','container','private']),
-            x_ms_meta_name_values = dict(type='dict'),
-        ),
+    module_args = dict(
+        access_token = dict(type='str'),
+        account_name = dict(required=True, type='str'),
+        blob_name = dict(type='str'),
+        container_name = dict(required=True, type='str'),
+        days = dict(type='int', default=0),
+        file_path = dict(type='str'),
+        hours = dict(type='int', default=0),
+        marker = dict(type='str'),
+        max_results = dict(type='int'),
+        mode = dict(type='str', choices=['create', 'update', 'delete', 'get', 'put', 'list', 'get_url', 'get_token', 'delete_blob']),
+        overwrite = dict(type='str', aliases=['force'], default='always'),
+        permissions = dict(type='str'),
+        prefix = dict(type='str'),
+        resource_group = dict(required=True, type='str'),
+        x_ms_blob_cache_control = dict(type='str'),
+        x_ms_blob_content_encoding = dict(type='str'),
+        x_ms_blob_content_language = dict(type='str'),
+        x_ms_blob_content_type = dict(type='str'),
+        x_ms_blob_public_access = dict(type='str', choices=['blob','container','private']),
+        x_ms_meta_name_values = dict(type='dict'),
+    )
+    
+    module = azure_module(
+        argument_spec=module_args,
         supports_check_mode=True
     )
 
@@ -793,12 +789,12 @@ def main():
     debug = module.params.get('debug')
 
     if debug:
-        log = azure_rm_log(LOG_PATH)
+        log = AzureLog(LOG_PATH)
     else:
-        log = azure_rm_log()
+        log = AzureLog()
     
     try:
-        rm = azure_rm_resources(module.params, log.log)
+        rm = AzureRM(module.params, log.log)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 

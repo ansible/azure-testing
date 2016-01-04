@@ -681,29 +681,26 @@ def module_impl(rm, log, params, check_mode=False):
     return results
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
-            profile = dict(type='str'),
-            subscription_id = dict(type='str'),
-            client_id = dict(type='str'),
-            client_secret = dict(type='str'),
-            tenant_id = dict(type='str'),
-            default_rules = dict(type='list'),
-            gather_facts = dict(type='bool', default=False),
-            gather_list = dict(type='bool', default=False),
-            location = dict(type='str'),
-            name = dict(type='str'),
-            network_interfaces = dict(type='list'),
-            purge_default_rules = dict(type='bool', default=False),
-            purge_network_interfaces = dict(type='bool', default=False),
-            purge_rules = dict(type='bool', default=False),
-            purge_subnets = dict(type='bool', default=False),
-            resource_group = dict(required=True, type='str'),
-            rules = dict(type='list'),
-            state = dict(default='present', choices=['present', 'absent']),
-            subnets = dict(type='list'),
-            tags = dict(type='dict'),
-        ),
+    module_args = dict(
+        default_rules = dict(type='list'),
+        gather_facts = dict(type='bool', default=False),
+        gather_list = dict(type='bool', default=False),
+        location = dict(type='str'),
+        name = dict(type='str'),
+        network_interfaces = dict(type='list'),
+        purge_default_rules = dict(type='bool', default=False),
+        purge_network_interfaces = dict(type='bool', default=False),
+        purge_rules = dict(type='bool', default=False),
+        purge_subnets = dict(type='bool', default=False),
+        resource_group = dict(required=True, type='str'),
+        rules = dict(type='list'),
+        state = dict(default='present', choices=['present', 'absent']),
+        subnets = dict(type='list'),
+        tags = dict(type='dict'),
+    )
+
+    module = azure_module(
+        argument_spec=module_args,
         supports_check_mode=True
     )
 
@@ -711,12 +708,12 @@ def main():
     debug = module.params.get('debug')
 
     if debug:
-        log = azure_rm_log(LOG_PATH)
+        log = AzureLog(LOG_PATH)
     else:
-        log = azure_rm_log()
+        log = AzureLog()
     
     try:
-        rm = azure_rm_resources(module.params, log.log)
+        rm = AzureRM(module.params, log.log)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
