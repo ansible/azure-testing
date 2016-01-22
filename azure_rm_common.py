@@ -23,6 +23,16 @@ import ConfigParser
 import os
 from os.path import expanduser
 
+
+AZURE_COMMON_ARGS = dict(
+    profile=dict(type='str'),
+    subscription_id=dict(type='str'),
+    client_id=dict(type='str'),
+    client_secret=dict(type='str'),
+    tenant_id=dict(type='str'),
+    debug=dict(type='bool', default=False),
+)
+
 HAS_AZURE = True
 HAS_REQUESTS = True
 
@@ -32,6 +42,7 @@ try:
     from azure.mgmt.resource import ResourceManagementClient
     from azure.mgmt.storage import StorageManagementClient
     from azure.mgmt.resource import ResourceManagementClient
+    from azure.mgmt.compute import ComputeManagementClient
 except ImportError:
     HAS_AZURE = False
 
@@ -41,35 +52,32 @@ except ImportError:
     HAS_REQUESTS = False
 
 
-
-class AzureLog(object):
-    def __init__(self, log_path=None):
-        self.log_path = log_path
-
-    def log(self, msg):
-        #    print msg
-        if not self.log_path:
-            return
-        with open(self.log_path, "a") as logfile:
-            logfile.write("{0}\n".format(msg))
-
-
 class AzureRM(object):
 
-    def __init__(self, params, log):
+    def __init__(self, module):
         if not HAS_AZURE:
             raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
 
         if not HAS_REQUESTS:
             raise Exception("The requests python module is not installed (try 'pip install requests')")
-        
-        self.log = log
-        
-        self.credentials = self.__get_credentials(params)
-        if not self.credentials:
+
+        self._module = module
+        self._network_client = None
+        self._storage_client = None
+        self._resource_client = None
+        self._compute_client = None
+        self._debug = self._module.params.get('debug')
+        self.log = module.debug
+
+        self._credentials = self.__get_credentials(module.params)
+        if not self._credentials:
             raise Exception("Failed to get credentials. Either pass as parameters, set environment variables, or define " +
                 "a profile in ~/.azure/credientials.")
-        self.auth_endpoint = "https://login.microsoftonline.com/%s/oauth2/token" % self.credentials['tenant_id']
+
+        self._auth_endpoint = "https://login.microsoftonline.com/%s/oauth2/token" % self._credentials['tenant_id']
+        auth_token = self.__get_token_from_client_credentials()
+        self._creds = SubscriptionCloudCredentials(self._credentials['subscription_id'], auth_token)
+
 
     def __get_credentials_parser(self):
         path = expanduser("~")    
@@ -163,96 +171,61 @@ class AzureRM(object):
         
         payload = {
             'grant_type': 'client_credentials',
-            'client_id': self.credentials['client_id'],
-            'client_secret': self.credentials['client_secret'],
+            'client_id': self._credentials['client_id'],
+            'client_secret': self._credentials['client_secret'],
             'resource': 'https://management.core.windows.net/',
         }
        
         try:
-            response = requests.post(self.auth_endpoint, data=payload).json()
+            response = requests.post(self._auth_endpoint, data=payload).json()
             if 'error_description' in response:
                self.log('error: %s ' % response['error_description'])
                raise Exception('Failed getting OAuth token: %s' % response['error_description'])
-        except Exception as e:
+        except Exception, e:
             raise Exception(e)
 
         return response['access_token']
 
-    def get_storage_client(self):
-
-        self.log('Getting storage client')
-        
-        auth_token = self.__get_token_from_client_credentials()
-
-        self.log('Creating credential object...')
-
-        creds = SubscriptionCloudCredentials(self.credentials['subscription_id'], auth_token)
-
+    @property
+    def storage_client(self):
         self.log('Creating ARM client...')
+        if not self._storage_client:
+            self._storage_client = StorageManagementClient(self._creds)
+        if not self._resource_client:
+            self._resource_client = ResourceManagementClient(self._creds)
+        self._resource_client.providers.register('Microsoft.Storage')
+        return self._storage_client
 
-        storage_client = StorageManagementClient(creds)
-        resource_client = ResourceManagementClient(creds)
-        try:
-            # registering is supposed to be a one-time thing. How do we know if it has already been done?
-            resource_client.providers.register('Microsoft.Storage')
-        except Exception as e:
-            self.log(str(e.args[0]))
-
-        return storage_client
-
-    def get_network_client(self):
-        
+    @property
+    def network_client(self):
         self.log('Getting network client')
+        if not self._network_client:
+            self._network_client = azure.mgmt.network.NetworkResourceProviderClient(self._creds)
+        return self._network_client
 
-        auth_token = self.__get_token_from_client_credentials()
-
-        self.log('Creating credential object...')
-
-        creds = SubscriptionCloudCredentials(self.credentials['subscription_id'], auth_token)
-
-        self.log('Creating ARM client...')
-
-        network_client = azure.mgmt.network.NetworkResourceProviderClient(creds)
-
-        return network_client
-
-    def get_rm_client(self):
+    @property
+    def rm_client(self):
         self.log('Getting resource manager client')
+        self._resource_client = ResourceManagementClient(self._creds)
+        return self._resource_client
 
-        auth_token = self.__get_token_from_client_credentials()
-
-        self.log('Creating credential object...')
-
-        creds = SubscriptionCloudCredentials(self.credentials['subscription_id'], auth_token)
-
-        self.log('Creating ARM client...')
-
-        resource_client = ResourceManagementClient(creds)
-
-        return resource_client
-
-
-AZURE_COMMON_ARGS = dict(
-    profile=dict(type='str'),
-    subscription_id=dict(type='str'),
-    client_id=dict(type='str'),
-    client_secret=dict(type='str'),
-    tenant_id=dict(type='str'),
-    debug=dict(type='bool', default=False),
-)
+    @property
+    def compute_client(self):
+        self.log('Getting compute client')
+        if not self._compute_client:
+            self._compute_client = ComputeManagementClient(creds)
+        if not self._resource_client:
+            self._resource_client = ResourceManagementClient(creds)
+        self._resource_client.providers.register('Microsoft.Compute')
+        return self._compute_client
 
 def azure_module(**kwargs):
-    '''
-    Append the common args to the argument_spec
-    '''
+    # Append the common args to the argument_spec
     argument_spec = dict()
     argument_spec.update(AZURE_COMMON_ARGS)
     if kwargs.get('argument_spec'):
         argument_spec.update(kwargs['argument_spec'])
     kwargs['argument_spec'] = argument_spec
-    #kwargs['check_invalid_arguments'] = False
-    
     module = AnsibleModule(**kwargs)
-
     return module
 

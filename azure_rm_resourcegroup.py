@@ -47,7 +47,7 @@ def module_impl(rm, log, name, state, location, check_mode=False):
 
     results = dict(changed=False)
 
-    resource_client = rm.get_rm_client()
+    resource_client = rm.rm_client
 
     try:
         log('fetching resource group...')
@@ -111,21 +111,13 @@ def main():
     
     p = module.params
 
-    check_mode = module.check_mode
-    debug = module.params.get('debug')
-
-    if debug:
-        log = AzureLog(LOG_PATH)
-    else:
-        log = AzureLog()
-    
     try:
-        rm = AzureRM(module.params, log.log)
+        rm = AzureRM(module)
     except Exception as e:
         module.fail_json(msg=e.args[0])
     
     try:
-        res = module_impl(rm, log.log, p.get('name'), p.get('state'), p.get('location'), module.check_mode)
+        res = module_impl(rm, module.debug, p.get('name'), p.get('state'), p.get('location'), module.check_mode)
     except:
         raise
 

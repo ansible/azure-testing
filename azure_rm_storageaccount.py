@@ -242,7 +242,7 @@ def module_impl(rm, log, params, check_mode=False):
     
     results = dict(changed=False)
 
-    storage_client = rm.get_storage_client() 
+    storage_client = rm.storage_client
     
     if not resource_group:
         raise Exception("Parameter error: resource_group cannot be None.")
@@ -525,21 +525,13 @@ def main():
         supports_check_mode=True
     )
 
-    check_mode = module.check_mode
-    debug = module.params.get('debug')
-
-    if debug:
-        log = AzureLog(LOG_PATH)
-    else:
-        log = AzureLog()
-    
     try:
-        rm = AzureRM(module.params, log.log)
+        rm = AzureRM(module)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
     try:
-        result = module_impl(rm, log.log, module.params, check_mode)
+        result = module_impl(rm, module.debug, module.params, module.check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 

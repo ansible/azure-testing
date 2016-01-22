@@ -2,46 +2,31 @@
 - name: Test azure_rm_storageblob
   hosts: localhost
   vars:
-      debug_mode: yes
+      debug_mode: no
   tasks:
-      - name: Remove log file
-        file:
-           name: azure_rm_storageblob.log
-           state: absent
-
-      - name: Remove log file
-        file:
-           name: azure_rm_resourcegroup.log
-           state: absent
-
-      - name: Remove log file
-        file:
-           name: azure_rm_storageaccount.log
-           state: absent
-
       - name: Create resource group
         azure_rm_resourcegroup:
-            name: testgroup01
+            name: testgroup03
             location: eastus
             state: present
-            debug: yes
+            debug: "{{ debug_mode }}"
 
       - name: Create storage account
         azure_rm_storageaccount:
-            resource_group: testgroup01
+            resource_group: testgroup03
             location: eastus
-            name: testgroup01blobs
+            name: testgroup03blobs
             account_type: Standard_LRS
             state: present
-            debug: yes
+            debug: "{{ debug_mode }}"
 
       - name: Create container
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs 
+            resource_group: testgroup03
+            account_name: testgroup03blobs 
             container_name: my-blobs
             mode: create
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: create_facts
 
       - debug: var=create_facts
@@ -51,12 +36,12 @@
 
       - name: Update container set access to container
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs 
+            resource_group: testgroup03
+            account_name: testgroup03blobs 
             container_name: my-blobs
             x_ms_blob_public_access: private
             mode: update
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: update_facts    
 
       - debug: var=update_facts
@@ -66,13 +51,13 @@
 
       - name: Update container set signed permissions  
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             permissions: rw
             hours: 12 
             mode: update
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: update_facts
 
       - debug: var=update_facts
@@ -82,8 +67,8 @@
 
       - name: Force upload blob
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             mode: put
             blob_name: 'Ratings.png'
@@ -92,8 +77,8 @@
             x_ms_meta_name_values:
                 val1: foo
                 val2: bar
-            debug: yes
             force: always 
+            debug: "{{ debug_mode }}"
         register: upload_facts 
 
       - debug: var=upload_facts
@@ -103,13 +88,13 @@
 
       - name: Upload blob
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             mode: put
             blob_name: 'Ratings.png'
             file_path: './files/Ratings.png'
-            debug: yes
+            debug: "{{ debug_mode }}"
             overwrite: different
         register: upload_facts 
 
@@ -117,12 +102,12 @@
 
       - name: Make url for Ratings.png  
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             mode: get_url 
             blob_name: 'Ratings.png'
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: make_url_facts 
 
       - debug: var=make_url_facts
@@ -130,11 +115,11 @@
 
       - name: List blobs
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             mode: list
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: list_facts
 
       - debug: var=list_facts
@@ -142,14 +127,14 @@
 
       - name: Get token
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs  
             blob_name: 'Ratings.png'
             mode: get_token
             hours: 24
             permissions: 'rwd'
-            debug: yes
+            debug: "{{ debug_mode }}"
         register: access_token
 
       - debug: var=access_token
@@ -159,25 +144,27 @@
 
       - name: Generate secure URL
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             blob_name: 'Ratings.png' 
             mode: get_url
             access_token: "{{ access_token['access_token'] }}"
+            debug: "{{ debug_mode }}"
         register: secure_access
 
       - assert: { that: "secure_access['url'] is defined" }
 
       - name: Should not download file 
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             blob_name: 'Ratings.png'
             mode: get
             file_path: './files/Ratings.png'
             overwrite: never
+            debug: "{{ debug_mode }}"
         register: download_results
 
       - debug: var=download_results 
@@ -189,13 +176,14 @@
 
       - name: Should download file 
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: my-blobs
             blob_name: 'Ratings.png'
             mode: get
             file_path: '/tmp/Ratings.png'
             overwrite: always
+            debug: "{{ debug_mode }}"
         register: download_results
 
       - assert: { that: "download_results['changed'] == True" }
@@ -207,20 +195,22 @@
 
       - name: Create a container with an object
         azure_rm_storageblob:
-            resource_group: testgroup01 
-            account_name: testgroup01blobs 
+            resource_group: testgroup03 
+            account_name: testgroup03blobs 
             container_name: newcontainer
             blob_name: graylog.png
             file_path: './files/graylog.png'
             mode: put
+            debug: "{{ debug_mode }}"
         register: new_container
 
       - name: List contents of new container
         azure_rm_storageblob:
-            resource_group: testgroup01 
-            account_name: testgroup01blobs 
+            resource_group: testgroup03 
+            account_name: testgroup03blobs 
             container_name: newcontainer
             mode: list
+            debug: "{{ debug_mode }}"
         register: new_contents
 
       # if we're re-running the test, there may actually be 2 files in the container
@@ -228,51 +218,57 @@
 
       - name: Upload file to new container
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: newcontainer
             blob_name: Ratings.png
             file_path: './files/Ratings.png'
             mode: put
+            debug: "{{ debug_mode }}"
         register: new_container
       
       - name: List contents of new container
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: newcontainer
             mode: list
+            debug: "{{ debug_mode }}"
         register: new_contents
 
       - assert: { that: "{{ new_contents.blobs | length }} == 2" }
       
       - name: Delete blob object
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: newcontainer
             mode: delete_blob
+            debug: "{{ debug_mode }}"
             blob_name: Ratings.png
 
       - name: List contents of new container
         azure_rm_storageblob:
-            resource_group: testgroup01
-            account_name: testgroup01blobs
+            resource_group: testgroup03
+            account_name: testgroup03blobs
             container_name: newcontainer
             mode: list
+            debug: "{{ debug_mode }}"
         register: new_contents
       
       - assert: { that: "{{ new_contents.blobs | length }} == 1" }
 
       - name: Delete new container
         azure_rm_storageblob:
-            resource_group: testgroup01 
-            account_name: testgroup01blobs 
+            resource_group: testgroup03 
+            account_name: testgroup03blobs 
             container_name: newcontainer
+            debug: "{{ debug_mode }}"
             mode: delete
 
       - name: Delete resource group
         azure_rm_resourcegroup:
-            name: testgroup01
+            name: testgroup03
             location: eastus
             state: absent
+            debug: "{{ debug_mode }}"
