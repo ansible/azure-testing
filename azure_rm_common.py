@@ -85,10 +85,9 @@ class AzureRM(object):
         p = ConfigParser.ConfigParser()
         try:
             p.read(path)
-        except:
-            raise Exception("Failed to access %s. Check that the file exists and you have read access." % path)
-        return p 
-    
+            return p
+        except Exception:
+            self._module.fail_json(msg="Failed to access %s. Check that the file exists and you have read access." % path)
 
     def __parse_creds(self, profile="default"):
         parser = self.__get_credentials_parser()
@@ -101,8 +100,8 @@ class AzureRM(object):
         for key in creds:
             try:
                 creds[key] = parser.get(profile, key, raw=True)       
-            except:
-                raise Exception("Failed to get %s for profile %s in ~/.azure/credentials" % (key, profile))
+            except Exception:
+                self._module.fail_json(msg="Failed to get %s for profile %s in ~/.azure/credentials" % (key, profile))
         return creds
 
     def __get_env_creds(self):
@@ -168,7 +167,6 @@ class AzureRM(object):
 
     def __get_token_from_client_credentials(self):
         self.log('Getting auth token...')
-        
         payload = {
             'grant_type': 'client_credentials',
             'client_id': self._credentials['client_id'],
@@ -176,14 +174,10 @@ class AzureRM(object):
             'resource': 'https://management.core.windows.net/',
         }
        
-        try:
-            response = requests.post(self._auth_endpoint, data=payload).json()
-            if 'error_description' in response:
-               self.log('error: %s ' % response['error_description'])
-               raise Exception('Failed getting OAuth token: %s' % response['error_description'])
-        except Exception, e:
-            raise Exception(e)
-
+        response = requests.post(self._auth_endpoint, data=payload).json()
+        if 'error_description' in response:
+           self.log('error: %s ' % response['error_description'])
+           self._module.fail_json(msg='Failed getting OAuth token: %s' % response['error_description'])
         return response['access_token']
 
     @property

@@ -5,14 +5,16 @@
     debug_playbook: yes
     new_account_name: "mystorage{{ 100 |random }}"
   tasks:
-     - name: Remove log file
-       file:
-           name: azure_rm_storageaccount.log
-           state: absent
+     - name: Create resource group
+       azure_rm_resourcegroup:
+           name: chousetest 
+           location: westus 
+           state: present
+           debug: "{{ debug_playbook }}"
 
      - name: Test invalid account name
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "invalid_char$"
            state: present
        register: invalid_name     
@@ -23,7 +25,7 @@
 
      - name: Delete storage account
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ new_account_name }}"
            state: absent
        register: test_004
@@ -33,12 +35,12 @@
 
      - name: Create new storage account
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ test_004['name'] }}" 
            location: eastus
            account_type: Standard_LRS
            state: present
-           debug: yes
+           debug: "{{ debug_playbook }}" 
            tags:
                test: test
                galaxy: galaxy
@@ -56,10 +58,10 @@
 
      - name: Gather facts
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ test_005['name'] }}"
            gather_facts: yes
-           debug: yes
+           debug: "{{ debug_playbook }}" 
        register: gathered_facts
 
      - name: Debug
@@ -74,7 +76,7 @@
 
      - name: Change account type 
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ test_005['name'] }}"
            account_type: Premium_LRS
        register: change_account
@@ -85,13 +87,13 @@
 
      - name: Change account type and add custom domain
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ test_005['name'] }}"
            account_type: Standard_GRS
            custom_domain:
                name: "ansible.com"
                use_sub_domain: no  
-           debug: yes
+           debug: "{{ debug_playbook }}" 
        register: change_account
        ignore_errors: true
 
@@ -104,7 +106,7 @@
 
      - name: List all storage accounts in resource group
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            gather_list: yes
        register: gathered_list
       
@@ -113,8 +115,15 @@
 
      - name: Delete acccounts - anything not in use will be deleted
        azure_rm_storageaccount:
-           resource_group: chouse
+           resource_group: chousetest
            name: "{{ item['name'] }}"
            state: absent
-           debug: yes
+           debug: "{{ debug_playbook }}" 
        with_items: "{{ gathered_list['storage_accounts'] }}"
+
+     - name: Delete resource group
+       azure_rm_resourcegroup:
+           name: chousetest 
+           location: westus 
+           state: absent 
+           debug: "{{ debug_mode }}"

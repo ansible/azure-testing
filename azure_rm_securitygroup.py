@@ -704,22 +704,11 @@ def main():
         supports_check_mode=True
     )
 
-    check_mode = module.check_mode
-    debug = module.params.get('debug')
-
-    if debug:
-        log = AzureLog(LOG_PATH)
-    else:
-        log = AzureLog()
-    
-    try:
-        rm = AzureRM(module.params, log.log)
-    except Exception as e:
-        module.fail_json(msg=e.args[0])
+    rm = AzureRM(module.params)
 
     try:
-        result = module_impl(rm, log.log, module.params, check_mode)
-    except Exception as e:
+        result = module_impl(rm, module.debug, module.params, module.check_mode)
+    except Exception, e:
         module.fail_json(msg=e.args[0])
 
     module.exit_json(**result)

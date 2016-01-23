@@ -110,16 +110,12 @@ def main():
     )
     
     p = module.params
+    rm = AzureRM(module)
 
     try:
-        rm = AzureRM(module)
-    except Exception as e:
-        module.fail_json(msg=e.args[0])
-    
-    try:
         res = module_impl(rm, module.debug, p.get('name'), p.get('state'), p.get('location'), module.check_mode)
-    except:
-        raise
+    except Exception, e:
+        module.fail_json(msg=e.args[0])
 
     module.exit_json(**res)
 

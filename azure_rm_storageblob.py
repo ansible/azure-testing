@@ -785,15 +785,10 @@ def main():
         supports_check_mode=True
     )
 
-    check_mode = module.check_mode
+    rm = AzureRM(module)
 
     try:
-        rm = AzureRM(module)
-    except Exception as e:
-        module.fail_json(msg=e.args[0])
-
-    try:
-        result = module_impl(rm, module.debug, module.params, check_mode)
+        result = module_impl(rm, module.debug, module.params, module.check_mode)
     except Exception as e:
         module.fail_json(msg=e.args[0])
 
