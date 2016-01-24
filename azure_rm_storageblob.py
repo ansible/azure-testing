@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# (c) 2015 Chris Houseknecht, <chouse@ansible.com>
+# (c) 2016 Chris Houseknecht, <chouseknecht@ansible.com>
 #
 # This file is part of Ansible
 #
