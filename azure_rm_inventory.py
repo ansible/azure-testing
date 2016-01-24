@@ -27,6 +27,12 @@ Generates dynamic inventory by making API requests to Azure using the Azure
 Python SDK. For instruction on installing the Azure Python SDK see
 http://azure-sdk-for-python.readthedocs.org/
 
+To run for a specific host a resource group is required.
+
+The VM inventory_hostname will be the fqdn, when set on the public_ip_address object.
+Otherwise, the public ip address is used. If no public ip address, then the private
+ip address is used.
+
 When run against a specific host, this script returns the following variables:
  - computer_name
  - fqdn
@@ -248,7 +254,8 @@ class AzureInventory(object):
         self._inventory = dict(
             _meta=dict(
                 hostvars=dict()
-            )
+            ),
+            azure=[]
         )
 
         if self._args.host and not self._args.resource_group:
@@ -268,7 +275,7 @@ class AzureInventory(object):
         parser.add_argument('--host', action='store',
                            help='Get all information about an instance')
         parser.add_argument('--pretty', action='store_true', default=False,
-                           help='Pretty format (default: False)')
+                           help='Pretty print JSON output(default: False)')
         parser.add_argument('--profile', action='store',
                             help='Azure profile contained in ~/.azure/credentials')
         parser.add_argument('--subscription_id', action='store',
@@ -345,29 +352,29 @@ class AzureInventory(object):
                     version=machine.storage_profile.image_reference.version
                 )
 
-            for interface in machine.network_profile.network_interfaces:
-                # interface is a NetworkInterfaceReference. We need the actual NetworkInterface
-                reference = self._parse_ref_id(interface.reference_uri)
-                response = self._network_client.network_interfaces.get(reference['resourceGroups'],
-                                                                       reference['networkInterfaces'])
-                network_interface = response.network_interface
-                host_vars['network_interface'] = network_interface.name
-                host_vars['mac_address'] = network_interface.mac_address
-                network_sec_group_reference = self._parse_ref_id(network_interface.network_security_group.id)
-                host_vars['network_security_group'] = network_sec_group_reference['networkSecurityGroups']
+            # For now assuming that there is only a single network interface. The primary attribute
+            # does not seem to be set, otherwise we could find and use the primary only.
+            interface_reference = self._parse_ref_id(machine.network_profile.network_interfaces[0].reference_uri)
+            interface_response = self._network_client.network_interfaces.get(interface_reference['resourceGroups'],
+                                                                   interface_reference['networkInterfaces'])
+            network_interface = interface_response.network_interface
+            host_vars['network_interface'] = network_interface.name
+            host_vars['mac_address'] = network_interface.mac_address
+            network_sec_group_reference = self._parse_ref_id(network_interface.network_security_group.id)
+            host_vars['network_security_group'] = network_sec_group_reference['networkSecurityGroups']
 
-                for ip_config in network_interface.ip_configurations:
-                    host_vars['private_ip_address'] = ip_config.private_ip_address
-                    if ip_config.public_ip_address:
-                        public_ip_reference = self._parse_ref_id(ip_config.public_ip_address.id)
-                        public_ip_response = self._network_client.public_ip_addresses.get(
-                                                 public_ip_reference['resourceGroups'],
-                                                 public_ip_reference['publicIPAddresses'])
-                        public_ip_address = public_ip_response.public_ip_address
-                        host_vars['public_ip_address'] = public_ip_address.ip_address
-                        host_vars['public_ip_address_name'] = public_ip_address.name
-                        if public_ip_address.dns_settings:
-                            host_vars['fqdn'] = public_ip_address.dns_settings.fqdn
+            for ip_config in network_interface.ip_configurations:
+                host_vars['private_ip_address'] = ip_config.private_ip_address
+                if ip_config.public_ip_address:
+                    public_ip_reference = self._parse_ref_id(ip_config.public_ip_address.id)
+                    public_ip_response = self._network_client.public_ip_addresses.get(
+                                             public_ip_reference['resourceGroups'],
+                                             public_ip_reference['publicIPAddresses'])
+                    public_ip_address = public_ip_response.public_ip_address
+                    host_vars['public_ip_address'] = public_ip_address.ip_address
+                    host_vars['public_ip_address_name'] = public_ip_address.name
+                    if public_ip_address.dns_settings:
+                        host_vars['fqdn'] = public_ip_address.dns_settings.fqdn
 
             if self._args.host:
                 self._inventory = host_vars
@@ -391,6 +398,7 @@ class AzureInventory(object):
         self._inventory[vars['location']].append(host_name)
         self._inventory['_meta']['hostvars'][host_name] = vars
         self._inventory[resource_group].append(host_name)
+        self._inventory['azure'].append(host_name)
 
         for key in vars['tags']:
             if not self._inventory.get(key):
