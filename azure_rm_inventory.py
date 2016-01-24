@@ -85,8 +85,6 @@ import sys
 
 HAS_AZURE = True
 HAS_REQUESTS = True
-LOG_PATH = "azure_rm_securitygroup.log"
-NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
 try:
     from azure.mgmt.common import SubscriptionCloudCredentials
@@ -424,10 +422,12 @@ class AzureInventory(object):
 
 def main():
     if not HAS_AZURE:
-        raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
+        print "The Azure python sdk is not installed (try 'pip install azure')"
+        sys.exit(1)
 
     if not HAS_REQUESTS:
-         raise Exception("The requests python module is not installed (try 'pip install requests')")
+        print "The requests python module is not installed (try 'pip install requests')"
+        sys.exit(1)
 
     AzureInventory()
 
