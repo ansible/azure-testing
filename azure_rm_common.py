@@ -38,10 +38,9 @@ HAS_REQUESTS = True
 
 try:
     from azure.mgmt.common import SubscriptionCloudCredentials
-    import azure.mgmt.network
+    from azure.mgmt.network import NetworkResourceProviderClient
     from azure.mgmt.resource import ResourceManagementClient
     from azure.mgmt.storage import StorageManagementClient
-    from azure.mgmt.resource import ResourceManagementClient
     from azure.mgmt.compute import ComputeManagementClient
 except ImportError:
     HAS_AZURE = False
@@ -132,7 +131,7 @@ class AzureRM(object):
         profile = params.get('profile')
         subscription_id = params.get('subscription_id')
         client_id = params.get('client_id')
-        client_secret = params.get('client_id')
+        client_secret = params.get('client_secret')
         tenant_id = params.get('tenant_id')
 
         # try module params
@@ -194,7 +193,7 @@ class AzureRM(object):
     def network_client(self):
         self.log('Getting network client')
         if not self._network_client:
-            self._network_client = azure.mgmt.network.NetworkResourceProviderClient(self._creds)
+            self._network_client = NetworkResourceProviderClient(self._creds)
         return self._network_client
 
     @property
@@ -207,9 +206,9 @@ class AzureRM(object):
     def compute_client(self):
         self.log('Getting compute client')
         if not self._compute_client:
-            self._compute_client = ComputeManagementClient(creds)
+            self._compute_client = ComputeManagementClient(self._creds)
         if not self._resource_client:
-            self._resource_client = ResourceManagementClient(creds)
+            self._resource_client = ResourceManagementClient(self._creds)
         self._resource_client.providers.register('Microsoft.Compute')
         return self._compute_client
 
