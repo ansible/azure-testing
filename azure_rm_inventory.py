@@ -63,7 +63,7 @@ Examples:
   Execute uname on all instances in the us-central1-a zone
   $ ansible -i azure_rm_inventory.py galaxy-qa -m shell -a "/bin/uname -a"
 
-  Use the GCE inventory script to print out instance specific information
+  Use the inventory script to print instance specific information
   $ contrib/inventory/azure_rm_inventory.py --host my_instance
 
 Author: Chris Houseknecht chouseknecht@ansible.com
@@ -242,8 +242,7 @@ class AzureInventory(object):
         try:
             rm = AzureRM(self._args)
         except Exception, e:
-            print "{0}".format(e.args[0])
-            sys.exit(1)
+            sys.exit("{0}".format(e.args[0]))
 
         self._compute_client = rm.compute_client
         self._network_client = rm.network_client
@@ -257,8 +256,7 @@ class AzureInventory(object):
         )
 
         if self._args.host and not self._args.resource_group:
-            print("Error: cannot retrieve host without a resource group.")
-            sys.exit(1)
+            sys.exit("Error: cannot retrieve host without a resource group.")
 
         self.get_inventory()
         print(self._json_format_dict(pretty=self._args.pretty))
@@ -295,26 +293,22 @@ class AzureInventory(object):
                                                                      self._args.host)
                 self._load_machines([response.virtual_machine], self._args.resource_group)
             except AzureMissingResourceHttpError, e:
-                print "{0}".format(json.loads(e.message)['error']['message'])
-                sys.exit(1)
+                sys.exie("{0}".format(json.loads(e.message)['error']['message']))
         elif self._args.resource_group:
             try:
                 list = self._compute_client.virtual_machines.list(self._args.resource_group)
                 self._load_machines(list.virtual_machines, self._args.resource_group)
             except AzureMissingResourceHttpError, e:
-                print "{0}".format(json.loads(e.message)['error']['message'])
-                sys.exit(1)
+                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
         else:
             # get all VMs in all resource groups
             try:
                 response = self._resource_client.resource_groups.list(None)
-                print "next: %s" % response.next_link
                 for resource_group in response.resource_groups:
                     list = self._compute_client.virtual_machines.list(resource_group.name)
                     self._load_machines(list.virtual_machines, resource_group.name)
             except AzureHttpError, e:
-                print "{0}".format(json.loads(e.message)['error']['message'])
-                sys.exit(1)
+                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
 
     def _load_machines(self, machines, resource_group):
         for machine in machines:
@@ -422,12 +416,10 @@ class AzureInventory(object):
 
 def main():
     if not HAS_AZURE:
-        print "The Azure python sdk is not installed (try 'pip install azure')"
-        sys.exit(1)
+        sys.exit("The Azure python sdk is not installed (try 'pip install azure')")
 
     if not HAS_REQUESTS:
-        print "The requests python module is not installed (try 'pip install requests')"
-        sys.exit(1)
+        sys.exit("The requests python module is not installed (try 'pip install requests')")
 
     AzureInventory()
 
