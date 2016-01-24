@@ -199,7 +199,8 @@ class AzureRM(object):
     @property
     def rm_client(self):
         self.log('Getting resource manager client')
-        self._resource_client = ResourceManagementClient(self._creds)
+        if not self._resource_client:
+            self._resource_client = ResourceManagementClient(self._creds)
         return self._resource_client
 
     @property
