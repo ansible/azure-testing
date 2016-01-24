@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 #
 # (c) 2016 Chris Houseknecht, <chouseknecht@ansible.com>
@@ -19,7 +20,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 '''
 Azure external inventory script
 ===============================
@@ -27,13 +27,44 @@ Generates dynamic inventory by making API requests to Azure using the Azure
 Python SDK. For instruction on installing the Azure Python SDK see
 http://azure-sdk-for-python.readthedocs.org/
 
-To run for a specific host a resource group is required.
+Authentication
+--------------
+The ordeder of precedence is command line arguments, environment variables,
+and finally the [default] profile found in ~/.azure/credentials.
 
-The VM inventory_hostname will be the fqdn, when set on the public_ip_address object.
-Otherwise, the public ip address is used. If no public ip address, then the private
-ip address is used.
+If using a credentials file, it should be an ini formatted file with one or
+more sections, which we refer to as profiles. The script looks for a 
+[default] section, if a profile is not specified either on the command line
+or with an environment variable.  
 
-When run against a specific host, this script returns the following variables:
+For command line arguments and environment variables specify a profile found
+in your ~/.azure/credentials file, or specify the client_id, client_secret, 
+subscription_id and tenant_id. 
+
+Commnad line arguments:
+ - profile 
+ - client_id
+ - client_secrent
+ - subscription_id
+ - tenant_id  
+
+Environment variables:
+ - AZURE_PROFILE
+ - AZURE_CLIENT_ID
+ - AZURE_CLIENT_SECRET
+ - AZURE_SUBSCRIPTION_ID
+ - AZURE_TENANT_ID 
+
+inventory_hostname
+------------------
+The VM inventory_hostname will be the fqdn, when set on the public_ip_address
+object. Otherwise, the public ip address is used. If no public ip address,
+then the private ip address is used.
+
+Run for Specific Host
+-----------------------
+When run for a specific host using the --host option, a resource group is 
+required. For a specific host, this script returns the following variables:
  - computer_name
  - fqdn
  - id
@@ -53,6 +84,8 @@ When run against a specific host, this script returns the following variables:
  - type
  - virtual_machine_size
 
+Groups
+------
 When run in --list mode, instances are grouped by the following categories:
  - azure
  - location
@@ -60,19 +93,24 @@ When run in --list mode, instances are grouped by the following categories:
  - tag key
 
 Examples:
+---------
   Execute uname on all instances in the us-central1-a zone
   $ ansible -i azure_rm_inventory.py galaxy-qa -m shell -a "/bin/uname -a"
 
   Use the inventory script to print instance specific information
-  $ contrib/inventory/azure_rm_inventory.py --host my_instance
+  $ contrib/inventory/azure_rm_inventory.py --host my_instance_host_name
+
+Insecure Platform Warning
+-------------------------
+If you receive InsecurePlatformWarning from urllib3, install the
+requests security packages:
+
+    pip install requests[security]
+
 
 Author: Chris Houseknecht chouseknecht@ansible.com
+Company: RedHat | Ansible        
 Version: 1.0.0
-
-
-NOTE: If you receive InsecurePlatformWarning from urllib3, install the requests security packages:
-      pip install requests[security]
-
 '''
 
 import argparse
