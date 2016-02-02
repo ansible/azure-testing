@@ -21,8 +21,11 @@
 
 import ConfigParser
 import os
-from os.path import expanduser
+import sys
+import logging
+import json
 
+from os.path import expanduser
 
 AZURE_COMMON_ARGS = dict(
     profile=dict(type='str'),
@@ -30,11 +33,15 @@ AZURE_COMMON_ARGS = dict(
     client_id=dict(type='str'),
     client_secret=dict(type='str'),
     tenant_id=dict(type='str'),
+    log_path=dict(type='str'),
+    log_mode=dict(type='str', choices=['stderr','file','syslog'], default='syslog'),
+    filter_logger=dict(type='bool', default=True),
     debug=dict(type='bool', default=False),
 )
 
-HAS_AZURE = True
-HAS_REQUESTS = True
+AZURE_COMMON_REQUIRED_IF = [
+    ('log_mode', 'file', ['log_path'])
+]
 
 try:
     from azure.mgmt.common import SubscriptionCloudCredentials
@@ -42,33 +49,58 @@ try:
     from azure.mgmt.resource import ResourceManagementClient
     from azure.mgmt.storage import StorageManagementClient
     from azure.mgmt.compute import ComputeManagementClient
+    from azure.mgmt.compute import ComputeManagementClient
 except ImportError:
-    HAS_AZURE = False
+    # TODO: use pretty JSON fail, but fail EARLY so derived imports don't need to check
+    raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
 
 try:
     import requests
 except ImportError:
-    HAS_REQUESTS = False
+    # TODO: use pretty JSON fail, but fail EARLY so derived imports don't need to check
+    raise Exception("The requests python module is not installed (try 'pip install requests')")
 
+# if we're being run as a Python module, import module_utils/basic stuff
+if __name__ != '__main__':
+    from ansible.module_utils.basic import *
 
-class AzureRM(object):
+class AzureRMModuleBase(object):
 
-    def __init__(self, module):
-        if not HAS_AZURE:
-            raise Exception("The Azure python sdk is not installed (try 'pip install azure')")
+    def __init__(self, derived_arg_spec, supports_check_mode=False):
+        self._logger =  logging.getLogger(self.__class__.__name__)
 
-        if not HAS_REQUESTS:
-            raise Exception("The requests python module is not installed (try 'pip install requests')")
+        merged_arg_spec = dict()
+        merged_arg_spec.update(AZURE_COMMON_ARGS)
+        if derived_arg_spec:
+            merged_arg_spec.update(derived_arg_spec)
 
-        self._module = module
+        # TODO: support merging required_if, others from derived classes
+        self._module = AnsibleModule(argument_spec=merged_arg_spec, supports_check_mode=supports_check_mode, required_if=AZURE_COMMON_REQUIRED_IF)
+
         self._network_client = None
         self._storage_client = None
         self._resource_client = None
         self._compute_client = None
-        self._debug = self._module.params.get('debug')
-        self.log = module.debug
 
-        self._credentials = self.__get_credentials(module.params)
+        self._log_mode = self._module.params.get('log_mode')
+        self._filter_logger = self._module.params.get('filter_logger')
+
+        self.debug = self._logger.debug
+
+        if self._log_mode == 'syslog':
+            # TODO: bridge this to module.debug() with a logger handler
+            pass
+        elif self._log_mode == 'file':
+            self._log_path = self._module.params.get('log_path')
+            logging.basicConfig(level=logging.DEBUG, filename=self._log_path)
+        elif self._log_mode == 'stderr':
+            logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+
+        if self._filter_logger:
+            for h in logging.root.handlers:
+                h.addFilter(logging.Filter(name=self._logger.name))
+
+        self._credentials = self.__get_credentials(self._module.params)
         if not self._credentials:
             raise Exception("Failed to get credentials. Either pass as parameters, set environment variables, or define " +
                 "a profile in ~/.azure/credientials.")
@@ -126,7 +158,7 @@ class AzureRM(object):
         # Get authentication credentials.
         # Precedence: module parameters-> environment variables-> default profile in ~/.azure/credentials.
         
-        self.log('Getting credentials')
+        self.debug('Getting credentials')
 
         profile = params.get('profile')
         subscription_id = params.get('subscription_id')
@@ -136,12 +168,12 @@ class AzureRM(object):
 
         # try module params
         if profile:
-           self.log('Retrieving credentials with profile parameter.')
+           self.debug('Retrieving credentials with profile parameter.')
            creds = self.__parse_creds(profile)
            return creds
         
         if subscription_id and client_id and client_secret and tenant_id:
-           self.log('Received credentials from parameters.')
+           self.debug('Received credentials from parameters.')
            creds = dict(
                subscription_id = subscription_id,
                client_id = client_id,
@@ -153,19 +185,19 @@ class AzureRM(object):
         # try environment
         env_creds = self.__get_env_creds()
         if env_creds:
-            self.log('Received credentials from env.')
+            self.debug('Received credentials from env.')
             return env_creds
 
         # try default profile from ~./azure/credentials
         def_creds = self.__parse_creds()
         if def_creds:
-            self.log('Retrieved default profile credentials from ~/.azure/credentials.')
+            self.debug('Retrieved default profile credentials from ~/.azure/credentials.')
             return def_creds
 
         return None
 
     def __get_token_from_client_credentials(self):
-        self.log('Getting auth token...')
+        self.debug('Getting auth token...')
         payload = {
             'grant_type': 'client_credentials',
             'client_id': self._credentials['client_id'],
@@ -175,13 +207,48 @@ class AzureRM(object):
        
         response = requests.post(self._auth_endpoint, data=payload).json()
         if 'error_description' in response:
-           self.log('error: %s ' % response['error_description'])
+           self.debug('error: %s ' % response['error_description'])
            self._module.fail_json(msg='Failed getting OAuth token: %s' % response['error_description'])
         return response['access_token']
 
+    def exec_module(self):
+        res = self.exec_module_impl(**self._module.params)
+
+        self._module.exit_json(**res)
+
+    @property
+    def compute_client(self):
+        self.debug('Getting compute client')
+
+        # TODO: store lazy-init credentials on AzureRM object so we only do this once
+
+        auth_token = self.__get_token_from_client_credentials()
+
+        self.debug('Creating credential object...')
+
+        creds = SubscriptionCloudCredentials(self.credentials['subscription_id'], auth_token)
+
+        self.debug('Creating ARM client...')
+
+        compute_client = ComputeManagementClient(creds)
+        #resource_client = ResourceManagementClient(creds)
+
+        # TODO: only attempt to register provider on a well-known unregistered provider error
+        #
+        # try:
+        #     # registering is supposed to be a one-time thing. How do we know if it has already been done?
+        #     resource_client.providers.register('Microsoft.Compute')
+        # except Exception as e:
+        #     self.debug(str(e.args[0]))
+
+        return compute_client
+
     @property
     def storage_client(self):
-        self.log('Creating ARM client...')
+        self.debug('Getting storage client')
+        # TODO: store lazy-init credentials on AzureRM object so we only do this once
+
+        self.debug('Creating ARM client...')
         if not self._storage_client:
             self._storage_client = StorageManagementClient(self._creds)
         if not self._resource_client:
@@ -191,21 +258,34 @@ class AzureRM(object):
 
     @property
     def network_client(self):
-        self.log('Getting network client')
+        # except Exception as e:
+        #     self.debug(str(e.args[0]))
+        #
+        self.debug('Getting network client')
         if not self._network_client:
             self._network_client = NetworkResourceProviderClient(self._creds)
         return self._network_client
 
     @property
-    def rm_client(self):
-        self.log('Getting resource manager client')
+    def resource_client(self):
+
+        #resource_client = ResourceManagementClient(creds)
+
+        # TODO: only attempt to register provider on a well-known unregistered provider error
+        # try:
+        #     # registering is supposed to be a one-time thing. How do we know if it has already been done?
+        #     resource_client.providers.register('Microsoft.Network')
+        # except Exception as e:
+        #     self.debug(str(e.args[0]))
+        #
+        self.debug('Getting resource manager client')
         if not self._resource_client:
             self._resource_client = ResourceManagementClient(self._creds)
         return self._resource_client
 
     @property
     def compute_client(self):
-        self.log('Getting compute client')
+        self.debug('Getting compute client')
         if not self._compute_client:
             self._compute_client = ComputeManagementClient(self._creds)
         if not self._resource_client:
@@ -213,13 +293,4 @@ class AzureRM(object):
         self._resource_client.providers.register('Microsoft.Compute')
         return self._compute_client
 
-def azure_module(**kwargs):
-    # Append the common args to the argument_spec
-    argument_spec = dict()
-    argument_spec.update(AZURE_COMMON_ARGS)
-    if kwargs.get('argument_spec'):
-        argument_spec.update(kwargs['argument_spec'])
-    kwargs['argument_spec'] = argument_spec
-    module = AnsibleModule(**kwargs)
-    return module
 

@@ -22,108 +22,98 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_resourcegroup
 '''
-HAS_AZURE = True
-HAS_REQUESTS = True
-LOG_PATH = "azure_rm_resourcegroup.log"
 
-try:
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.common import SubscriptionCloudCredentials
-    from azure.mgmt.resource import ResourceManagementClient, ResourceGroup
-    import azure.mgmt.network
-except ImportError:
-    HAS_AZURE = False
-
-try:
-    import requests
-except ImportError:
-    HAS_REQUESTS = False
-
-def module_impl(rm, log, name, state, location, check_mode=False):
-    if not HAS_AZURE:
-        raise Exception("The Azure python sdk is not installed (try 'pip install azure'")
-    if not HAS_REQUESTS:
-        raise Exception("The requests python module is not installed (try 'pip install requests'")
-
-    results = dict(changed=False)
-
-    resource_client = rm.rm_client
-
-    try:
-        log('fetching resource group...')
-        rg = resource_client.resource_groups.get(name)
-        # TODO: there's a weird state where this doesn't 404 for a bit after deletion (check resource_group.provisioningState != Succeeded or Deleting)
-        if state == 'absent':
-            log("CHANGED: resource group exists but requested state is 'absent'...")
-            results['changed'] = True
-        elif state == 'present':
-            log('comparing resource group attributes...')
-            # TODO: reenable this check after canonicalizing location (lowercase, remove spaces)
-            # if rg.resource_group.location != location:
-            #     return dict(failed=True, msg="Resource group '{0}' already exists in location '{1}' and cannot be moved.".format(name, location))
-    except AzureMissingResourceHttpError:
-        log('resource group does not exist')
-        if state == 'present':
-            log("CHANGED: resource group does not exist but requested state is 'present'")
-            results['changed'] = True
-
-    if check_mode:
-        log('check mode, exiting early...')
-        return results
-
-    if not results['changed']:
-        log('no changes to make, exiting...')
-        return results
-
-    if state == 'present':
-        log('calling create_or_update...')
-        res = resource_client.resource_groups.create_or_update(
-            name,
-            ResourceGroup(location=location)
-        )
-        log('finished')
-        # TODO: check anything in result?
-
-    elif state == 'absent':
-        log('calling delete...')
-        res = resource_client.resource_groups.delete(name)
-        log('finished')
-        # TODO: poll for actual completion- looks like deletion is slow and async (even w/o begin_deleting)...
-        # TODO: check anything in result?
-
-    return results
-
-def main():
-    
-    module_args = dict(
-        name = dict(required=True),
-        state = dict(default='present', choices=['present', 'absent']),
-        location = dict(required=True),
-        
-        # TODO: implement tags
-        # TODO: implement object security
-    )
-
-    module = azure_module(
-        argument_spec=module_args,
-        supports_check_mode=True
-    )
-    
-    p = module.params
-    rm = AzureRM(module)
-
-    try:
-        res = module_impl(rm, module.debug, p.get('name'), p.get('state'), p.get('location'), module.check_mode)
-    except Exception, e:
-        module.fail_json(msg=e.args[0])
-
-    module.exit_json(**res)
-
+import sys
+# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
+# without playing games with __metaclass__ or runtime base type hackery.
+# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 
 # Assumes running ansible from source and there is a copy or symlink for azure_rm_common
 # found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
+
+# TODO: ensure the base class errors properly on these imports failing
+from azure.common import AzureMissingResourceHttpError
+from azure.mgmt.resource import ResourceGroup
+
+class AzureRMResourceGroup(AzureRMModuleBase):
+    def __init__(self, **kwargs):
+        module_arg_spec = dict(
+            name = dict(required=True),
+            state = dict(default='present', choices=['present', 'absent']),
+            location = dict(required=True),
+
+            # TODO: implement tags
+            # TODO: implement object security
+        )
+
+        AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
+
+    def exec_module_impl(self, name, state, location, **kwargs):
+        results = dict(changed=False)
+
+        resource_client = self.resource_client
+
+        try:
+            self.debug('fetching resource group...')
+            rg = resource_client.resource_groups.get(name)
+            # TODO: there's a weird state where this doesn't 404 for a bit after deletion (check resource_group.provisioningState != Succeeded or Deleting)
+            if state == 'absent':
+                self.debug("CHANGED: resource group exists but requested state is 'absent'...")
+                results['changed'] = True
+            elif state == 'present':
+                self.debug('comparing resource group attributes...')
+                # TODO: reenable this check after canonicalizing location (lowercase, remove spaces)
+                # if rg.resource_group.location != location:
+                #     return dict(failed=True, msg="Resource group '{0}' already exists in location '{1}' and cannot be moved.".format(name, location))
+        except AzureMissingResourceHttpError:
+            self.debug('resource group does not exist')
+            if state == 'present':
+                self.debug("CHANGED: resource group does not exist but requested state is 'present'")
+                results['changed'] = True
+
+        if self._module.check_mode:
+            self.debug('check mode, exiting early...')
+            return results
+
+        if not results['changed']:
+            self.debug('no changes to make, exiting...')
+            return results
+
+        if state == 'present':
+            self.debug('calling create_or_update...')
+            res = resource_client.resource_groups.create_or_update(
+                name,
+                ResourceGroup(location=location)
+            )
+            self.debug('finished')
+            # TODO: check anything in result?
+
+        elif state == 'absent':
+            self.debug('calling delete...')
+            res = resource_client.resource_groups.delete(name)
+            self.debug('finished')
+            # TODO: poll for actual completion- looks like deletion is slow and async (even w/o begin_deleting)...
+            # TODO: check anything in result?
+
+        return results
+
+
+def main():
+    if '--interactive' in sys.argv:
+        # import the module here so we can reset the default complex args value
+        import ansible.module_utils.basic
+
+        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
+            name='mdavis-test-rg5',
+            state='present',
+            location='West US',
+            log_mode='stderr',
+            #filter_logger=False,
+        ))
+
+    AzureRMResourceGroup().exec_module()
 
 main()
 
