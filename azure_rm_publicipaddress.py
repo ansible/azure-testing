@@ -23,164 +23,105 @@ DOCUMENTATION = '''
 module: azure_rm_publicipaddress
 '''
 
-HAS_AZURE = True
-HAS_REQUESTS = True
+import sys
+# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
+# without playing games with __metaclass__ or runtime base type hackery.
+# TODO: figure out a better way...
+from ansible.module_utils.basic import *
 
-try:
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.common import SubscriptionCloudCredentials
-    import azure.mgmt.network
-except ImportError:
-    HAS_AZURE = False
+# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
+# found in local lib/ansible/module_utils
+from ansible.module_utils.azure_rm_common import *
 
-try:
-    import requests
-except ImportError:
-    HAS_REQUESTS = False
+# TODO: ensure the base class errors properly on these imports failing
+from azure.common import AzureMissingResourceHttpError
+from azure.mgmt.network import PublicIpAddress
 
-log_path = None
-
-def log(msg):
-#    print msg
-
-    if not log_path:
-        return
-    with open(log_path, "a") as logfile:
-        logfile.write("{0}\n".format(msg))
-
-def get_token_from_client_credentials(endpoint, client_id, client_secret):
-    payload = {
-        'grant_type': 'client_credentials',
-        'client_id': client_id,
-        'client_secret': client_secret,
-        'resource': 'https://management.core.windows.net/',
-    }
-    response = requests.post(endpoint, data=payload).json()
-    return response['access_token']
-
-def get_network_client(endpoint, subscription_id, client_id, client_secret):
-    log('getting auth token...')
-
-    auth_token = get_token_from_client_credentials(
-        endpoint,
-        client_id,
-        client_secret
-    )
-
-    log('creating credential object...')
-
-    creds = SubscriptionCloudCredentials(subscription_id, auth_token)
-
-    log('creating ARM client...')
-
-    network_client = azure.mgmt.network.NetworkResourceProviderClient(creds)
-
-    return network_client
-
-def module_impl(resource_group, name, state, location, subscription_id, auth_tenant_id, auth_endpoint, auth_client_id, auth_client_secret, check_mode):
-    if not HAS_AZURE:
-        raise Exception("The Azure python sdk is not installed (try 'pip install azure'")
-    if not HAS_REQUESTS:
-        raise Exception("The requests python module is not installed (try 'pip install requests'")
-
-    #TODO: add automatic Microsoft.Network provider check/registration (only on failure?)
-    results = dict(changed=False)
-
-    # TODO: validate arg shape (CIDR blocks, etc)
-
-    network_client = get_network_client(auth_endpoint, subscription_id, auth_client_id, auth_client_secret)
-
-    try:
-        log('fetching pip...')
-        pip_resp = network_client.public_ip_addresses.get(resource_group, name)
-        # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
-        log('pip exists...')
-        pip = pip_resp.public_ip_address
-        if state == 'present':
-            # TODO: move to extract method
-            results['id'] = pip.id # store these values early in case of check mode exit
-            results['ip_address'] = pip.ip_address
-            # TODO: validate args
-            # TODO: what about ip_configuration tie to nic?
-        elif state == 'absent':
-            log("CHANGED: pip exists but requested state is 'absent'")
-            results['changed'] = True
-    except AzureMissingResourceHttpError:
-        log('pip does not exist')
-        if state == 'present':
-            log("CHANGED: pip does not exist but requested state is 'present'")
-            results['changed'] = True
-
-    if check_mode:
-        log('check mode, exiting early')
-        return results
-
-    if results['changed']:
-        if state == 'present':
-
-            pip = azure.mgmt.network.PublicIpAddress(
-                location=location,
-                # TODO: get this from an arg
-                public_ip_allocation_method='dynamic'
-            )
-            log('creating/updating pip...')
-            pip_resp = network_client.public_ip_addresses.create_or_update(resource_group, name, pip)
-            # TODO: check response
-
-            pip_resp = network_client.public_ip_addresses.get(resource_group, name)
-            # TODO: move to extract_result method
-            results['id'] = pip_resp.public_ip_address.id
-            results['ip_address'] = pip_resp.public_ip_address.ip_address
-
-        elif state == 'absent':
-            log('deleting pip...')
-            pip_resp = network_client.public_ip_addresses.delete(resource_group, name)
-            # TODO: check response
-
-    return results
-
-def main():
-    global log_path
-    module = AnsibleModule(
-        argument_spec = dict(
+class AzureRMPublicIPAddress(AzureRMModuleBase):
+    def __init__(self, **kwargs):
+        module_arg_spec = dict(
             resource_group = dict(required=True),
             name = dict(required=True),
             state = dict(default='present', choices=['present', 'absent']),
             location = dict(required=True),
-            # TODO: add mode static/dynamic
-            # TODO: add idle_timeout
-            # TODO: add dns short name
-            log_path = dict(default=None),
 
             # TODO: implement tags
             # TODO: implement object security
+        )
 
-            # common/auth args
-            # TODO: move to a shared definition
-            subscription_id = dict(required=True), # TODO: False after .azure/env stuff is here
-            auth_tenant_id = dict(required=True), # TODO: False after .azure/env stuff is here
-            auth_client_id = dict(required=True, no_log=True), # TODO: False after .azure/env stuff is here
-            auth_client_secret = dict(required=True, no_log=True), # TODO: False after .azure/env stuff is here
-        ),
-        supports_check_mode = True
-    )
+        AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
 
-    p = module.params
 
-    # allow these to come from env and .azure/credentials
-    subscription_id = p['subscription_id']
-    auth_tenant_id = p['auth_tenant_id']
-    auth_endpoint='https://login.microsoftonline.com/{0}/oauth2/token'.format(auth_tenant_id)
-    auth_client_id = p['auth_client_id']
-    auth_client_secret = p['auth_client_secret']
+    def exec_module_impl(self, resource_group, name, state, location, **kwargs):  
+        #TODO: add automatic Microsoft.Network provider check/registration (only on failure?)
+        results = dict(changed=False)
+    
+        # TODO: validate arg shape (CIDR blocks, etc)
+    
+        try:
+            self.debug('fetching pip...')
+            pip_resp = self.network_client.public_ip_addresses.get(resource_group, name)
+            # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
+            self.debug('pip exists...')
+            pip = pip_resp.public_ip_address
+            if state == 'present':
+                # TODO: move to extract method
+                results['id'] = pip.id # store these values early in case of check mode exit
+                results['ip_address'] = pip.ip_address
+                # TODO: validate args
+                # TODO: what about ip_configuration tie to nic?
+            elif state == 'absent':
+                self.debug("CHANGED: pip exists but requested state is 'absent'")
+                results['changed'] = True
+        except AzureMissingResourceHttpError:
+            self.debug('pip does not exist')
+            if state == 'present':
+                self.debug("CHANGED: pip does not exist but requested state is 'present'")
+                results['changed'] = True
+    
+        if self._module.check_mode:
+            self.debug('check mode, exiting early')
+            return results
+    
+        if results['changed']:
+            if state == 'present':
+    
+                pip = PublicIpAddress(
+                    location=location,
+                    # TODO: get this from an arg
+                    public_ip_allocation_method='dynamic'
+                )
+                self.debug('creating/updating pip...')
+                pip_resp = self.network_client.public_ip_addresses.create_or_update(resource_group, name, pip)
+                # TODO: check response
+    
+                pip_resp = self.network_client.public_ip_addresses.get(resource_group, name)
+                # TODO: move to extract_result method
+                results['id'] = pip_resp.public_ip_address.id
+                results['ip_address'] = pip_resp.public_ip_address.ip_address
+    
+            elif state == 'absent':
+                self.debug('deleting pip...')
+                pip_resp = self.network_client.public_ip_addresses.delete(resource_group, name)
+                # TODO: check response
+    
+        return results
 
-    log_path = p['log_path']
+def main():
+    if '--interactive' in sys.argv:
+        # import the module here so we can reset the default complex args value
+        import ansible.module_utils.basic
 
-    # TODO: dict-ify module params and splat them directly
-    res = module_impl(p.get('resource_group'), p.get('name'), p.get('state'), p.get('location'), subscription_id, auth_tenant_id, auth_endpoint, auth_client_id, auth_client_secret, module.check_mode)
+        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
+            resource_group = "rm_demo",
+            name = "test-publicip",
+            state = "present",
+            location = "West US",
+            log_mode='stderr',
+            #filter_logger=False,
+        ))
 
-    module.exit_json(**res)
+    AzureRMPublicIPAddress().exec_module()
 
-from ansible.module_utils.basic import *
 main()
 
