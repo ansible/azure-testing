@@ -134,8 +134,5 @@ def main():
 
     AzureRMVirtualNetwork().exec_module()
 
-
-
-from ansible.module_utils.basic import *
 main()
 
