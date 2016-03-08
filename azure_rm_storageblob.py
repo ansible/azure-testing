@@ -19,14 +19,25 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import ConfigParser
 import datetime
 import hashlib
-import json 
-import os
-from os.path import expanduser
 import re
-import time
+
+# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
+# without playing games with __metaclass__ or runtime base type hackery.
+# TODO: figure out a better way...
+from ansible.module_utils.basic import *
+
+# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
+# found in local lib/ansible/module_utils
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from azure.storage.blob import BlockBlobService
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+except ImportError:
+    HAS_AZURE = False
+
 
 DOCUMENTATION = '''
 ---
@@ -34,11 +45,12 @@ module: azure_rm_storageblob
 
 short_description: Create, read, update and delete Azure storage accounts.
 description:
-    - Create and manage blob containers within a given storage account, upload and download objects to the blob container, and control
-      access to the objects.
-    - For authentication with Azure pass subscription_id, client_id, client_secret and tenant_id. Or, create a ~/.azure/credentials 
-      file with one or more profiles. When using a credentials file, if no profile option is provided, Azure modules look for a 
-      'default' profile. Each profile should include subscription_id, client_id, client_secret and tenant_id values.
+    - Create and manage blob containers within a given storage account, upload and download objects to the blob
+      container, and control access to the objects.
+    - For authentication with Azure pass subscription_id, client_id, client_secret and tenant_id. Or, create a
+      ~/.azure/credentials file with one or more profiles. When using a credentials file, if no profile option is
+      provided, Azure modules look for a 'default' profile. Each profile should include subscription_id, client_id,
+      client_secret and tenant_id values.
 options:
     profile:
         description:
@@ -55,121 +67,86 @@ options:
             - Azure client_id used for authentication.
         required: false
         default: null
-    client_secret:
+    secret:
         description:
             - Azure client_secrent used for authentication.
         required: false
         default: null
-    tenant_id:
+    tenant:
         description:
             - Azure tenant_id used for authentication.
         required: false
         default: null
-    account_name:
+    storage_account:
         description:
             - name of the storage account.
         required: true
         default: null
-    access_token:
+    blob:
         description:
-            - use mode 'get_token' to generate an access_token value. Pass the token as parameter 'access_token' along with mode 'get_url', permissions, hours and days to create a secure, temporary url for accessing a blob object.
+            - name of a blob object within the container.
         required: false
         default: null
-    blob_name:
-        description:
-            - name of the blob object when using modes get, put, delete_blob and get_url.
-        required: false
-        default: null
-    container_name:
+        aliases:
+            - blob_name
+    container:
         description:
             - name of a blob container within the storage account.
         required: true
         default: null
-    days:
-        description:
-            - integer number of days. Use when creating a secured url with mode 'get_url' or with mode 'update' to add an ACL to a container.
-        rquired: false
-        default: null
+        aliases:
+            - container_name
     debug:
         description:
             - turn on debugging for the module. Will create a log file in the current working directory.
-    file_path:
+
+    state:
         description:
-            - path to a file when uploading (mode 'put') or downloading (mode 'get') a blob object.
-        required: false
-        default: null
-    hours:
-        description:
-            - integer number of hours. Use when creating a secured url with mode 'get_url' or with mode 'update' to add an ACL to a container.
-        required: false
-        default: null
-    marker:
-        description:
-            - use with mode 'list' to identify the portion of the list to be returned with the next list operation. The operation returns a 
-              marker value within the response body if the list returned was not complete. The marker value may then be used in a subsequent 
-              call to request the next set of list items.
-        required: false
-        default: null
-    max_results:
-        description:
-            - use with mode 'list' to limit the number of blob objects returned.
-        required: false
-        default: null
-    mode:
-        description:
-            - determines the operation or function to be performed. For container operations use: create, update, delete. For blob object 
-              operations use: get, put, list, get_url, get_token.
+            - Assert the state of a container or blob. State can be absent, present.
+            - Use state 'absent' with a container value only to delete a container. Include a blob value to remove
+              a specific blob. A container will not be deleted, if it contains blobs. Use the force option to override,
+              deleting the container and all associated blobs.
+            - Use state 'present' to create or update a container and upload or download a blob. If the container
+              does not exist, it will be created. If it exists, it will be updated with configuration options. Provide
+              a blob name and either src or dest to upload or download. Provide a src path to upload and a dest path
+              to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten.
+              Use the force option to overwrite.
         required: true
-        default: null
-    overwrite:
+        choices:
+            - absent
+            - present
+    src:
         description:
-            - when uploading or downloading a blob object determines if matching objects will be overwritten. Set to: always, different, never.
-        required: false
-        default: 'always'
-    permissions:
-        description:
-            - use with modes 'get_token' and 'update'. Will be a string containing a combination of the letters r, w, d representing 
-              read, write and delete.
-        required: false
+            - Source file path. Use with state 'present' to upload a blob.
         default: null
-    prefix:
+        aliases:
+            - source
+    dest:
         description:
-            - use with mode 'list' to filter results, returning only blobs whose names begin with the specified prefix.
-        required: false
+            - Destination file path. Use with state 'present' to download a blob.
         default: null
+        aliases:
+            - destination
+    force:
+        description:
+            - When uploading or downloading overwrite an existing file or blob.
+        default: false
     resource_group:
         description:
             - name of resource group.
         required: true
         default: null
-    x_ms_meta_name_values:
+    meta_data:
         description:
-            - use with mode 'update' or 'put' to add metadata to a container or object. A dict containing name, value as metadata.
-        required: false
+            - dictionary of key:value pairs to add to either a container or blob.
         default: null
-    x_ms_blob_public_access:
+    public_access:
         description:
-            - use with mode 'update' to set a container's public access level. Set to one of: container, blob, private.
-        required: false
+            - Determine a container's level of public access. By default containers are private.
+        choices:
+            - container
+            - blob
         default: null
-    x_ms_blob_cache_control:
-        description:
-            - use with mode 'put' to set the blob object's cache control option. Returned with read requests.
-        required: false
-        default: null
-    x_ms_blob_content_encoding:
-        description:
-            - use with mode 'put' to set the blob object's content encoding. Returned with read requests.
-        required: false
-        default: null
-    x_ms_blob_content_language:
-        description:
-            - use with mode 'put' to set the blob object's content language. Returned with read requests.
-        required: false
-        default: null
-    x_ms_blob_content_type:
-        description:
-            - use with mode 'put' to set the blob object's content type. Returned with read requests.
 
 requirements:
     - "python >= 2.7"
@@ -280,38 +257,15 @@ EXAMPLES = '''
 '''
 
 
-
 NAME_PATTERN = re.compile(r"^(?!-)(?!.*--)[a-z0-9\-]+$")
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
-from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
-from ansible.module_utils.azure_rm_common import *
-
-
-
-
-from azure.storage import AccessPolicy, SharedAccessPolicy, SignedIdentifier, SignedIdentifiers
-from azure.storage.blob import BlobService, BlobSharedAccessPermissions
-from azure.common import AzureMissingResourceHttpError, AzureHttpError
-from azure.mgmt.storage.storagemanagement import (
-    AccountType,
-    StorageAccountUpdateParameters,
-    CustomDomain,
-    StorageAccountCreateParameters,
-    OperationStatus,
-    KeyName
-)
 
 def path_check(path):
     if os.path.exists(path):
         return True
     else:
         return False
+
 
 def get_container_facts(bs, container_name):
     container = None
@@ -332,11 +286,13 @@ def get_container_facts(bs, container_name):
         pass
     return container
 
+
 def container_check(bs, container_name):
     container = get_container_facts(bs, container_name)
     if container is None:
         raise Exception("Requested container %s not found." % container_name)
     return container
+
 
 def get_blob_facts(bs, container_name, blob_name):
     blob = None
@@ -346,11 +302,13 @@ def get_blob_facts(bs, container_name, blob_name):
         pass
     return blob
 
+
 def blob_check(bs, container_name, blob_name):
     blob = get_blob_facts(bs, container_name, blob_name)
     if blob is None:
         raise Exception("Requested blob %s not found in container %s." % (blob_name, container_name))
     return blob
+
 
 def get_md5(file_path, block_size=2**20):
     # hash sent to azure needs to be base64 encoded
@@ -364,8 +322,10 @@ def get_md5(file_path, block_size=2**20):
         md5.update(data)
     return md5.digest().encode('base64')[:-1]
 
+
 def put_block_blob(bs, container_name, blob_name, file_path, x_ms_meta_name_values,
-    x_ms_blob_cache_control, x_ms_blob_content_encoding, x_ms_blob_content_language, x_ms_blob_content_type):
+                   x_ms_blob_cache_control, x_ms_blob_content_encoding, x_ms_blob_content_language, 
+                   x_ms_blob_content_type):
     md5_local = get_md5(file_path)
     bs.put_block_blob_from_path(
         container_name=container_name,
@@ -379,6 +339,7 @@ def put_block_blob(bs, container_name, blob_name, file_path, x_ms_meta_name_valu
         x_ms_blob_content_type=x_ms_blob_content_type,
         max_connections=5
     )
+
 
 def get_shared_access_policy(permission, hours=0, days=0):
     # https://github.com/Azure/azure-storage-python/blob/master/tests/test_storage_blob.py
@@ -403,6 +364,7 @@ def get_identifier(id, hours, days, permission):
     si.access_policy.expiry = expiry.strftime(date_format)
     si.access_policy.permission = permission
     return si
+
 
 class AzureRMStorageBlob(AzureRMModuleBase):
     def __init__(self, **kwargs):
@@ -458,26 +420,26 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             access_token,
             **kwargs):
         results = dict(changed=False)
-        
+
         if not resource_group:
             raise Exception("Parameter error: resource_group cannot be None.")
-        
+
         if not account_name:
             raise Exception("Parameter error: account_name cannot be None.")
-    
+
         if not container_name:
             raise Exception("Parameter error: container_name cannot be None.")
-    
+
         if not NAME_PATTERN.match(container_name):
             raise Exception("Parameter error: container_name must consist of lowercase letters, numbers and hyphens. It must begin with " +
                 "a letter or number. It may not contain two consecutive hyphens.")
-    
+
         # add file path validation
-    
+
         results['account_name'] = account_name
-        results['resource_group'] = resource_group 
+        results['resource_group'] = resource_group
         results['container_name'] = container_name
-    
+
         # put (upload), get (download), geturl (return download url (Ansible 1.3+), getstr (download object as string (1.3+)), list (list keys (2.0+)), create (bucket), delete (bucket), and delobj (delete object)
         try:
             self.debug('Getting keys')
@@ -488,14 +450,14 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         except AzureHttpError as e:
             self.debug('Error getting keys for account %s' % account_name)
             raise Exception(str(e.message))
-    
+
         try:
             self.debug('Create blob service')
             bs = BlobService(account_name, keys[KeyName.key1])
         except Exception as e:
             self.debug('Error creating blob service.')
             raise Exception(str(e.args[0]))
-    
+
         if mode == 'create':
             container = get_container_facts(bs, container_name)
             if container is not None:
@@ -511,7 +473,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             results['msg'] = "Container created successfully."
             results['changed'] = True
             return results
-    
+
         if mode == 'update':
             container = get_container_facts(bs, container_name)
             if container is None:
@@ -521,7 +483,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
                 results['changed'] = True
                 results['msg'] = 'Container created successfully.'
-                return results     
+                return results
             # update existing container
             results['msg'] = "Container not changed."
             if x_ms_meta_name_values:
@@ -542,7 +504,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             if permissions:
                 if hours == 0 and days == 0:
                     raise Exception("Parameter error: expecting hours > 0 or days > 0")
-                id = "%s-%s" % (container_name, permissions) 
+                id = "%s-%s" % (container_name, permissions)
                 si = get_identifier(id, hours, days, permissions)
                 identifiers = SignedIdentifiers()
                 identifiers.signed_identifiers.append(si)
@@ -553,7 +515,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 results['msg'] = 'Container ACL updated successfully.'
             results['container'] = get_container_facts(bs, container_name)
             return results
-    
+
         if mode == 'delete':
             container = get_container_facts(bs, container_name)
             if container is None:
@@ -565,47 +527,47 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             results['changed'] = True
             results['msg'] = 'Container deleted successfully.'
             return results
-    
+
         if mode == 'delete_blob':
             if blob_name is None:
                 raise Exception("Parameter error: blob_name cannot be None.")
-            
+
             container = container_check(bs, container_name)
             blob = get_blob_facts(bs, container_name, blob_name)
-    
+
             if not blob:
                 results['msg'] = 'Blob %s could not be found in container %s.' % (blob_name, container_name)
                 return results
-    
+
             if not self._module.check_mode:
                 self.debug('Deleteing %s from container %s.' % (blob_name, container_name))
                 bs.delete_blob(container_name, blob_name)
             results['changed'] = True
             results['msg'] = 'Blob successfully deleted.'
             return results
-    
+
         if mode == 'put':
             if not blob_name:
                 raise Exception("Parameter error: blob_name cannot be None.")
-    
+
             if not file_path :
                 raise Exception("Parameter error: file_path cannot be None.")
-    
+
             if not path_check(file_path):
                 raise Exception("File %s does not exist." % file_path)
-    
+
             container = get_container_facts(bs, container_name)
             blob = None
             if container is not None:
                 blob = get_blob_facts(bs, container_name, blob_name)
-    
+
             if container is not None and blob is not None:
                 # both container and blob already exist
                 md5_remote = blob['content-md5']
                 md5_local = get_md5(file_path)
                 results['container'] = container
                 results['blob'] = blob
-    
+
                 if md5_local == md5_remote:
                     sum_matches = True
                     results['msg'] = 'File checksums match. File not uploaded.'
@@ -648,7 +610,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     else:
                         results['msg'] = "WARNING: Checksums do not match. Use overwrite parameter to force upload."
                 return results
-    
+
             if container is None:
                 # container does not exist. create container and upload.
                 if not self._module.check_mode:
@@ -671,7 +633,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 results['changed'] = True
                 results['msg'] = 'Successfully created container and uploaded file.'
                 return results
-    
+
             if container is not None:
                 # container exists. just upload.
                 if not self._module.check_mode:
@@ -691,7 +653,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 results['changed'] = True
                 results['msg'] = 'Successfully updloaded file.'
                 return results
-    
+
         if mode == 'list':
             container = container_check(bs, container_name)
             response = bs.list_blobs(
@@ -711,26 +673,26 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 )
                 results['blobs'].append(b)
             return results
-    
+
         if mode == 'get':
             if file_path is None:
                 raise Exception("Parameter error: file_path cannot be None.")
-            
+
             container = container_check(bs, container_name)
             blob = blob_check(bs, container_name, blob_name)
             path_exists = path_check(file_path)
-            
+
             if not path_exists or overwrite == 'always':
                 if not self._module.check_mode:
                     bs.get_blob_to_path(container_name, blob_name, file_path)
                 results['changed'] = True
                 results['msg'] = "Blob %s successfully downloaded to %s." % (blob_name, file_path)
                 return results
-    
+
             if path_exists:
                 md5_remote = blob['content-md5']
                 md5_local = get_md5(file_path)
-    
+
                 if md5_local == md5_remote:
                     sum_matches = True
                     if overwrite == 'always':
@@ -749,19 +711,19 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                         results['msg'] = "Blob %s successfully downloaded to %s." % (blob_name, file_path)
                     else:
                         results['msg'] ="WARNING: Checksums do not match. Use overwrite parameter to force download."
-            
+
             if sum_matches is True and overwrite == 'never':
                 results['msg'] = "Local and remote object are identical, ignoring. Use overwrite parameter to force."
-            
+
             return results
-    
+
         if mode == 'get_url':
             if not blob_name:
                 raise Exception("Parameter error: blob_name cannot be None.")
-    
+
             container = container_check(bs, container_name)
             blob = blob_check(bs, container_name, blob_name)
-    
+
             url = bs.make_blob_url(
                 container_name=container_name,
                 blob_name=blob_name,
@@ -769,7 +731,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             results['url'] = url
             results['msg'] = "Url: %s" % url
             return results
-    
+
         if mode == 'get_token':
             if hours == 0 and days == 0:
                 raise Exception("Parameter error: expecting hours > 0 or days > 0")
