@@ -24,6 +24,7 @@ import ConfigParser
 import os
 import sys
 import logging
+import json
 
 from os.path import expanduser
 
@@ -69,16 +70,32 @@ except ImportError:
 
 class AzureRMModuleBase(object):
 
-    def __init__(self, derived_arg_spec, supports_check_mode=False):
-        self._logger =  logging.getLogger(self.__class__.__name__)
+    def __init__(self, derived_arg_spec, bypass_checks=False, no_log=False,
+                 check_invalid_arguments=True, mutually_exclusive=None, required_together=None,
+                 required_one_of=None, add_file_common_args=False, supports_check_mode=False,
+                 required_if=None):
+
+        self._logger = logging.getLogger(self.__class__.__name__)
 
         merged_arg_spec = dict()
         merged_arg_spec.update(AZURE_COMMON_ARGS)
         if derived_arg_spec:
             merged_arg_spec.update(derived_arg_spec)
 
-        # TODO: support merging required_if, others from derived classes
-        self.module = AnsibleModule(argument_spec=merged_arg_spec, supports_check_mode=supports_check_mode, required_if=AZURE_COMMON_REQUIRED_IF)
+        merged_required_if = list(AZURE_COMMON_REQUIRED_IF)
+        if required_if:
+            merged_required_if += required_if
+
+        self.module = AnsibleModule(argument_spec=merged_arg_spec,
+                                    bypass_checks=bypass_checks,
+                                    no_log=no_log,
+                                    check_invalid_arguments=check_invalid_arguments,
+                                    mutually_exclusive=mutually_exclusive,
+                                    required_together=required_together,
+                                    required_one_of=required_one_of,
+                                    add_file_common_args=add_file_common_args,
+                                    supports_check_mode=supports_check_mode,
+                                    required_if=merged_required_if)
 
         if not HAS_AZURE:
             self.fail("The Azure python sdk is not installed (try 'pip install azure')")
@@ -132,8 +149,15 @@ class AzureRMModuleBase(object):
     def fail(self, msg):
         self.module.fail_json(msg=msg)
 
-    def log(self, msg):
-        self._logger.debug(msg)
+    def log(self, msg, pretty_print=False):
+        if pretty_print:
+            self._logger.debug(json.dumps(msg))
+        else:
+            self._logger.debug(msg)
+
+    def exec_module(self):
+        res = self.exec_module_impl(**self._module.params)
+        self._module.exit_json(**res)
 
     def _parse_credentials(self, profile="default"):
         path = expanduser("~")
