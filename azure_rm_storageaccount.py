@@ -157,7 +157,53 @@ requirements:
 
 author: "Chris Houseknecht @chouseknecht"
 '''
+EXAMPLES = '''
+    - name: remove account, if it exists
+      azure_rm_storageaccount:
+        resource_group: Testing
+        location: 'East US 2'
+        name: clh0002
+        state: absent
 
+    - name: create an account
+      azure_rm_storageaccount:
+        resource_group: Testing
+        location: 'East US 2'
+        name: clh0002
+        type: Standard_RAGRS
+'''
+
+RETURNS = '''
+{
+    "changed": true,
+    "check_mode": false,
+    "results": {
+        "account_type": "Standard_RAGRS",
+        "custom_domain": null,
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/clh0003",
+        "location": "eastus2",
+        "name": "clh0003",
+        "primary_endpoints": {
+            "blob": "https://clh0003.blob.core.windows.net/",
+            "queue": "https://clh0003.queue.core.windows.net/",
+            "table": "https://clh0003.table.core.windows.net/"
+        },
+        "primary_location": "eastus2",
+        "provisioning_state": "Succeeded",
+        "resource_group": "Testing",
+        "secondary_endpoints": {
+            "blob": "https://clh0003-secondary.blob.core.windows.net/",
+            "queue": "https://clh0003-secondary.queue.core.windows.net/",
+            "table": "https://clh0003-secondary.table.core.windows.net/"
+        },
+        "secondary_location": "centralus",
+        "status_of_primary": "Available",
+        "status_of_secondary": "Available",
+        "tags": null,
+        "type": "Microsoft.Storage/storageAccounts"
+    }
+}
+'''
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
 

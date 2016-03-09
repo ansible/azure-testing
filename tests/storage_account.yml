@@ -5,19 +5,25 @@
         azure_rm_storageaccount:
             resource_group: Testing
             location: 'East US 2'
-            name: clh0002
+            name: clh0003
             state: absent
             log_path: ./storage_account.log
             log_mode: file
             debug: yes
+        register: foo
+
+      - debug: var=foo
        
       - name: create an account
         azure_rm_storageaccount:
             resource_group: Testing
             location: 'East US 2'
-            name: clh0002
+            name: clh0003
             type: Standard_RAGRS
             log_path: ./storage_account.log
             log_mode: file
             debug: yes
+        register: foo
+
+      - debug: var=foo
             
