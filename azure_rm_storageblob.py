@@ -32,6 +32,9 @@ from ansible.module_utils.basic import *
 # found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
+
+HAS_AZURE = True
+
 try:
     from azure.storage.cloudstorageaccount import CloudStorageAccount
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
@@ -130,7 +133,6 @@ options:
               a blob name and either src or dest to upload or download. Provide a src path to upload and a dest path
               to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten.
               Use the force option to overwrite.
-        required: true
         default: present
         choices:
             - absent
@@ -345,13 +347,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
-            account=dict(required=True, type='str'),
+            storage_account=dict(required=True, type='str'),
             blob=dict(type='str', aliases=['blob_name']),
             container=dict(required=True, type='str', aliases=['container_name']),
-            force=dict(type='bool', default=false),
+            force=dict(type='bool', default=False),
             resource_group=dict(required=True, type='str'),
             src=dict(type='str'),
-            state=dict(required=True, type='str', default='present', choices=['absent', 'present']),
+            state=dict(type='str', default='present', choices=['absent', 'present']),
             tags=dict(type='dict'),
             public_access=dict(type='str', choices=['container', 'blob'])
 
@@ -360,17 +362,21 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         mutually_exclusive = [('src', 'dest')]
 
-        Super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
+        super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
                                                  supports_check_mode=True,
                                                  mutually_exclusive=mutually_exclusive,
                                                  **kwargs)
 
+        if not HAS_AZURE:
+            self.fail("The Azure python sdk is not installed (try 'pip install azure')")
+
         self.blob_client = None
         self.blob_details = None
-        self.account = None
+        self.storage_account = None
         self.blob = None
+        self.blob_obj = None
         self.container = None
-        self.container_details = None
+        self.container_obj = None
         self.force = None
         self.resource_group = None
         self.src = None
@@ -386,8 +392,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
-
-        if not NAME_PATTERN.match(container):
+        if not NAME_PATTERN.match(self.container):
             self.fail("Parameter error: container_name must consist of lowercase letters, "
                       "numbers and hyphens. It must begin with a letter or number. It may "
                       "not contain two consecutive hyphens.")
@@ -398,61 +403,95 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             # Get keys from the storage account
             self.log('Getting keys')
             keys = dict()
-            response = self.storage_client.storage_accounts.list_keys(resource_group, account)
-            keys['key1'] = response.storage_account_keys.key1
-            keys['key2'] = response.storage_account_keys.key2
+            account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.storage_account)
+            keys['key1'] = account_keys.key1
+            keys['key2'] = account_keys.key2
         except AzureHttpError as e:
-            self.debug('Error getting keys for account %s' % account)
+            self.debug('Error getting keys for account %s' % self.storge_account)
             self.fail(str(e.message))
 
         try:
             self.log('Create blob service')
-            self.blob_client = CloudStorageAccount(account, keys['key1']).create_block_blob_service()
+            self.blob_client = CloudStorageAccount(self.storage_account, keys['key1']).create_page_blob_service()
         except Exception as e:
             self.debug('Error creating blob service.')
             self.fail(str(e))
 
-        self.container_details = self.get_container()
+        self.container_obj = self.get_container()
+
+        if self.blob is not None:
+            self.blob_obj = self.get_blob()
 
         if self.state == 'present':
-            if self.container_details is None:
+            # create or update the container
+            if self.container_obj is None:
+                # create the container
                 self.create_container()
-            else:
-                #TODO check and update
-                pass
+            elif self.blob is None:
+                # update container attributes
+                if self.tags and self.container_obj.get('tags') != self.tags:
+                    # Update container tags
+                    self.update_container_tags()
 
+            # create, update or download blob
             if self.blob is not None:
-                self.blob_details = self.get_blob()
-                if self.src is not None:
-                    if self.blob_details is None or self.force:
+                if self.src is not None and self.src_is_valid():
+                    if self.blob_obj is None or self.force:
                         self.upload_blob()
 
-                if self.dest is not None:
+                elif self.dest is not None:
                     # verify file existance
                     # download
+                    pass
 
+                if self.tags and self.blob_obj.get('tags') != self.tags:
+                    # update tags
+                    pass
 
-        if self.state == 'absent':
-            # remove things
-            pass
+        elif self.state == 'absent':
+            if self.container_obj is not None and self.blob is None:
+                # Delete container
+                if self.container_has_blobs():
+                    if self.force:
+                        self.delete_container()
+                    self.results['actions'].append("Skip delete container {0}. Container has blobs.".format(
+                        self.container))
+                else:
+                    self.delete_container()
+            elif self.container_obj is not None and self.blob_obj is not None:
+                # Delete blob
+                self.delete_blob()
 
-        return self.result
+        return self.results
 
     def get_container(self):
         container = None
+        response = None
         try:
-            container = self.blob_client.get_container_properties(self.container)
-            container['meta_data'] = self.blob_client.get_container_metadata(self.container)
+            response = self.blob_client.get_container_properties(self.container)
         except AzureMissingResourceHttpError:
             pass
+        if response is not None:
+            container = dict(
+                name=response.name,
+                tags=response.metadata,
+                last_mdoified=response.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z')
+            )
         return container
 
     def get_blob(self):
         blob = None
+        response = None
         try:
-            blob = self.blob_client.get_blob_properties(self.container, self.blob)
+            response = self.blob_client.get_blob_properties(self.container, self.blob)
         except AzureMissingResourceHttpError:
             pass
+        if response:
+            blob = dict(
+                name=response.name,
+                tags=response.metadata,
+                last_modified=response.properties.last_modifiedlast_modified.strftime('%d-%b-%Y %H:%M:%S %z')
+            )
         return blob
 
     def create_container(self):
@@ -465,13 +504,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         if not self.check_mode:
             try:
-                self.blob_client.create_container(self.container, tags, self.public_access)
+                self.blob_client.create_container(self.container, metadata=tags, public_access=self.public_access)
             except AzureHttpError, exc:
                 self.fail("Error creating container {0} - {1}".format(self.container, str(exc)))
-        self.container_details = self.get_container()
+        self.container_obj = self.get_container()
         self.results['changed'] = True
         self.results['actions'].append('created container {0}'.format(self.container))
-        self.results['container'] = self.container_details
+        self.results['container'] = self.container_obj
 
     def upload_blob(self):
         try:
@@ -479,10 +518,10 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         except AzureHttpError, exc:
             self.fail("Error creating blob {0} - {1}".format(self.blob, str(exc)))
 
-        self.blob_details = self.get_blob()
+        self.blob_obj = self.get_blob()
         self.results['changed'] = True
-        self.results['actions'].append('created blob {0}'.format(self.blob))
-        self.results['blob'] = self.blob_details
+        self.results['actions'].append('created blob {0} from {1}'.format(self.blob, self.src))
+        self.results['blob'] = self.blob_obj
 
     def src_is_valid(self):
         if not os.path.isfile(self.src):
@@ -496,292 +535,43 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             fp.close()
         return True
 
-        #
-        #
-        #
-        # if mode == 'create':
-        #     if container is not None:
-        #         # container exists
-        #         results['container'] = container
-        #         results['msg'] = "Container already exists."
-        #         return results
-        #     # create the container
-        #     if not self._module.check_mode:
-        #         self.debug('Create container %s' % container_name)
-        #         bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
-        #         results['container'] = get_container_facts(bs, container_name)
-        #     results['msg'] = "Container created successfully."
-        #     results['changed'] = True
-        #     return results
-        #
-        # if mode == 'update':
-        #     container = get_container_facts(bs, container_name)
-        #     if container is None:
-        #         # container does not exist
-        #         if not self._module.check_mode:
-        #             self.debug('Create container %s' % container_name)
-        #             bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
-        #         results['changed'] = True
-        #         results['msg'] = 'Container created successfully.'
-        #         return results
-        #     # update existing container
-        #     results['msg'] = "Container not changed."
-        #     if x_ms_meta_name_values:
-        #         if not self._module.check_mode:
-        #             self.debug('Update x_ms_meta_name_values for container %s' % container_name)
-        #             bs.set_container_metadata(container_name, x_ms_meta_name_values)
-        #         results['changed'] = True
-        #         results['msg'] = 'Container meta data updated successfully.'
-        #     if x_ms_blob_public_access:
-        #         access = x_ms_blob_public_access
-        #         if x_ms_blob_public_access == 'private':
-        #             access = None
-        #         if not self._module.check_mode:
-        #             self.debug('Set access to %s for container %s' % (access, container_name))
-        #             bs.set_container_acl(container_name=container_name, x_ms_blob_public_access=access)
-        #         results['changed'] = True
-        #         results['msg'] = 'Container ACL updated successfully.'
-        #     if permissions:
-        #         if hours == 0 and days == 0:
-        #             raise Exception("Parameter error: expecting hours > 0 or days > 0")
-        #         id = "%s-%s" % (container_name, permissions)
-        #         si = get_identifier(id, hours, days, permissions)
-        #         identifiers = SignedIdentifiers()
-        #         identifiers.signed_identifiers.append(si)
-        #         if not self._module.check_mode:
-        #             self.debug('Set permissions to %s for container %s' % (permissions, container_name))
-        #             bs.set_container_acl(container_name=container_name,signed_identifiers=identifiers)
-        #         results['changed'] = True
-        #         results['msg'] = 'Container ACL updated successfully.'
-        #     results['container'] = get_container_facts(bs, container_name)
-        #     return results
-        #
-        # if mode == 'delete':
-        #     container = get_container_facts(bs, container_name)
-        #     if container is None:
-        #         results['msg'] = "Container %s could not be found." % container_name
-        #         return results
-        #     if not self._module.check_mode:
-        #         self.debug('Deleting container %s' % container_name)
-        #         bs.delete_container(container_name)
-        #     results['changed'] = True
-        #     results['msg'] = 'Container deleted successfully.'
-        #     return results
-        #
-        # if mode == 'delete_blob':
-        #     if blob_name is None:
-        #         raise Exception("Parameter error: blob_name cannot be None.")
-        #
-        #     container = container_check(bs, container_name)
-        #     blob = get_blob_facts(bs, container_name, blob_name)
-        #
-        #     if not blob:
-        #         results['msg'] = 'Blob %s could not be found in container %s.' % (blob_name, container_name)
-        #         return results
-        #
-        #     if not self._module.check_mode:
-        #         self.debug('Deleteing %s from container %s.' % (blob_name, container_name))
-        #         bs.delete_blob(container_name, blob_name)
-        #     results['changed'] = True
-        #     results['msg'] = 'Blob successfully deleted.'
-        #     return results
-        #
-        # if mode == 'put':
-        #     if not blob_name:
-        #         raise Exception("Parameter error: blob_name cannot be None.")
-        #
-        #     if not file_path :
-        #         raise Exception("Parameter error: file_path cannot be None.")
-        #
-        #     if not path_check(file_path):
-        #         raise Exception("File %s does not exist." % file_path)
-        #
-        #     container = get_container_facts(bs, container_name)
-        #     blob = None
-        #     if container is not None:
-        #         blob = get_blob_facts(bs, container_name, blob_name)
-        #
-        #     if container is not None and blob is not None:
-        #         # both container and blob already exist
-        #         md5_remote = blob['content-md5']
-        #         md5_local = get_md5(file_path)
-        #         results['container'] = container
-        #         results['blob'] = blob
-        #
-        #         if md5_local == md5_remote:
-        #             sum_matches = True
-        #             results['msg'] = 'File checksums match. File not uploaded.'
-        #             if overwrite == 'always':
-        #                 if not self._module.check_mode:
-        #                     self.debug('Uploading %s to container %s.' % (file_path, container_name))
-        #                     put_block_blob(
-        #                         bs,
-        #                         container_name,
-        #                         blob_name,
-        #                         file_path,
-        #                         x_ms_meta_name_values,
-        #                         x_ms_blob_cache_control,
-        #                         x_ms_blob_content_encoding,
-        #                         x_ms_blob_content_language,
-        #                         x_ms_blob_content_type
-        #                     )
-        #                     results['blob'] = get_blob_facts(bs, container_name, blob_name)
-        #                 results['changed'] = True
-        #                 results['msg'] = 'File successfully uploaded.'
-        #         else:
-        #             sum_matches = False
-        #             if overwrite in ('always', 'different'):
-        #                 if not self._module.check_mode:
-        #                     self.debug('Uploading %s to container %s.' % (file_path, container_name))
-        #                     put_block_blob(
-        #                         bs,
-        #                         container_name,
-        #                         blob_name,
-        #                         file_path,
-        #                         x_ms_meta_name_values,
-        #                         x_ms_blob_cache_control,
-        #                         x_ms_blob_content_encoding,
-        #                         x_ms_blob_content_language,
-        #                         x_ms_blob_content_type
-        #                     )
-        #                     results['blob'] = get_blob_facts(bs, container_name, blob_name)
-        #                 results['changed'] = True
-        #                 results['msg'] = 'File successfully uploaded.'
-        #             else:
-        #                 results['msg'] = "WARNING: Checksums do not match. Use overwrite parameter to force upload."
-        #         return results
-        #
-        #     if container is None:
-        #         # container does not exist. create container and upload.
-        #         if not self._module.check_mode:
-        #             self.debug('Creating container %s.' % container_name)
-        #             bs.create_container(container_name, x_ms_meta_name_values, x_ms_blob_public_access)
-        #             self.debug('Uploading %s to container %s.' % (file_path, container_name))
-        #             put_block_blob(
-        #                 bs,
-        #                 container_name,
-        #                 blob_name,
-        #                 file_path,
-        #                 x_ms_meta_name_values,
-        #                 x_ms_blob_cache_control,
-        #                 x_ms_blob_content_encoding,
-        #                 x_ms_blob_content_language,
-        #                 x_ms_blob_content_type
-        #             )
-        #             results['conainer'] = get_container_facts(bs, container_name)
-        #             results['blob'] = get_blob_facts(bs, container_name, blob_name)
-        #         results['changed'] = True
-        #         results['msg'] = 'Successfully created container and uploaded file.'
-        #         return results
-        #
-        #     if container is not None:
-        #         # container exists. just upload.
-        #         if not self._module.check_mode:
-        #             self.debug('Uploading %s to container %s.' % (file_path, container_name))
-        #             put_block_blob(
-        #                 bs,
-        #                 container_name,
-        #                 blob_name,
-        #                 file_path,
-        #                 x_ms_meta_name_values,
-        #                 x_ms_blob_cache_control,
-        #                 x_ms_blob_content_encoding,
-        #                 x_ms_blob_content_language,
-        #                 x_ms_blob_content_type
-        #             )
-        #             results['blob'] = get_blob_facts(bs, container_name, blob_name)
-        #         results['changed'] = True
-        #         results['msg'] = 'Successfully updloaded file.'
-        #         return results
-        #
-        # if mode == 'list':
-        #     container = container_check(bs, container_name)
-        #     response = bs.list_blobs(
-        #         container_name,
-        #         prefix,
-        #         marker,
-        #         max_results
-        #     )
-        #     results['blobs'] = []
-        #     for blob in response.blobs:
-        #         b = dict(
-        #             name = blob.name,
-        #             snapshot = blob.snapshot,
-        #             last_modified = blob.properties.last_modified,
-        #             content_length = blob.properties.content_length,
-        #             blob_type = blob.properties.blob_type,
-        #         )
-        #         results['blobs'].append(b)
-        #     return results
-        #
-        # if mode == 'get':
-        #     if file_path is None:
-        #         raise Exception("Parameter error: file_path cannot be None.")
-        #
-        #     container = container_check(bs, container_name)
-        #     blob = blob_check(bs, container_name, blob_name)
-        #     path_exists = path_check(file_path)
-        #
-        #     if not path_exists or overwrite == 'always':
-        #         if not self._module.check_mode:
-        #             bs.get_blob_to_path(container_name, blob_name, file_path)
-        #         results['changed'] = True
-        #         results['msg'] = "Blob %s successfully downloaded to %s." % (blob_name, file_path)
-        #         return results
-        #
-        #     if path_exists:
-        #         md5_remote = blob['content-md5']
-        #         md5_local = get_md5(file_path)
-        #
-        #         if md5_local == md5_remote:
-        #             sum_matches = True
-        #             if overwrite == 'always':
-        #                 if not self._module.check_mode:
-        #                     bs.get_blob_to_path(container_name, blob_name, file_path)
-        #                 results['changed'] = True
-        #                 results['msg'] = "Blob %s successfully downloaded to %s." % (blob_name, file_path)
-        #             else:
-        #                 results['msg'] = "Local and remote object are identical, ignoring. Use overwrite parameter to force."
-        #         else:
-        #             sum_matches = False
-        #             if overwrite in ('always', 'different'):
-        #                 if not self._module.check_mode:
-        #                     bs.get_blob_to_path(container_name, blob_name, file_path)
-        #                 results['changed'] = True
-        #                 results['msg'] = "Blob %s successfully downloaded to %s." % (blob_name, file_path)
-        #             else:
-        #                 results['msg'] ="WARNING: Checksums do not match. Use overwrite parameter to force download."
-        #
-        #     if sum_matches is True and overwrite == 'never':
-        #         results['msg'] = "Local and remote object are identical, ignoring. Use overwrite parameter to force."
-        #
-        #     return results
-        #
-        # if mode == 'get_url':
-        #     if not blob_name:
-        #         raise Exception("Parameter error: blob_name cannot be None.")
-        #
-        #     container = container_check(bs, container_name)
-        #     blob = blob_check(bs, container_name, blob_name)
-        #
-        #     url = bs.make_blob_url(
-        #         container_name=container_name,
-        #         blob_name=blob_name,
-        #         sas_token=access_token)
-        #     results['url'] = url
-        #     results['msg'] = "Url: %s" % url
-        #     return results
-        #
-        # if mode == 'get_token':
-        #     if hours == 0 and days == 0:
-        #         raise Exception("Parameter error: expecting hours > 0 or days > 0")
-        #     container = container_check(bs, container_name)
-        #     blob = blob_check(bs, container_name, blob_name)
-        #     results['blob_name'] = blob_name
-        #     sap = get_shared_access_policy(permissions, hours=hours, days=days)
-        #     token = bs.generate_shared_access_signature(container_name, blob_name, sap)
-        #     results['access_token'] = token
-        #     return results
+    def delete_container(self):
+        try:
+            self.blob_client.delete_container(self.container)
+        except AzureHttpError, exc:
+            self.fail("Error deleting container {0} - {1}".format(self.container, str(exc)))
+
+        self.results['changed'] = True
+        self.results['actions'].append('deleted container {0}'.format(self.container))
+
+    def container_has_blobs(self):
+        try:
+            response = self.blob_client.list_blobs(self.container)
+        except AzureHttpError, exc:
+            self.fail("Error list blobs in {0} - {1}".format(self.container, str(exc)))
+        if response:
+            self.log(response, pretty_print=True)
+        return True
+
+    def delete_blob(self):
+        try:
+            self.blob_client.delete_blob(self.container, self.blob)
+        except AzureHttpError, exc:
+            self.fail("Error deleting blob {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
+
+        self.results['changed'] = True
+        self.results['actions'].append('deleted blob {0}:{1}'.format(self.container, self.blob))
+
+    def update_container_tags(self):
+        try:
+            self.blob_client.set_container_metadata(self.container, metadata=self.tags)
+        except AzureHttpError, exc:
+            self.fail("Error updating container tags {0} - {1}".format(self.container, str(exc)))
+        self.container_obj = self.get_container()
+        self.results['changed'] = True
+        self.results['actions'].append("updated container {0} tags.".format(self.container))
+        self.results['container'] = self.container_obj
+
 
 def main():
     if '--interactive' in sys.argv:

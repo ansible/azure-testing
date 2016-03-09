@@ -1,0 +1,8 @@
+- name: Tests storage accounts
+  hosts: all
+  tasks:
+      - name: create an account
+        azure_rm_storageaccount:
+            resource_group: Testing
+            name: clh0001
+            type: Standard-RAGRS

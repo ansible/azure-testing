@@ -1,0 +1,29 @@
+- name: Test azure_rm_storageblob
+  hosts: all
+  tasks:
+#      - name: remove container foo 
+#        azure_rm_storageblob:
+#            log_mode: file
+#            log_path: ./storage_blob.log 
+#            debug: yes
+#            resource_group: rm_demo
+#            storage_account: mdavistest12341
+#            container: foo
+#            state: absent
+#        register: delete_response
+#
+#      - debug: var=delete_response
+
+      - name: create container foo
+        azure_rm_storageblob:
+            log_mode: file
+            log_path: ./storage_blob.log 
+            debug: yes
+            resource_group: 
+            storage_account: 
+            container: foo
+            blob: graylog.png
+            src: ./files/graylog.png
+        register: create_response
+      
+      - debug: var=create_response  
