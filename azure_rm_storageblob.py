@@ -36,6 +36,7 @@ from ansible.module_utils.azure_rm_common import *
 HAS_AZURE = True
 
 try:
+    from azure.storage.blob.models import ContentSettings
     from azure.storage.cloudstorageaccount import CloudStorageAccount
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
 except ImportError:
@@ -49,8 +50,8 @@ module: azure_rm_storageblob
 short_description: Create and manage blob containers and blob objects.
 
 description:
-    - Create and manage blob containers within a given storage account, upload and download objects to the blob
-      container, and control access to the objects.
+    - Create and manage blob containers and blobs within a given storage account. Upload and download blobs. Set blob
+
     - For authentication with Azure pass subscription_id, client_id, secret and tenant, or create a
       ~/.azure/credentials file with one or more profiles and pass a profile to the module. When using a credentials
       file, if no profile option is provided, the module will look for a 'default' profile. Each profile should include
@@ -101,6 +102,30 @@ options:
         default: null
         aliases:
             - container_name
+    content_type
+        description:
+            - Set the blob content-type header. For example, 'image/png'.
+        default: null
+    cache_control:
+        description:
+            - Set the blob cache-control header.
+        default: null
+    content_disposition:
+        description:
+            - Set the blob content-disposition header.
+        default: null
+    content_encoding:
+        description:
+            - Set the blob encoding header.
+        default: null
+    content_language:
+        description:
+            - Set the blob content-language header.
+        default: null
+    content_md5:
+        description:
+            - Set the blob md5 hash value.
+        default: null
     dest:
         description:
             - Destination file path. Use with state 'present' to download a blob.
@@ -139,14 +164,15 @@ options:
             - present
     public_access:
         description:
-            - Determine a container's level of public access. By default containers are private.
+            - Determine a container's level of public access. By default containers are private. Can only be set at
+              time of container creation.
         choices:
             - container
             - blob
         default: null
     tags:
         description:
-            - dictionary of key:value pairs to add to either a container or blob.
+            - Dictionary of key:value pairs to add to either a container or blob.
         default: null
 
 requirements:
@@ -157,189 +183,64 @@ author: "Chris Houseknecht @chouseknecht"
 '''
 
 EXAMPLES = '''
-# Simple PUT operation
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: mycontainer
-    blob_name: image.png
-    file_path: /my/images/image.png
-    mode: put
+- name: Remove container foo
+  azure_rm_storageblob:
+    resource_group: testing
+    storage_account: clh0002
+    container: foo
+    state: absent
 
-# Simple GET operation
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: mycontainer
-    blob_name: image.png
-    file_path: /downloads/image.png
-    mode: get
+- name: Create container foo and upload a file
+  azure_rm_storageblob:
+    resource_group: Testing
+    storage_account: clh0002
+    container: foo
+    blob: graylog.png
+    src: ./files/graylog.png
+    public_access: container
+    content_type: 'application/image'
 
-# PUT/upload with metadata
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: mycontainer
-    blob_name: image.png
-    file_path: /my/images/image.png
-    x_ms_blob_content_type: image/png
-    x_ms_meta_name_values:
-        val1: foo
-        val2: bar
-    mode: put
+- name: Download the file
+  azure_rm_storageblob:
+    resource_group: Testing
+    storage_account: clh0002
+    container: foo
+    blob: graylog.png
+    dest: ~/tmp/images/graylog.png
+'''
 
-# List blob objects in a container
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: mycontainer
-    mode: list
-
-# List blob objects with options
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: mycontainer
-    prefix: /my/desired/
-    marker: /my/desired/0023.txt
-    max_results: 50
-    mode: list
-
-# Create an empty container
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: emptycontainer
-    mode: create
-
-# Create a container with an object
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: newcontainer
-    blob_name: file1.txt
-    file_path: /myfiles/file1.txt
-    mode: put
-
-# Delete a container and its contents
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: newcontainer
-    mode: delete
-
-# GET an object but don't download when file checksums match
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: newcontainer
-    blob_name: file1.txt
-    file_path: /myfiles/file1.txt
-    mode: get
-    overwrite: different
-
-# Get an objet but don't download when file already exists
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: newcontainer
-    blob_name: file1.txt
-    file_path: /myfiles/file1.txt
-    mode: get
-    overwrite: never
-
-# Delete an object from a container
-- azure_rm_storageblob:
-    resource_group: mygroup
-    account_name: mystorageacct
-    container_name: newcontainer
-    blob_name: file1.txt
-    mode: delete_blob
-
+RETURN = '''
+{
+    "actions": [
+        "updated blob foo:graylog.png content settings."
+    ],
+    "blob": {
+        "content_length": 136532,
+        "content_settings": {
+            "cache_control": null,
+            "content_disposition": null,
+            "content_encoding": null,
+            "content_language": null,
+            "content_md5": null,
+            "content_type": "application/image"
+        },
+        "last_modified": "09-Mar-2016 22:08:25 +0000",
+        "name": "graylog.png",
+        "tags": {},
+        "type": "BlockBlob"
+    },
+    "changed": true,
+    "check_mode": false,
+    "container": {
+        "last_mdoified": "09-Mar-2016 19:28:26 +0000",
+        "name": "foo",
+        "tags": {}
+    }
+}
 '''
 
 
 NAME_PATTERN = re.compile(r"^(?!-)(?!.*--)[a-z0-9\-]+$")
-
-#
-# def path_check(path):
-#     if os.path.exists(path):
-#         return True
-#     else:
-#         return False
-#
-#
-# def get_blob_facts(bs, container_name, blob_name):
-#     blob = None
-#     try:
-#         blob = bs.get_blob_properties(container_name, blob_name)
-#     except AzureMissingResourceHttpError:
-#         pass
-#     return blob
-#
-#
-# def blob_check(bs, container_name, blob_name):
-#     blob = get_blob_facts(bs, container_name, blob_name)
-#     if blob is None:
-#         raise Exception("Requested blob %s not found in container %s." % (blob_name, container_name))
-#     return blob
-#
-#
-# def get_md5(file_path, block_size=2**20):
-#     # hash sent to azure needs to be base64 encoded
-#     # https://github.com/Azure/azure-storage-python/issues/11
-#     md5 = hashlib.md5()
-#     f = open(file_path, 'rb')
-#     while True:
-#         data = f.read(block_size)
-#         if not data:
-#             break
-#         md5.update(data)
-#     return md5.digest().encode('base64')[:-1]
-#
-#
-# def put_block_blob(bs, container_name, blob_name, file_path, x_ms_meta_name_values,
-#                    x_ms_blob_cache_control, x_ms_blob_content_encoding, x_ms_blob_content_language,
-#                    x_ms_blob_content_type):
-#     md5_local = get_md5(file_path)
-#     bs.put_block_blob_from_path(
-#         container_name=container_name,
-#         blob_name=blob_name,
-#         file_path=file_path,
-#         x_ms_blob_content_md5=md5_local,
-#         x_ms_meta_name_values=x_ms_meta_name_values,
-#         x_ms_blob_cache_control=x_ms_blob_cache_control,
-#         x_ms_blob_content_encoding=x_ms_blob_content_encoding,
-#         x_ms_blob_content_language=x_ms_blob_content_language,
-#         x_ms_blob_content_type=x_ms_blob_content_type,
-#         max_connections=5
-#     )
-#
-#
-# def get_shared_access_policy(permission, hours=0, days=0):
-#     # https://github.com/Azure/azure-storage-python/blob/master/tests/test_storage_blob.py
-#     date_format = "%Y-%m-%dT%H:%M:%SZ"
-#     start = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-#     expiry = start + datetime.timedelta(hours=hours, days=days)
-#     return SharedAccessPolicy(
-#         AccessPolicy(
-#             start.strftime(date_format),
-#             expiry.strftime(date_format),
-#             permission
-#         )
-#     )
-#
-#
-# def get_identifier(id, hours, days, permission):
-#     date_format = "%Y-%m-%dT%H:%M:%SZ"
-#     start = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-#     expiry = start + datetime.timedelta(hours=hours, days=days)
-#     si = SignedIdentifier()
-#     si.id = id
-#     si.access_policy.start = start.strftime(date_format)
-#     si.access_policy.expiry = expiry.strftime(date_format)
-#     si.access_policy.permission = permission
-#     return si
 
 
 class AzureRMStorageBlob(AzureRMModuleBase):
@@ -350,13 +251,19 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             storage_account=dict(required=True, type='str'),
             blob=dict(type='str', aliases=['blob_name']),
             container=dict(required=True, type='str', aliases=['container_name']),
+            dest=dict(type='str'),
             force=dict(type='bool', default=False),
             resource_group=dict(required=True, type='str'),
             src=dict(type='str'),
             state=dict(type='str', default='present', choices=['absent', 'present']),
             tags=dict(type='dict'),
-            public_access=dict(type='str', choices=['container', 'blob'])
-
+            public_access=dict(type='str', choices=['container', 'blob']),
+            content_type=dict(type='str'),
+            content_encoding=dict(type='str'),
+            content_language=dict(type='str'),
+            content_disposition=dict(type='str'),
+            cache_control=dict(type='str'),
+            content_md5=dict(type='str'),
             # TODO: implement object security
         )
 
@@ -377,6 +284,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.blob_obj = None
         self.container = None
         self.container_obj = None
+        self.dest = None
         self.force = None
         self.resource_group = None
         self.src = None
@@ -385,7 +293,9 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.public_access = None
         self.results = dict(changed=False,
                             check_mode=self.module.check_mode,
-                            actions=[])
+                            actions=[],
+                            container=dict(),
+                            blob=dict())
 
     def exec_module_impl(self, **kwargs):
 
@@ -407,15 +317,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
         except AzureHttpError as e:
-            self.debug('Error getting keys for account %s' % self.storge_account)
-            self.fail(str(e.message))
+            self.fail("Error getting keys for account {0}: {1}".format(self.storage_account, str(e)))
 
         try:
             self.log('Create blob service')
-            self.blob_client = CloudStorageAccount(self.storage_account, keys['key1']).create_page_blob_service()
+            self.blob_client = CloudStorageAccount(self.storage_account, keys['key1']).create_block_blob_service()
         except Exception as e:
-            self.debug('Error creating blob service.')
-            self.fail(str(e))
+            self.fail("Error creating blob service client: {0}".format(str(e)))
 
         self.container_obj = self.get_container()
 
@@ -423,7 +331,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             self.blob_obj = self.get_blob()
 
         if self.state == 'present':
-            # create or update the container
             if self.container_obj is None:
                 # create the container
                 self.create_container()
@@ -433,20 +340,21 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     # Update container tags
                     self.update_container_tags()
 
-            # create, update or download blob
             if self.blob is not None:
+                # create, update or download blob
                 if self.src is not None and self.src_is_valid():
                     if self.blob_obj is None or self.force:
                         self.upload_blob()
 
                 elif self.dest is not None:
-                    # verify file existance
-                    # download
-                    pass
+                    if self.dest_is_valid():
+                        self.download_blob()
 
                 if self.tags and self.blob_obj.get('tags') != self.tags:
-                    # update tags
-                    pass
+                    self.update_blob_tags()
+
+                if self.blob_content_settings_differ():
+                    self.update_blob_content_settings()
 
         elif self.state == 'absent':
             if self.container_obj is not None and self.blob is None:
@@ -454,8 +362,9 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 if self.container_has_blobs():
                     if self.force:
                         self.delete_container()
-                    self.results['actions'].append("Skip delete container {0}. Container has blobs.".format(
-                        self.container))
+                    else:
+                        self.results['actions'].append("Skipped delete container {0}. Container has blobs.".format(
+                            self.container))
                 else:
                     self.delete_container()
             elif self.container_obj is not None and self.blob_obj is not None:
@@ -490,7 +399,17 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             blob = dict(
                 name=response.name,
                 tags=response.metadata,
-                last_modified=response.properties.last_modifiedlast_modified.strftime('%d-%b-%Y %H:%M:%S %z')
+                last_modified=response.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z'),
+                type=response.properties.blob_type,
+                content_length=response.properties.content_length,
+                content_settings=dict(
+                    content_type=response.properties.content_settings.content_type,
+                    content_encoding=response.properties.content_settings.content_encoding,
+                    content_language=response.properties.content_settings.content_language,
+                    content_disposition=response.properties.content_settings.content_disposition,
+                    cache_control=response.properties.content_settings.cache_control,
+                    content_md5 =response.properties.content_settings.content_md5
+                )
             )
         return blob
 
@@ -513,26 +432,88 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.results['container'] = self.container_obj
 
     def upload_blob(self):
+        content_settings = None
+        if self.content_type or self.content_encoding or self.content_language or self.content_disposition or \
+                self.cache_control or self.content_md5:
+            content_settings = ContentSettings(
+                content_type=self.content_type,
+                content_encoding=self.content_encoding,
+                content_language=self.content_language,
+                content_disposition=self.content_disposition,
+                cache_control=self.cache_control,
+                content_md5=self.content_md5
+            )
+
         try:
-            self.blob_client.create_blob_from_path(self.container, self.blob, self.src, metadata=self.tags)
+            self.blob_client.create_blob_from_path(self.container, self.blob, self.src,
+                                                   metadata=self.tags, content_settings=content_settings)
         except AzureHttpError, exc:
             self.fail("Error creating blob {0} - {1}".format(self.blob, str(exc)))
 
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
         self.results['actions'].append('created blob {0} from {1}'.format(self.blob, self.src))
+        self.results['container'] = self.container_obj
         self.results['blob'] = self.blob_obj
+
+    def download_blob(self):
+        try:
+            self.blob_client.get_blob_to_path(self.container, self.blob, self.dest)
+        except Exception, exc:
+            self.fail("Failed to download blob {0}:{1} to {2} - {3}".format(self.container,
+                                                                            self.blob,
+                                                                            self.dest,
+                                                                            exc))
+            self.results['changed'] = True
+            self.results['actions'].append('downloaded blob {0}:{1} to {2}'.format(self.container,
+                                                                                   self.blob,
+                                                                                   self.dest))
+
+            self.results['container'] = self.container_obj
+            self.results['blob'] = self.blob_obj
 
     def src_is_valid(self):
         if not os.path.isfile(self.src):
             self.fail("The source path must be a file.")
         try:
             fp = open(self.src, 'r')
+            fp.close()
         except IOError as e:
             self.fail("Failed to access {0}. Make sure the file exists and that you have "
                       "read access.".format(self.src))
+        return True
+
+    def dest_is_valid(self):
+        self.dest = os.path.expanduser(self.dest)
+        self.dest = os.path.expandvars(self.dest)
+        if not os.path.basename(self.dest):
+            # dest is a directory
+            if os.path.isdir(self.dest):
+                self.log("Path is dir. Appending blob name.")
+                self.dest += self.blob
+            else:
+                try:
+                    self.log('Attempting to makedirs {0}'.format(self.dest))
+                    os.makddirs(self.dest)
+                except IOError, exc:
+                    self.fail("Failed to create directory {0} - {1}".format(self.dest, exc))
+                self.dest += self.blob
         else:
-            fp.close()
+            # does path exist without basename
+            file_name = os.path.basename(self.dest)
+            path = self.dest.replace(file_name, '')
+            self.log('Checking path {0}'.format(path))
+            if not os.path.isdir(path):
+                try:
+                    self.log('Attempting to makedirs {0}'.format(path))
+                    os.makedirs(path)
+                except IOError, exc:
+                    self.fail("Failed to create directory {0} - {1}".format(path, exc))
+        self.log('Checking final path {0}'.format(self.dest))
+        if os.path.isfile(self.dest) and not self.force:
+            # dest already exists and we're not forcing
+            self.log('Path already exists')
+            return False
         return True
 
     def delete_container(self):
@@ -546,12 +527,12 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
     def container_has_blobs(self):
         try:
-            response = self.blob_client.list_blobs(self.container)
+            list_generator = self.blob_client.list_blobs(self.container)
         except AzureHttpError, exc:
             self.fail("Error list blobs in {0} - {1}".format(self.container, str(exc)))
-        if response:
-            self.log(response, pretty_print=True)
-        return True
+        if len(list_generator.items) > 0:
+            return True
+        return False
 
     def delete_blob(self):
         try:
@@ -561,6 +542,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         self.results['changed'] = True
         self.results['actions'].append('deleted blob {0}:{1}'.format(self.container, self.blob))
+        self.results['container'] = self.container_obj
 
     def update_container_tags(self):
         try:
@@ -572,6 +554,52 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.results['actions'].append("updated container {0} tags.".format(self.container))
         self.results['container'] = self.container_obj
 
+    def update_blob_tags(self):
+        try:
+            self.blob_client.set_blob_metadata(self.container, self.blob, metadata=self.tags)
+        except AzureHttpError, exc:
+            self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, exc))
+        self.blob_obj = self.get_blob()
+        self.results['changed'] = True
+        self.results['actions'].append("updated blob {0}:{1} tags.".format(self.container, self.blob))
+        self.results['container'] = self.container_obj
+        self.results['blob'] = self.blob_obj
+
+    def blob_content_settings_differ(self):
+        if self.content_type or self.content_encoding or self.content_language or self.content_disposition or \
+                self.cache_control or self.content_md5:
+            settings = dict(
+                content_type=self.content_type,
+                content_encoding=self.content_encoding,
+                content_language=self.content_language,
+                content_disposition=self.content_disposition,
+                cache_control=self.cache_control,
+                content_md5=self.content_md5
+            )
+            if self.blob_obj['content_settings'] != settings:
+                return True
+
+        return False
+
+    def update_blob_content_settings(self):
+        content_settings = ContentSettings(
+            content_type=self.content_type,
+            content_encoding=self.content_encoding,
+            content_language=self.content_language,
+            content_disposition=self.content_disposition,
+            cache_control=self.cache_control,
+            content_md5=self.content_md5
+        )
+        try:
+            self.blob_client.set_blob_properties(self.container, self.blob, content_settings=content_settings)
+        except AzureHttpError, exc:
+            self.fail("Update blob content settings {0}:{1} - {2}".format(self.container, self.blob, exc))
+
+        self.blob_obj = self.get_blob()
+        self.results['changed'] = True
+        self.results['actions'].append("updated blob {0}:{1} content settings.".format(self.container, self.blob))
+        self.results['container'] = self.container_obj
+        self.results['blob'] = self.blob_obj
 
 def main():
     if '--interactive' in sys.argv:

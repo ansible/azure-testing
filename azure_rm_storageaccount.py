@@ -40,8 +40,12 @@ from ansible.module_utils.azure_rm_common import *
 HAS_AZURE = True
 
 try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.storage.cloudstorageaccount import CloudStorageAccount
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.mgmt.storage.models import AccountType,\
+                                          AccountStatus, \
+                                          ProvisioningState, \
                                           StorageAccountUpdateParameters,\
                                           CustomDomain, StorageAccountCreateParameters, KeyName
 except:
@@ -164,24 +168,27 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         if not HAS_AZURE:
             raise Exception("The Azure python sdk is not installed. Try 'pip install azure'")
 
-        module_arg_spec = dict(
-            resource_group=dict(required=True, type='str'),
-            name=dict(type='str'),
-            state=dict(default='present', choices=['present', 'absent']),
-            location=dict(type='str'),
-            tags=dict(type='dict'),
+        self.module_arg_spec = dict(
             account_type=dict(type='str', choices=[], aliases=['type']),
             custom_domain=dict(type='dict'),
+            force=dict(type='bool', default=False),
             gather_facts=dict(type='bool', default=False),
             gather_list=dict(type='bool', default=False),
+            location=dict(type='str'),
+            name=dict(type='str'),
+            resource_group=dict(required=True, type='str'),
+            state=dict(default='present', choices=['present', 'absent']),
+            tags=dict(type='dict'),
 
             # TODO: implement object security
         )
 
-        for attr, value in AccountType.__dict__.iteritems():
-            if not re.match('_', attr):
-                module_arg_spec['account_type']['choices'].append(getattr(AccountType, attr, None))
+        for key in AccountType:
+            self.module_arg_spec['account_type']['choices'].append(getattr(key, 'value'))
 
+        super(AzureRMStorageAccount, self).__init__(self.module_arg_spec,
+                                                    supports_check_mode=True,
+                                                    **kwargs)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode
@@ -199,22 +206,22 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key, value in kwargs.iteritems():
-            setattr(self, key, value)
+        for key in self.module_arg_spec:
+            setattr(self, key, kwargs[key])
 
         if self.gather_list:
             # gather facts for all storage accounts in a given resource group and get out
             self.list_accounts()
             return self.results
 
-        if not name:
-            raise Exception("Parameter error: name cannot be None.")
+        if not self.name:
+            self.fail("Parameter error: name cannot be None.")
 
-        if not NAME_PATTERN.match(name):
-            raise Exception("Parameter error: name must contain numbers and lowercase letters only.")
+        if not NAME_PATTERN.match(self.name):
+            self.fail("Parameter error: name must contain numbers and lowercase letters only.")
 
-        if len(name) < 3 or len(name) > 24:
-            raise Exception("Parameter error: name length must be between 3 and 24 characters.")
+        if len(self.name) < 3 or len(self.name) > 24:
+            self.fail("Parameter error: name length must be between 3 and 24 characters.")
 
         if self.custom_domain:
             self.log("custom_domain: {0}".format(self.custom_domain))
@@ -225,7 +232,10 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                           "attribute of type boolean.")
 
         self.account_dict = self.get_account()
-        self.results['results'] = self.account_dict
+        if self.account_dict is not None:
+            self.results['results'] = self.account_dict
+        else:
+            self.results['results'] = dict()
 
         if self.gather_facts:
             self.results['changed'] = False
@@ -233,11 +243,16 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         if self.state == 'present':
             if self.account_dict is None:
-                self.create_account()
-            self.update_account()
+                self.results['results'] = self.create_account()
+            else:
+                self.update_account()
         elif self.state == 'absent':
-            self.delete_account()
+            if self.account_dict is not None:
+                self.delete_account()
+                self.results['results'] = dict()
 
+        self.log('here returning results')
+        self.log(self.results, pretty_print=True)
         return self.results
 
     def check_name_availability(self):
@@ -245,21 +260,20 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             response = self.storage_client.storage_accounts.check_name_availability(self.name)
         except AzureHttpError, e:
             self.log('Error attempting to validate name.')
-            self.fail("Error checking name availability: {0}".format(str(e.)))
+            self.fail("Error checking name availability: {0}".format(str(e)))
 
         if not response.name_available:
-            self.debug('Error name not available.')
+            self.log('Error name not available.')
             self.fail("{0} - {1}".format(response.message, response.reason))
 
-
     def get_account(self):
+        self.log('Get properties for account {0}'.format(self.name))
         account_obj = None
         account_dict = None
 
         try:
-            self.log('Get properties for account {0}'.format(self.name))
             account_obj = self.storage_client.storage_accounts.get_properties(self.resource_group, self.name)
-        except AzureMissingResourceHttpError:
+        except CloudError:
             pass
 
         if account_obj is not None:
@@ -269,11 +283,13 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 location=account_obj.location,
                 resource_group=self.resource_group,
                 type=account_obj.type,
-                account_type=account_obj.account_type,
-                provisioning_state=account_obj.provisioning_state,
+                account_type=account_obj.account_type.value,
+                provisioning_state=account_obj.provisioning_state.value,
                 secondary_location=account_obj.secondary_location,
-                status_of_primary=account_obj.status_of_primary,
-                status_of_secondary=account_obj.status_of_secondary,
+                status_of_primary=(account_obj.status_of_primary.value
+                                   if account_obj.status_of_primary is not None else None),
+                status_of_secondary=(account_obj.status_of_secondary.value
+                                     if account_obj.status_of_secondary is not None else None),
                 primary_location=account_obj.primary_location
             )
             account_dict['custom_domain'] = None
@@ -302,15 +318,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             if account_obj.tags:
                 account_dict['tags'] = account_obj.tags
 
-            # account_dict['keys'] = {}
-            # keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
-            # account_dict['keys'][KeyName.key1] = keys.key1
-            # account_dict['keys'][KeyName.key2] = keys.key2
-
+        self.log("Existing account:")
+        self.log(account_dict, pretty_print=True)
         return account_dict
 
     def update_account(self):
-        self.debug('Update storage account {0}'.format(self.name))
+        self.log('Update storage account {0}'.format(self.name))
         if self.account_type:
             if self.account_type != self.account_dict['account_type']:
                 # change the account type
@@ -354,11 +367,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 self.account_dict['tags'] = self.tags
 
             if self.results['changed'] and not self.check_mode:
-                parameters = StorageAccountUpdateParameters(tags=self.account_dict'tags'])
+                parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
                 except AzureHttpError, e:
-                     self.fail("Failed to update tags: {0}".format(str(e)))
+                    self.fail("Failed to update tags: {0}".format(str(e)))
 
     def create_account(self):
         self.log("Creating account {0}".format(self.name))
@@ -371,80 +384,55 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         self.check_name_availability()
         
-        self.account_dict = dict(
-            location=self.location,
-            account_type=self.account_type,
-            name =self.name,
-            resource_group=self.resource_group,
-        )
-        self.account_dict['tags'] = {}
-
-        if self.tags:
-            self.account_dict['tags'] = self.tags
-
-        if not self.check_mode:
+        if self.check_mode:
+            account_dict = dict(
+                location=self.location,
+                account_type=self.account_type,
+                name =self.name,
+                resource_group=self.resource_group,
+                tags=dict()
+            )
+            if self.tags:
+                account_dict['tags'] = self.tags
+            return account_dict
+        else:
             self.results['changed'] = True
             try:
-                parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location, tags=self.tags)
-                response = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
-                delay = 20
-                while not response.done():
-                    # The create response contains no account attributes. If we wait again, the attributes will be there.
-                    self.debug("Waiting {0}sec before attempting GET".format(delay))
-                    time.sleep(delay)
-                response = response.result()
-            except AzureHttpError as e:
+                parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
+                                                            tags=self.tags)
+                poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
+            except AzureHttpError, e:
                 self.log('Error creating storage account.')
                 self.fail("Failed to create account: {0}".format(str(e)))
 
-            if response is not None:
-                self.account_dict = dict(
-                    id=response.id,
-                    type=response.type,
-                    provisioning_state=response.provisioning_state,
-                    custom_domain=dict(),
-                    primary_location=response.primary_location,
-                    secondary_location=response.secondary_location,
-                    status_of_primary=response.status_of_primary,
-                    status_of_secondary=response.status_of_secondary
-                )
-
-                self.account_dict['primary_endpoints'] = None
-                if response.primary_endpoints:
-                    self.account_dict['primary_endpoints'] = {
-                        'blob': response.primary_endpoints.blob,
-                        'queue': response.primary_endpoints.queue,
-                        'table': response.primary_endpoints.table
-                    }
-
-                self.account_dict['secondary_endpoints'] = None
-                if response.secondary_endpoints:
-                    self.account_dict['secondary_endpoints'] = {
-                        'blob': response.secondary_endpoints.blob,
-                        'queue': response.secondary_endpoints.queue,
-                        'table': response.secondary_endpoints.table
-                    }
-
-                # results['keys'] = {}
-                # keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
-                # results['keys'][KeyName.key1] = keys.key1
-                # results['keys'][KeyName.key2] = keys.key2
+            self.log('Checking poller for result:')
+            while not poller.done():
+                delay = 20
+                self.log("Waiting for {0} sec".format(delay))
+                poller.wait(timeout=delay)
+            # The actual result we finally get back from poller.result() seems to be empty.
+            # Make a call to the API to get actual results
+            return self.get_account()
 
     def delete_account(self):
+        if self.account_dict['provisioning_state'] != ProvisioningState.succeeded.value:
+            self.fail("Account provisioning has not completed. State is: {0}".format(
+                self.account_dict['provisioning_state']))
 
-        ## TODO -- check if the account has containers. Don't delete without a force option
+        if self.account_dict['provisioning_state'] == ProvisioningState.succeeded.value and \
+           self.account_has_blob_containers() and not self.force:
+            self.fail("Account contains blob containers. Is it in use? Use the force option to attempt deletion.")
 
         self.log('Delete storage account {0}'.format(self.name))
         self.results['changed'] = True
         if not self.check_mode:
             try:
                 self.storage_client.storage_accounts.delete(self.resource_group, self.name)
-            except  AzureHttpError, e:
+            except AzureHttpError, e:
                 self.fail("Failed to delete the account: {0}".format(str(e)))
 
-
     def list_accounts(self):
-        self.debug('List storage accounts for resource group {0}'.format(self.resource_group))
+        self.log('List storage accounts for resource group {0}'.format(self.resource_group))
         try:
             response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
         except AzureHttpError as e:
@@ -453,56 +441,38 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         self.log(str(response))
 
-        # if response:
-        # for storage_account in response.storage_accounts:
-        #     s = {}
-        #     s['id'] = storage_account.id
-        #     s['name'] = storage_account.name
-        #     s['location'] = storage_account.location
-        #     s['resource_group'] = resource_group
-        #     s['type'] = storage_account.type
-        #     s['account_type'] = storage_account.account_type
-        #     s['provisioning_state'] = storage_account.provisioning_state
-        #
-        #     s['custom_domain'] = None
-        #     if storage_account.custom_domain:
-        #         s['custom_domain'] = {
-        #             'name': storage_account.custom_domain.name,
-        #             'use_sub_domain': storage_account.custom_domain.use_sub_domain
-        #         }
-        #
-        #     s['primary_location'] = storage_account.primary_location
-        #
-        #     s['primary_endpoints'] = None
-        #     if storage_account.primary_endpoints:
-        #         s['primary_endpoints'] = {
-        #             'blob': storage_account.primary_endpoints.blob,
-        #             'queue': storage_account.primary_endpoints.queue,
-        #             'table': storage_account.primary_endpoints.table
-        #         }
-        #
-        #     s['secondary_endpoints'] = None
-        #     if storage_account.secondary_endpoints:
-        #         s['secondary_endpoints'] = {
-        #             'blob': storage_account.secondary_endpoints.blob,
-        #             'queue': storage_account.secondary_endpoints.queue,
-        #             'table': storage_account.secondary_endpoints.table
-        #         }
-        #
-        #     s['secondary_location'] = storage_account.secondary_location
-        #     s['status_of_primary'] = storage_account.status_of_primary
-        #     s['status_of_secondary'] = storage_account.status_of_secondary
-        #
-        #     s['tags'] = {}
-        #     if storage_account.tags:
-        #         s['tags'] = storage_account.tags
-        #
-        #     s['keys'] = {}
-        #     keys = storage_client.storage_accounts.list_keys(resource_group, storage_account.name)
-        #     s['keys'][KeyName.key1] = keys.storage_account_keys.key1
-        #     s['keys'][KeyName.key2] = keys.storage_account_keys.key2
-        #
-        #     results['storage_accounts'].append(s)
+    def account_has_blob_containers(self):
+        '''
+        If there are blob containers, then there are likely VMs depending on this account and it should
+        not be deleted.
+        '''
+        self.log('Checking for existing blob containers')
+        keys = dict()
+        try:
+            # Get keys from the storage account
+            account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
+            keys['key1'] = account_keys.key1
+            keys['key2'] = account_keys.key2
+        except AzureHttpError, e:
+            self.log("Error getting keys for account {0}".format(e))
+            self.fail("check_for_container:Failed to get account keys: {0}".format(e))
+
+        try:
+            cloud_storage = CloudStorageAccount(self.name, keys['key1']).create_page_blob_service()
+        except Exception, e:
+            self.log("Error creating blob service: {0}".format(e))
+            self.fail("check_for_container:Error creating blob service: {0}".format(e))
+
+        try:
+            response = cloud_storage.list_containers()
+        except AzureMissingResourceHttpError:
+            # No blob storage available?
+            return False
+
+        if len(response.items) > 0:
+            return True
+        return False
+
 
 def main():
     if '--interactive' in sys.argv:

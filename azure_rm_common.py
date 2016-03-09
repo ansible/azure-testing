@@ -135,13 +135,14 @@ class AzureRMModuleBase(object):
             self.fail("Failed to get credentials. Either pass as parameters, set environment variables, "
                       "or define a profile in ~/.azure/credentials.")
 
-        if self.credentials.get('subscription_id') is None:
+        if self.credentials.get('subscription_id', None) is None:
             self.fail("Credentials did not include a subscription_id value.")
-        else:
-            self.subscription_id = self.credentials['subscription_id']
+        self.log("setting subscription_id")
+        self.subscription_id = self.credentials['subscription_id']
 
         if self.credentials.get('client_id') is not None and \
-           self.credentials.get('secret') is not None and self.credentials.get('tenant') is not None:
+           self.credentials.get('secret') is not None and \
+           self.credentials.get('tenant') is not None:
             self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
                                                                  secret=self.credentials['secret'],
                                                                  tenant=self.credentials['tenant'])
@@ -247,7 +248,8 @@ class AzureRMModuleBase(object):
 
     @property
     def storage_client(self):
-        self.log('Creating ARM client...')
+        self.log('Creating storage client...')
+        self.log("subscription_id: {0}".format(self.subscription_id))
         if not self._storage_client:
             self._storage_client = StorageManagementClient(
                 StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id))

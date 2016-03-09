@@ -1,8 +1,23 @@
 - name: Tests storage accounts
   hosts: all
   tasks:
+      - name: remove account, if it exists
+        azure_rm_storageaccount:
+            resource_group: Testing
+            location: 'East US 2'
+            name: clh0002
+            state: absent
+            log_path: ./storage_account.log
+            log_mode: file
+            debug: yes
+       
       - name: create an account
         azure_rm_storageaccount:
             resource_group: Testing
-            name: clh0001
-            type: Standard-RAGRS
+            location: 'East US 2'
+            name: clh0002
+            type: Standard_RAGRS
+            log_path: ./storage_account.log
+            log_mode: file
+            debug: yes
+            
