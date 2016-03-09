@@ -116,7 +116,7 @@ class AzureRMModuleBase(object):
         self.debug = self._logger.debug
 
         if self._log_mode == 'syslog':
-            handler = AzureSysLogHandler(logging.debug(), self.module)
+            handler = AzureSysLogHandler(level=logging.DEBUG, module=self.module)
             self._logger.addHandler(handler)
             logging.basicConfig(level=logging.DEBUG)
         elif self._log_mode == 'file':
