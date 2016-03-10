@@ -70,24 +70,44 @@ Run for Specific Host
 -----------------------
 When run for a specific host using the --host option, a resource group is 
 required. For a specific host, this script returns the following variables:
- - computer_name
- - fqdn
- - id
- - image (dictionary: offer, publisher, sku, version)
- - location
- - mac address
- - name
- - network_interface
- - network_security_group
- - os_disk (dictionary: name, operating_system_type)
- - private_ip_address
- - provisioning_state
- - public_ip_address
- - public_ip_address_name
- - resource_group
- - tags (dictionary of key, value pairs)
- - type
- - virtual_machine_size
+
+{
+  "ansible_host": "XXX.XXX.XXX.XXX",
+  "computer_name": "computer_name2",
+  "fqdn": null,
+  "id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Compute/virtualMachines/object-name",
+  "image": {
+    "offer": "CentOS",
+    "publisher": "OpenLogic",
+    "sku": "7.1",
+    "version": "latest"
+  },
+  "location": "westus",
+  "mac_address": "00-0D-3A-31-2C-EC",
+  "name": "object-name",
+  "network_interface": "interface-name",
+  "network_interface_id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Network/networkInterfaces/object-name1",
+  "network_security_group": null,
+  "network_security_group_id": null,
+  "os_disk": {
+    "name": "object-name",
+    "operating_system_type": "Linux"
+  },
+  "plan": null,
+  "private_ip": "172.26.3.6",
+  "private_ip_alloc_method": "Static",
+  "provisioning_state": "Succeeded",
+  "public_ip": "XXX.XXX.XXX.XXX",
+  "public_ip_alloc_method": "Static",
+  "public_ip_id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Network/publicIPAddresses/object-name",
+  "public_ip_name": "object-name",
+  "resource_group": "galaxy-production",
+  "security_group": "object-name",
+  "security_group_id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Network/networkSecurityGroups/object-name",
+  "tags": null,
+  "type": "Microsoft.Compute/virtualMachines",
+  "virtual_machine_size": "Standard_DS4"
+}
 
 Groups
 ------
@@ -95,6 +115,7 @@ When run in --list mode, instances are grouped by the following categories:
  - azure
  - location
  - resource_group
+ - security_group
  - tag key
 
 Examples:
@@ -159,7 +180,10 @@ class AzureRM(object):
         self._compute_client = None
         self._resource_client = None
         self._network_client = None
-        self.debug = True
+
+        self.debug = False
+        if args.debug:
+            self.debug = True
 
         self.credentials = self._get_credentials(args)
         if not self.credentials:
@@ -320,6 +344,8 @@ class AzureInventory(object):
                 description='Produce an Ansible Inventory file for an Azure subscription')
         parser.add_argument('--list', action='store_true', default=True,
                            help='List instances (default: True)')
+        parser.add_argument('--debug', action='store_true', default=False,
+                           help='Show debug messages')
         parser.add_argument('--host', action='store',
                            help='Get all information about an instance')
         parser.add_argument('--pretty', action='store_true', default=False,
@@ -338,7 +364,7 @@ class AzureInventory(object):
                             help='Active Directory User')
         parser.add_argument('--password', action='store',
                             help='password')
-        parser.add_argument('--resource_group', action='store',
+        parser.add_argument('--resource-group', action='store',
                             help='Return inventory for a given Azure resource group')
         return parser.parse_args()
 
@@ -377,6 +403,7 @@ class AzureInventory(object):
                 private_ip_alloc_method=None,
                 public_ip=None,
                 public_ip_name=None,
+                public_ip_id=None,
                 public_ip_alloc_method=None,
                 fqdn=None,
                 location=machine.location,
@@ -384,8 +411,10 @@ class AzureInventory(object):
                 type=machine.type,
                 id=machine.id,
                 tags=machine.tags,
+                network_interface_id=None,
                 network_interface=None,
                 network_security_group=None,
+                network_security_group_id=None,
                 resource_group=resource_group,
                 mac_address=None,
                 plan=(machine.plan.name if machine.plan else None),
@@ -417,6 +446,7 @@ class AzureInventory(object):
                         host_vars['security_group'] = self._security_groups[network_interface.id]['name']
                         host_vars['security_group_id'] = self._security_groups[network_interface.id]['id']
                     host_vars['network_interface'] = network_interface.name
+                    host_vars['network_interface_id'] = network_interface.id
                     host_vars['mac_address'] = network_interface.mac_address
                     for ip_config in network_interface.ip_configurations:
                         host_vars['private_ip'] = ip_config.private_ip_address
@@ -430,6 +460,7 @@ class AzureInventory(object):
                             host_vars['public_ip'] = public_ip_address.ip_address
                             host_vars['public_ip_name'] = public_ip_address.name
                             host_vars['public_ip_alloc_method'] = public_ip_address.public_ip_allocation_method.value
+                            host_vars['public_ip_id'] = public_ip_address.id
                             if public_ip_address.dns_settings:
                                 host_vars['fqdn'] = public_ip_address.dns_settings.fqdn
 
@@ -447,7 +478,6 @@ class AzureInventory(object):
                         name=group.name,
                         id=group.id
                     )
-        print json.dumps(self._security_groups)
 
     def _add_host(self, vars, resource_group):
         if not self._inventory.get(resource_group):
