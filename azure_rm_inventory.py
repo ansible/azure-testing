@@ -577,7 +577,7 @@ class AzureInventory(object):
         # Load settings from azure.ini, if it exists. Otherwise,
         # look for environment values.
         file_settings = self._load_settings()
-        if file_settings is not None:
+        if file_settings:
             for key in AZURE_CONFIG_SETTINGS:
                 if key == 'resource_groups' and file_settings.get(key, None) is not None:
                     values = file_settings.get(key).split(',')
