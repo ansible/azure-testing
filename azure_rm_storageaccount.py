@@ -19,14 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import ConfigParser
-import json 
-import os
-from os.path import expanduser
-import re
-import time
-import sys
-
 
 # normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
 # without playing games with __metaclass__ or runtime base type hackery.
@@ -140,14 +132,13 @@ options:
         default: null
     gather_facts:
         description:
-            - Set to True to get all attributes including endpoints and keys for a given storage account. Expects resource_group
+            - Set to True to get all attributes including endpoints for a given storage account. Expects resource_group
               and name to be present.
         required: false
         default: false
     gather_list:
         description:
-            - Set to True to get all attributes for all storage accounts within a given resource group. Expects resource_group to be
-              present.
+            - Set to True to get all attributes for all storage accounts within a given resource group.
         required: false
         default: false
 
@@ -203,6 +194,40 @@ RETURNS = '''
         "type": "Microsoft.Storage/storageAccounts"
     }
 }
+
+# For gather_list:
+
+{
+    "changed": false,
+    "check_mode": false,
+    "results": [
+        {
+            "account_type": "Standard_RAGRS",
+            "custom_domain": null,
+            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/clh0001",
+            "location": "eastus2",
+            "name": "clh0001",
+            "primary_endpoints": {
+                "blob": "https://clh0001.blob.core.windows.net/",
+                "queue": "https://clh0001.queue.core.windows.net/",
+                "table": "https://clh0001.table.core.windows.net/"
+            },
+            "primary_location": "eastus2",
+            "provisioning_state": "Succeeded",
+            "resource_group": "Testing",
+            "secondary_endpoints": {
+                "blob": "https://clh0001-secondary.blob.core.windows.net/",
+                "queue": "https://clh0001-secondary.queue.core.windows.net/",
+                "table": "https://clh0001-secondary.table.core.windows.net/"
+            },
+            "secondary_location": "centralus",
+            "status_of_primary": "Available",
+            "status_of_secondary": "Available",
+            "tags": null,
+            "type": "Microsoft.Storage/storageAccounts"
+        }
+    ]
+}
 '''
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
@@ -218,8 +243,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             account_type=dict(type='str', choices=[], aliases=['type']),
             custom_domain=dict(type='dict'),
             force=dict(type='bool', default=False),
-            gather_facts=dict(type='bool', default=False),
-            gather_list=dict(type='bool', default=False),
             location=dict(type='str'),
             name=dict(type='str'),
             resource_group=dict(required=True, type='str'),
@@ -247,18 +270,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.location = None
         self.account_type = None
         self.custom_domain = None
-        self.gather_facts = None
-        self.gather_list = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
-
-        if self.gather_list:
-            # gather facts for all storage accounts in a given resource group and get out
-            self.list_accounts()
-            return self.results
 
         if not self.name:
             self.fail("Parameter error: name cannot be None.")
@@ -283,10 +299,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         else:
             self.results['results'] = dict()
 
-        if self.gather_facts:
-            self.results['changed'] = False
-            return self.results
-
         if self.state == 'present':
             if self.account_dict is None:
                 self.results['results'] = self.create_account()
@@ -297,8 +309,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 self.delete_account()
                 self.results['results'] = dict()
 
-        self.log('here returning results')
-        self.log(self.results, pretty_print=True)
         return self.results
 
     def check_name_availability(self):
@@ -323,49 +333,52 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             pass
 
         if account_obj is not None:
-            account_dict = dict(
-                id=account_obj.id,
-                name=account_obj.name,
-                location=account_obj.location,
-                resource_group=self.resource_group,
-                type=account_obj.type,
-                account_type=account_obj.account_type.value,
-                provisioning_state=account_obj.provisioning_state.value,
-                secondary_location=account_obj.secondary_location,
-                status_of_primary=(account_obj.status_of_primary.value
-                                   if account_obj.status_of_primary is not None else None),
-                status_of_secondary=(account_obj.status_of_secondary.value
-                                     if account_obj.status_of_secondary is not None else None),
-                primary_location=account_obj.primary_location
+            account_dict = self.account_obj_to_dict(account_obj)
+
+        return account_dict
+
+    def account_obj_to_dict(self, account_obj):
+        account_dict = dict(
+            id=account_obj.id,
+            name=account_obj.name,
+            location=account_obj.location,
+            resource_group=self.resource_group,
+            type=account_obj.type,
+            account_type=account_obj.account_type.value,
+            provisioning_state=account_obj.provisioning_state.value,
+            secondary_location=account_obj.secondary_location,
+            status_of_primary=(account_obj.status_of_primary.value
+                               if account_obj.status_of_primary is not None else None),
+            status_of_secondary=(account_obj.status_of_secondary.value
+                                 if account_obj.status_of_secondary is not None else None),
+            primary_location=account_obj.primary_location
+        )
+        account_dict['custom_domain'] = None
+        if account_obj.custom_domain:
+            account_dict['custom_domain'] = dict(
+                name=account_obj.custom_domain.name,
+                use_sub_domain=account_obj.custom_domain.use_sub_domain
             )
-            account_dict['custom_domain'] = None
-            if account_obj.custom_domain:
-                account_dict['custom_domain'] = dict(
-                    name=account_obj.custom_domain.name,
-                    use_sub_domain=account_obj.custom_domain.use_sub_domain
-                )
-            account_dict['primary_endpoints'] = None
-            if account_obj.primary_endpoints:
-                account_dict['primary_endpoints'] = dict(
-                    blob=account_obj.primary_endpoints.blob,
-                    queue=account_obj.primary_endpoints.queue,
-                    table=account_obj.primary_endpoints.table
-                )
+        account_dict['primary_endpoints'] = None
+        if account_obj.primary_endpoints:
+            account_dict['primary_endpoints'] = dict(
+                blob=account_obj.primary_endpoints.blob,
+                queue=account_obj.primary_endpoints.queue,
+                table=account_obj.primary_endpoints.table
+            )
 
-            account_dict['secondary_endpoints'] = None
-            if account_obj.secondary_endpoints:
-                account_dict['secondary_endpoints'] = dict(
-                    blob=account_obj.secondary_endpoints.blob,
-                    queue=account_obj.secondary_endpoints.queue,
-                    table=account_obj.secondary_endpoints.table
-                )
+        account_dict['secondary_endpoints'] = None
+        if account_obj.secondary_endpoints:
+            account_dict['secondary_endpoints'] = dict(
+                blob=account_obj.secondary_endpoints.blob,
+                queue=account_obj.secondary_endpoints.queue,
+                table=account_obj.secondary_endpoints.table
+            )
 
-            account_dict['tags'] = None
-            if account_obj.tags:
-                account_dict['tags'] = account_obj.tags
+        account_dict['tags'] = None
+        if account_obj.tags:
+            account_dict['tags'] = account_obj.tags
 
-        self.log("Existing account:")
-        self.log(account_dict, pretty_print=True)
         return account_dict
 
     def update_account(self):
@@ -476,16 +489,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 self.storage_client.storage_accounts.delete(self.resource_group, self.name)
             except AzureHttpError, e:
                 self.fail("Failed to delete the account: {0}".format(str(e)))
-
-    def list_accounts(self):
-        self.log('List storage accounts for resource group {0}'.format(self.resource_group))
-        try:
-            response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
-        except AzureHttpError as e:
-            self.log('Error listing storage accounts for resource group %s' % resource_group)
-            self.fail("Failed to list storage accounts for resource group: {0}".format(str(e)))
-
-        self.log(str(response))
 
     def account_has_blob_containers(self):
         '''

@@ -1,0 +1,17 @@
+- name: Get storage account facts
+  hosts: all
+  tasks:
+    - name: Gather facts
+      azure_rm_storageaccount_facts:
+        resource_group: Testing
+        name: clh0004
+      register: foo
+  
+    - debug: var=foo
+
+    - name: Get facts for all accounts
+      azure_rm_storageaccount_facts:
+        resource_group: Testing
+      register: foo
+
+    - debug: var=foo
