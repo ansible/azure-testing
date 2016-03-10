@@ -184,7 +184,7 @@ class AzureRMModuleBase(object):
             config = ConfigParser.ConfigParser()
             config.read(path)
         except Exception, exc:
-            self.fail(msg="Failed to access {0}. Check that the file exists and you have read "
+            self.fail("Failed to access {0}. Check that the file exists and you have read "
                       "access. {1}".format(path, str(exc)))
         credentials = dict()
         for key in AZURE_CREDENTIAL_ENV_MAPPING:
@@ -220,7 +220,7 @@ class AzureRMModuleBase(object):
 
         arg_credentials = dict()
         for attribute, env_variable in AZURE_CREDENTIAL_ENV_MAPPING.iteritems():
-            arg_credentials[attribute] = params.get(env_variable, None)
+            arg_credentials[attribute] = params.get(attribute, None)
 
         # try module params
         if arg_credentials['profile'] is not None:
