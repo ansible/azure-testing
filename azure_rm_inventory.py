@@ -118,6 +118,20 @@ When run in --list mode, instances are grouped by the following categories:
  - security_group
  - tag key
 
+Control groups using azure.ini or set environment variables:
+
+AZURE_GROUP_BY_RESOURCE_GROUP
+AZURE_GROUP_BY_LOCATION
+AZURE_GROUP_BY_SECURITY_GROUP
+AZURE_GROUP_BY_TAG
+
+Control resource groups by assigning a comma separated list to:
+
+AZURE_RESOURCE_GROUPS
+
+If not list is provided, all resource groups will be included.
+
+
 Examples:
 ---------
   Execute /bin/uname on all instances in the us-central1-a zone
@@ -150,6 +164,7 @@ HAS_AZURE = True
 HAS_REQUESTS = True
 
 try:
+    from msrestazure.azure_exceptions import CloudError
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
@@ -170,6 +185,14 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
     tenant='AZURE_TENANT',
     ad_user='AZURE_AD_USER',
     password='AZURE_PASSWORD'
+)
+
+AZURE_CONFIG_SETTINGS = dict(
+    resource_groups='AZURE_RESOURCE_GROUPS',
+    group_by_resource_group='AZURE_GROUP_BY_RESOURCE_GROUP',
+    group_by_location='AZURE_GROUP_BY_LOCATION',
+    group_by_security_group='AZURE_GROUP_BY_SECURITY_GROUP',
+    group_by_tag='AZURE_GROUP_BY_TAG'
 )
 
 
@@ -324,6 +347,12 @@ class AzureInventory(object):
         self._resource_client = rm.rm_client
         self._security_groups = None
 
+        self.resource_groups = []
+        self.group_by_resource_group = True
+        self.group_by_location = True
+        self.group_by_security_group = True
+        self.group_by_tag = True
+
         self._inventory = dict(
             _meta=dict(
                 hostvars=dict()
@@ -331,7 +360,13 @@ class AzureInventory(object):
             azure=[]
         )
 
-        if self._args.host and not self._args.resource_group:
+        self._get_settings()
+
+        if self._args.resource_groups:
+            values = self._args.resource_groups.split(',')
+            self.resource_groups = values
+
+        if self._args.host and len(self.resource_groups) == 0:
             sys.exit("Error: cannot retrieve host without a resource group.")
 
         self.get_inventory()
@@ -345,7 +380,7 @@ class AzureInventory(object):
         parser.add_argument('--list', action='store_true', default=True,
                            help='List instances (default: True)')
         parser.add_argument('--debug', action='store_true', default=False,
-                           help='Show debug messages')
+                           help='Send debug messages to STDOUT')
         parser.add_argument('--host', action='store',
                            help='Get all information about an instance')
         parser.add_argument('--pretty', action='store_true', default=False,
@@ -364,26 +399,33 @@ class AzureInventory(object):
                             help='Active Directory User')
         parser.add_argument('--password', action='store',
                             help='password')
-        parser.add_argument('--resource-group', action='store',
+        parser.add_argument('--resource-groups', action='store',
                             help='Return inventory for a given Azure resource group')
         return parser.parse_args()
 
     def get_inventory(self):
-        if self._args.host and self._args.resource_group:
+        if self._args.host:
             try:
-                virtual_machine = self._compute_client.virtual_machines.get(self._args.resource_group,
-                                                                            self._args.host)
-                self._get_security_groups(self._args.resource_group)
-                self._load_machines([virtual_machine], self._args.resource_group)
-            except AzureMissingResourceHttpError, e:
-                sys.exie("{0}".format(json.loads(e.message)['error']['message']))
-        elif self._args.resource_group:
-            try:
-                virtual_machines = self._compute_client.virtual_machines.list(self._args.resource_group)
-                self._get_security_groups(self._args.resource_group)
-                self._load_machines(virtual_machines, self._args.resource_group)
+                for resource_group in self.resource_groups:
+                    virtual_machine = self._compute_client.virtual_machines.get(resource_group,
+                                                                                self._args.host)
+                    self._get_security_groups(resource_group)
+                    self._load_machines([virtual_machine], resource_group)
             except AzureMissingResourceHttpError, e:
                 sys.exit("{0}".format(json.loads(e.message)['error']['message']))
+            except CloudError, e:
+                sys.exit("{0}".format(str(e)))
+
+        elif len(self.resource_groups) > 0:
+            try:
+                for resource_group in self.resource_groups:
+                    virtual_machines = self._compute_client.virtual_machines.list(resource_group)
+                    self._get_security_groups(resource_group)
+                    self._load_machines(virtual_machines, resource_group)
+            except AzureMissingResourceHttpError, e:
+                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
+            except CloudError, e:
+                sys.exit("{0}".format(str(e)))
         else:
             # get all VMs in all resource groups
             try:
@@ -394,6 +436,8 @@ class AzureInventory(object):
                     self._load_machines(virtual_machines, resource_group.name)
             except AzureHttpError, e:
                 sys.exit("{0}".format(json.loads(e.message)['error']['message']))
+            except CloudError, e:
+                sys.exit("{0}".format(str(e)))
 
     def _load_machines(self, machines, resource_group):
         for machine in machines:
@@ -435,6 +479,20 @@ class AzureInventory(object):
                     sku=machine.storage_profile.image_reference.sku,
                     version=machine.storage_profile.image_reference.version
                 )
+
+            # Add windows details
+            if machine.os_profile.windows_configuration is not None:
+                host_vars['windows_auto_updates_enabled'] = \
+                    machine.os_profile.windows_configuration.enable_automatic_updates
+                host_vars['windows_timezone'] = machine.os_profile.windows_configuration.time_zone
+                host_vars['windows_rm'] = None
+                if machine.os_profile.windows_configuration.win_rm is not None:
+                    host_vars['windows_rm'] = dict(listeners=None)
+                    if machine.os_profile.windows_configuration.win_rm.listeners is not None:
+                        host_vars['windows_rm']['listeners'] = []
+                        for listener in machine.os_profile.windows_configuration.win_rm.listeners:
+                            host_vars['windows_rm']['listeners'].append(dict(protocol=listener.protocol,
+                                                                             certificate_url=listener.certificate_url))
 
             for interface in machine.network_profile.network_interfaces:
                 interface_reference = self._parse_ref_id(interface.id)
@@ -480,29 +538,64 @@ class AzureInventory(object):
                     )
 
     def _add_host(self, vars, resource_group):
-        if not self._inventory.get(resource_group):
+        if self.group_by_resource_group and self._inventory.get(resource_group) is None:
             self._inventory[resource_group] = []
 
-        if not self._inventory.get(vars['location']):
+        if self.group_by_location and self._inventory.get(vars['location']) is None:
             self._inventory[vars['location']] = []
 
-        if vars.get('security_group') and self._inventory.get(vars['security_group']) is None:
+        if self.group_by_security_group and vars.get('security_group') and \
+           self._inventory.get(vars['security_group']) is None:
             self._inventory[vars['security_group']] = []
 
         host_name = vars['name']
-        self._inventory[vars['location']].append(host_name)
-        self._inventory['_meta']['hostvars'][host_name] = vars
-        self._inventory[resource_group].append(host_name)
-        self._inventory['azure'].append(host_name)
 
-        if vars.get('security_group'):
+        if self.group_by_location:
+            self._inventory[vars['location']].append(host_name)
+        if self.group_by_resource_group:
+            self._inventory[resource_group].append(host_name)
+        if self.group_by_security_group and vars.get('security_group'):
             self._inventory[vars['security_group']].append(host_name)
 
-        if vars.get('tags', None) is not None:
+        self._inventory['_meta']['hostvars'][host_name] = vars
+        self._inventory['azure'].append(host_name)
+
+        if self.group_by_tag and vars.get('tags', None) is not None:
             for key in vars['tags']:
                 if not self._inventory.get(key):
                     self._inventory[key] = []
                 self._inventory[key].append(host_name)
+
+    def _json_format_dict(self, pretty=False):
+        # convert inventory to json
+        if pretty:
+            return json.dumps(self._inventory, sort_keys=True, indent=2)
+        else:
+            return json.dumps(self._inventory)
+
+    def _get_settings(self):
+        # Load settings from azure.ini, if it exists. Otherwise,
+        # look for environment values.
+        file_settings = self._load_settings()
+        if file_settings is not None:
+            for key in AZURE_CONFIG_SETTINGS:
+                if key == 'resource_groups' and file_settings.get(key, None) is not None:
+                    values = file_settings.get(key).split(',')
+                    if len(values) > 0:
+                        self.resource_groups = values
+                elif file_settings.get(key, None) is not None:
+                    val = self._to_boolean(file_settings[key])
+                    setattr(self, key, val)
+        else:
+            env_settings = self._get_env_settings()
+            for key in AZURE_CONFIG_SETTINGS:
+                if key == 'resource_groups' and env_settings.get(key, None) is not None:
+                    values = env_settings.get(key).split(',')
+                    if len(values) > 0:
+                        self.resource_groups = values
+                elif env_settings.get(key, None) is not None:
+                    val = self._to_boolean(env_settings[key])
+                    setattr(self, key, val)
 
     def _parse_ref_id(self, reference):
         response = {}
@@ -512,13 +605,40 @@ class AzureInventory(object):
                 response[keys[index]] = keys[index + 1]
         return response
 
-    def _json_format_dict(self, pretty=False):
-        # convert inventory to json
-        if pretty:
-            return json.dumps(self._inventory, sort_keys=True, indent=2)
+    def _to_boolean(self, value):
+        if value in ['Yes', 'yes', 1, 'True', 'true', True]:
+            result = True
+        elif value in ['No', 'no', 0, 'False', 'false', False]:
+            result = False
         else:
-            return json.dumps(self._inventory)
+            result = True
+        return result
 
+    def _get_env_settings(self):
+        env_settings = dict()
+        for attribute, env_variable in AZURE_CONFIG_SETTINGS.iteritems():
+            env_settings[attribute] = os.environ.get(env_variable, None)
+        return env_settings
+
+    def _load_settings(self):
+        path = "./azure.ini"
+        config = None
+        settings = None
+        try:
+            config = ConfigParser.ConfigParser()
+            config.read(path)
+        except:
+            pass
+
+        if config is not None:
+            settings = dict()
+            for key in AZURE_CONFIG_SETTINGS:
+                try:
+                    settings[key] = config.get('azure', key, raw=True)
+                except:
+                    pass
+
+        return settings
 
 def main():
     if not HAS_AZURE:
