@@ -37,7 +37,7 @@ AZURE_COMMON_ARGS = dict(
     secret=dict(type='str'),
     tenant=dict(type='str'),
     log_path=dict(type='str'),
-    log_mode=dict(type='str', choices=['stderr','file','syslog'], default='syslog'),
+    log_mode=dict(type='str', choices=['stderr', 'file', 'syslog'], default='syslog'),
     filter_logger=dict(type='bool', default=True),
     debug=dict(type='bool', default=False),
 )
@@ -143,9 +143,9 @@ class AzureRMModuleBase(object):
         if self.credentials.get('client_id') is not None and \
            self.credentials.get('secret') is not None and \
            self.credentials.get('tenant') is not None:
-            self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
-                                                                 secret=self.credentials['secret'],
-                                                                 tenant=self.credentials['tenant'])
+           self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
+                                                                secret=self.credentials['secret'],
+                                                                tenant=self.credentials['tenant'])
         elif self.credentials.get('ad_user') is not None and self.credentials.get('password') is not None:
             self.azure_credentials = UserPassCredentials(self.credentials['ad_user'], self.credentials['password'])
         else:
