@@ -24,12 +24,7 @@
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
-
-HAS_AZURE = True
 
 try:
     from msrestazure.azure_exceptions import CloudError
@@ -40,9 +35,9 @@ try:
                                           ProvisioningState, \
                                           StorageAccountUpdateParameters,\
                                           CustomDomain, StorageAccountCreateParameters, KeyName
-except:
-    HAS_AZURE = False
-
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 
 DOCUMENTATION = '''
@@ -201,10 +196,8 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
 
 
 class AzureRMStorageAccount(AzureRMModuleBase):
-    def __init__(self, **kwargs):
 
-        if not HAS_AZURE:
-            raise Exception("The Azure python sdk is not installed. Try 'pip install azure'")
+    def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
             account_type=dict(type='str', choices=[], aliases=['type']),

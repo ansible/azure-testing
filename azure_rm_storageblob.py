@@ -27,21 +27,16 @@ import os
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
-
-HAS_AZURE = True
 
 try:
     from azure.storage.blob.models import ContentSettings
     from azure.storage.cloudstorageaccount import CloudStorageAccount
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
 except ImportError:
-    HAS_AZURE = False
-
+    # This is handled in azure_rm_common
+    pass
 
 DOCUMENTATION = '''
 ---
@@ -273,9 +268,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                                                  supports_check_mode=True,
                                                  mutually_exclusive=mutually_exclusive,
                                                  **kwargs)
-
-        if not HAS_AZURE:
-            self.fail("The Azure python sdk is not installed (try 'pip install azure')")
 
         self.blob_client = None
         self.blob_details = None

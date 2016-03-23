@@ -23,19 +23,18 @@ DOCUMENTATION = '''
 module: azure_rm_networkinterface
 '''
 
-import sys
 # normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
-# TODO: ensure the base class errors properly on these imports failing
-from azure.common import AzureMissingResourceHttpError
-from azure.mgmt.network import NetworkInterface, NetworkInterfaceIpConfiguration, ResourceId
+try:
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.network import NetworkInterface, NetworkInterfaceIpConfiguration, ResourceId
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 class AzureRMNetworkInterface(AzureRMModuleBase):
     def __init__(self, **kwargs):

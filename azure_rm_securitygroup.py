@@ -25,12 +25,8 @@ import re
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
-HAS_AZURE = True
 try:
     from msrestazure.azure_exceptions import CloudError
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
@@ -38,8 +34,9 @@ try:
     from azure.mgmt.network.models.network_management_client_enums import (SecurityRuleAccess,
                                                                            SecurityRuleDirection,
                                                                            SecurityRuleProtocol)
-except:
-    HAS_AZURE = False
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 DOCUMENTATION = '''
 ---
@@ -366,9 +363,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
     def __init__(self, **kwargs):
 
-        if not HAS_AZURE:
-            raise Exception("The Azure python sdk is not installed. Try 'pip install azure'")
-
         self.module_arg_spec = dict(
             default_rules=dict(type='list'),
             location=dict(type='str'),
@@ -392,7 +386,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
         super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
                                                    supports_check_mode=True,
                                                    **kwargs)
-        
+
         self.default_rules = None
         self.location = None
         self.name = None
