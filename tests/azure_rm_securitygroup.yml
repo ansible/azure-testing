@@ -4,20 +4,17 @@
   vars:
       playbook_debug: yes
   tasks:
-      - name: Remove log file
-        file:
-           name: azure_rm_securitygroup.log
-           state: absent
-
       - name: Create security group 
         azure_rm_securitygroup:
-            resource_group: chouse
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+            resource_group: Testing 
             name: mysecgroup
             location: 'eastus'
             purge_rules: yes
             rules:
                 - name: DenySSH
-                  protocol: TCP
+                  protocol: Tcp
                   source_port_range: '*'
                   source_address_prefix: '*'
                   destination_address_prefix: '*'
@@ -26,7 +23,7 @@
                   priority: 100
                   direction: Inbound 
                 - name: 'AllowSSH'
-                  protocol: TCP
+                  protocol: Tcp
                   source_port_range: '*' 
                   source_address_prefix: '174.109.158.0/24'
                   destination_address_prefix: '*'
@@ -41,16 +38,17 @@
         debug: var=test1
         when: playbook_debug
 
-      - assert: { that: "{{ test1.rules | length }} == 2" }
+      - assert: { that: "{{ test1.results.rules | length }} == 2" }
 
       - name: Add/Update rules on existing security group
         azure_rm_securitygroup:
-            resource_group: chouse
+            debug: "{{ playbook_debug }}"
+            resource_group: Testing 
             name: mysecgroup
             location: 'eastus'
             rules:
                 - name: DenySSH
-                  protocol: TCP
+                  protocol: Tcp
                   source_port_range: '*' 
                   source_address_prefix: '*'
                   destination_address_prefix: '*'
@@ -59,7 +57,7 @@
                   priority: 100
                   direction: Inbound 
                 - name: AllowSSHFromHome
-                  protocol: TCP
+                  protocol: Tcp
                   source_port_range: '*' 
                   source_address_prefix: '174.109.158.0/24'
                   destination_address_prefix: '*'
@@ -74,7 +72,7 @@
         debug: var=test2
         when: playbook_debug
 
-      - assert: { that: "{{ test2.rules | length }} == 3" }
+      - assert: { that: "{{ test2.results.rules | length }} == 3" }
 
       - name: Delete security group
         azure_rm_securitygroup:

@@ -30,12 +30,16 @@ from ansible.module_utils.basic import *
 # found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
-from azure.common import AzureMissingResourceHttpError, AzureHttpError
-from azure.mgmt.network.models import NetworkSecurityGroup, SecurityRule, Subnet, NetworkInterface
-from azure.mgmt.network.models.network_management_client_enums import (SecurityRuleAccess,
-                                                                       SecurityRuleDirection,
-                                                                       SecurityRuleProtocol)
-
+HAS_AZURE = True
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+    from azure.mgmt.network.models import NetworkSecurityGroup, SecurityRule, Subnet, NetworkInterface
+    from azure.mgmt.network.models.network_management_client_enums import (SecurityRuleAccess,
+                                                                           SecurityRuleDirection,
+                                                                           SecurityRuleProtocol)
+except:
+    HAS_AZURE = False
 
 DOCUMENTATION = '''
 ---
@@ -222,9 +226,10 @@ def validate_rule(rule, rule_type=None):
     access = rule.get('access', None)
     if not access:
         raise Exception("Rule access value is required.")
-    if access not in SecurityRuleAccess:
-        names = [member.name for member in SecurityRuleAccess]
-        raise Exception("Rule access must be one of {0}".format(','.join(names)))
+
+    access_names = [member.value for member in SecurityRuleAccess]
+    if access not in access_names:
+        raise Exception("Rule access must be one of [{0}]".format(', '.join(access_names)))
 
     priority = rule.get('priority', None)
     if not priority:
@@ -242,16 +247,17 @@ def validate_rule(rule, rule_type=None):
     protocol = rule.get('protocol', None)
     if not protocol:
         raise Exception("Rule protocol value is required.")
-    if protocol not in SecurityRuleProtocol:
-        names = [member.name for member in SecurityRuleProtocol]
-        raise Exception("Rule protocol must be one of {0}".format(','.join(names)))
+    protocol_names = [member.value for member in SecurityRuleProtocol]
+    if protocol not in protocol_names:
+        raise Exception("Rule protocol must be one of [{0}]".format(', '.join(protocol_names)))
     
     direction = rule.get('direction', None)
     if not direction:
         raise Exception("rule direction is required.")
-    if direction not in SecurityRuleDirection:
-        names = [member.name for member in SecurityRuleDirection]
-        raise Exception("Rule direction must be one of {0}".format(','.join(names)))
+
+    direction_names = [member.value for member in SecurityRuleDirection]
+    if direction not in direction_names:
+        raise Exception("Rule direction must be one of [{0}]".format(', '.join(direction_names)))
     
     if not rule.get('source_port_range', None):
         raise Exception("Rule source_port_range value is required.")
@@ -312,14 +318,14 @@ def create_rule_dict_from_obj(rule):
         id=rule.id,
         name=rule.name,
         description=rule.description,
-        protocol=rule.protocol,
+        protocol=rule.protocol.value,
         source_port_range=rule.source_port_range,
         destination_port_range=rule.destination_port_range,
         source_address_prefix=rule.source_address_prefix,
         destination_address_prefix=rule.destination_address_prefix,
-        access=rule.access,
+        access=rule.access.value,
         priority=rule.priority,
-        direction=rule.direction,
+        direction=rule.direction.value,
         provisioning_state=rule.provisioning_state,
         etag=rule.etag
     )
@@ -334,27 +340,36 @@ def create_network_security_group_dict(nsg):
         tags=nsg.tags,    
     )
     results['rules'] = []
-    for rule in nsg.security_rules:
-        results['rules'].append(create_rule_dict_from_obj(rule))
+    if nsg.security_rules:
+        for rule in nsg.security_rules:
+            results['rules'].append(create_rule_dict_from_obj(rule))
 
     results['default_rules'] = []
-    for rule in nsg.default_security_rules:
-        results['default_rules'].append(create_rule_dict_from_obj(rule))
+    if nsg.default_security_rules:
+        for rule in nsg.default_security_rules:
+            results['default_rules'].append(create_rule_dict_from_obj(rule))
 
     results['network_interfaces'] = []
-    for interface in nsg.network_interfaces:
-        results['network_interfaces'].append(interface.id)
+    if nsg.network_interfaces:
+        for interface in nsg.network_interfaces:
+            results['network_interfaces'].append(interface.id)
 
     results['subnets'] = []
-    for subnet in nsg.subnets:
-        results['subnets'].append(subnet.id)
+    if nsg.subnets:
+        for subnet in nsg.subnets:
+            results['subnets'].append(subnet.id)
 
     return results
 
 
 class AzureRMSecurityGroup(AzureRMModuleBase):
+
     def __init__(self, **kwargs):
-        module_arg_spec = dict(
+
+        if not HAS_AZURE:
+            raise Exception("The Azure python sdk is not installed. Try 'pip install azure'")
+
+        self.module_arg_spec = dict(
             default_rules=dict(type='list'),
             location=dict(type='str'),
             name=dict(type='str', required=True),
@@ -370,10 +385,11 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             resource_group=dict(required=True, type='str'),
             rules=dict(type='list'),
             state=dict(default='present', choices=['present', 'absent']),
-            tags=dict(type='dict')
+            tags=dict(type='dict'),
+            log_path=dict(type='str', default='azure_rm_security_group.log')
         )
 
-        super(AzureRMSecurityGroup, self).__init__(derived_arg_spec=module_arg_spec,
+        super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
                                                    supports_check_mode=True,
                                                    **kwargs)
         
@@ -404,7 +420,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
         changed = False
         results = dict()
 
-        if not NAME_PATTERN.match(name):
+        if not NAME_PATTERN.match(self.name):
             raise Exception("Parameter error: name must contain only word characters and '.','-','_'")
 
         if self.tags:
@@ -425,19 +441,20 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                     self.fail("Error validating dfault rule {0} - {1}".format(rule, str(exc)))
 
         try:
-            nsg = self.network_client.network_security_groups.get(resource_group, name)
+            nsg = self.network_client.network_security_groups.get(self.resource_group, self.name)
             if self.state == 'present':
                 results = create_network_security_group_dict(nsg)
-
+                self.log("found security group:")
+                self.log(results, pretty_print=True)
             elif self.state == 'absent':
                 changed = True
-        except AzureMissingResourceHttpError:
+        except CloudError:
             if self.state == 'present':
                 changed = True
 
         if self.state == 'present' and not changed:
             # update the security group
-            self.log("Update security group {0}".format(name))
+            self.log("Update security group {0}".format(self.name))
 
             if self.rules:
                 for rule in self.rules:
@@ -534,7 +551,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         elif self.state == 'present' and changed:
             # create the security group
-            self.debug("Create security group {0}".format(name))
+            self.debug("Create security group {0}".format(self.name))
 
             if not self.location:
                 raise Exception("Location is required when creating a new security group.")
@@ -545,7 +562,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             results['default_rules'] = []
             results['subnets'] = []
             results['network_interfaces'] = []
-            results['tags'] = []
+            results['tags'] = {}
 
             if self.rules:
                 results['rules'] = self.rules
@@ -560,7 +577,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
             self.results['changed'] = changed
             self.results['results'] = results
-            if not self._module.check_mode:
+            if not self.check_mode:
                 self.results['results'] = self.create_or_update(results)
 
         elif self.state == 'absent' and changed:
@@ -578,18 +595,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             # perform the update
             parameters = NetworkSecurityGroup(default_security_rules=[], network_interfaces=[], security_rules=[],
                                               subnets=[], tags={})
-            for rule in results['rules']:
+            for rule in results.get('rules'):
                 parameters.security_rules.append(create_rule_instance(rule))
-            for rule in results['default_rules']:
+            for rule in results.get('default_rules'):
                 parameters.default_security_rules.append(create_rule_instance(rule))
-            for subnet in results['subnets']:
+            for subnet in results.get('subnets'):
                 parameters.subnets.append(Subnet(subnet))
-            for interface in results['network_interfaces']:
+            for interface in results.get('network_interfaces'):
                 parameters.network_interfaces.append(NetworkInterface(interface))
-            parameters.tags = results['tags']
-            parameters.location = results['location']
-            parameters.type = results['type']
-            parameters.id = results['id']
+            parameters.tags = results.get('tags')
+            parameters.location = results.get('location')
+            parameters.type = results.get('type')
+            parameters.id = results.get('id')
             poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
                                                                                   self.name,
                                                                                   parameters)
