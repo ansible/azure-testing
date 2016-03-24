@@ -22,87 +22,163 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_subnet
 '''
-import sys
+
 # normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
-# TODO: ensure the base class errors properly on these imports failing
-from azure.common import AzureMissingResourceHttpError
-from azure.mgmt.network import Subnet
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.network.models import Subnet
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
+
+
+NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-_]+[a-zA-Z0-9_]$")
+
+
+def subnet_to_dict(subnet):
+    return dict(
+        id=subnet.id,
+        name=subnet.name,
+        provisioning_state=subnet.provisioning_state,
+        address_prefix=subnet.address_prefix)
+
 
 class AzureRMSubnet(AzureRMModuleBase):
+
     def __init__(self, **kwargs):
-        module_arg_spec = dict(
-            resource_group = dict(required=True),
-            name = dict(required=True),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(required=True),
-            virtual_network_name = dict(required=True),
-            address_prefix_cidr = dict(required=True),
-            # TODO: implement tags
-            # TODO: implement object security
+
+        self.module_arg_spec = dict(
+            resource_group=dict(required=True),
+            name=dict(required=True),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
+            #location=dict(type='str'),
+            virtual_network_name=dict(type='str', required=True),
+            address_prefix_cidr=dict(type='str'),
+            tags=dict(type='dict'),
+            log_file=dict(type='str', default='azure_rm_subnet.log')
         )
 
-        AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
+        required_if = [
+            ('state', 'present', ['address_prefix_cidr'])
+        ]
 
-    def exec_module_impl(self, resource_group, name, state, location, virtual_network_name, address_prefix_cidr, **kwargs):
-        #TODO: add automatic Microsoft.Network provider check/registration (only on failure?)
-        results = dict(changed=False)
+        super(AzureRMSubnet, self).__init__(self.module_arg_spec,
+                                            supports_check_mode=True,
+                                            required_if=required_if,
+                                            **kwargs)
 
-        # TODO: validate arg shape (CIDR blocks, etc)
+        self.results = dict(
+            changed=False,
+            results={}
+        )
+
+        self.resource_group = None
+        self.name = None
+        self.state = None
+        # self.location = None
+        self.virtual_etwork_name = None
+        self.address_prefix_cidr = None
+        self.tags = None
+
+    def exec_module_impl(self, **kwargs):
+        for key in self.module_arg_spec:
+            setattr(self, key, kwargs[key])
+
+        if not NAME_PATTERN.match(self.name):
+            self.fail("Parameter error: name must begin with a letter or number, end with a letter, number "
+                      "or underscore and may contain only letters, numbers, periods, underscores or hyphens.")
+
+        if self.state == 'present' and not CIDR_PATTERN.match(self.address_prefix_cidr):
+            self.fail("Invalid address_prefix_cidr value {0}".format(self.address_prefix_cidr))
+
+        if self.tags:
+            self.validate_tags(self.tags)
+
+        results = dict()
+        changed = False
 
         try:
-            self.debug('fetching subnet...')
-            subnet_resp = self.network_client.subnets.get(resource_group, virtual_network_name, name)
-            # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
-            self.debug('subnet exists...')
-            subnet = subnet_resp.subnet
-            if state == 'present':
-                results['id'] = subnet.id # store this early in case of check mode
-            # TODO: validate args
-                if subnet.address_prefix != address_prefix_cidr:
-                    self.debug("CHANGED: subnet address range does not match")
-                    results['changed'] = True
-            elif state == 'absent':
-                self.debug("CHANGED: subnet exists and state is 'absent'")
-                results['changed'] = True
-        except AzureMissingResourceHttpError:
-            self.debug('subnet does not exist')
-            if state == 'present':
-                self.debug("CHANGED: subnet does not exist and state is 'present'")
-                results['changed'] = True
+            self.log('Fetching subnet {0}'.format(self.name))
+            subnet = self.network_client.subnets.get(self.resource_group,
+                                                     self.virtual_network_name,
+                                                     self.name)
 
-        if self._module.check_mode:
-            self.debug('check mode, exiting early')
-            return results
+            if subnet.provisioning_state != AZURE_SUCCESS_STATE:
+                self.fail("Error subnet {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                    self.name, subnet.provisioning_state, AZURE_SUCCESS_STATE))
 
-        if results['changed']:
-            if state == 'present':
+            if self.state == 'present':
+                results = subnet_to_dict(subnet)
+            elif self.state == 'absent':
+                changed = True
+        except CloudError:
+            # the subnet does not exist
+            if self.state == 'present':
+                changed = True
 
-                subnet = Subnet(
-                    address_prefix=address_prefix_cidr
-                )
-                self.debug('creating/updating subnet...')
-                subnet_resp = self.network_client.subnets.create_or_update(resource_group, virtual_network_name, name, subnet)
-                # TODO: check response for success
+        self.results['changed'] = changed
+        self.results['results'] = results
 
-                # TODO: optimize away in change case
-                subnet_resp = self.network_client.subnets.get(resource_group, virtual_network_name, name)
+        if self.state == 'present' and changed:
+            # create new subnet
+            #if not self.location:
+            #    self.fail('Parameter error: location is required when creating a new subnet')
+            if not self.check_mode:
+                self.log('Creating subnet {0}'.format(self.name))
+                self.results['results'] = self.create_or_update_subnet()
+        elif self.state == 'present' and not changed:
+            # update subnet
+            if results['address_prefix'] != self.address_prefix_cidr:
+                changed = True
+                self.results['address_prefix'] = self.address_prefix_cidr
+                self.results['changed'] = changed
+                if not self.check_mode:
+                    self.log('Updating subnet {0}'.format(self.name))
+                    self.results['results'] = self.create_or_update_subnet()
+        elif self.state == 'absent':
+            # delete subnet
+            if not self.check_mode:
+                self.delete_subnet()
+                # the delete does not actually return anything. if no exception, then we'll assume
+                # it worked.
+                self.results['results']['status'] = 'Deleted'
+        return self.results
 
-                results['id'] = subnet_resp.subnet.id
+    def check_provisioning_state(self, subnet):
+        if subnet.provisioning_state != AZURE_SUCCESS_STATE:
+            self.fail("Error subnet {0} has a provisioning state of {1}. "
+                      "Expecting state to be {2}.".format(subnet.name, subnet.provisioning_state,
+                                                          AZURE_SUCCESS_STATE))
 
-            elif state == 'absent':
-                self.debug('deleting subnet...')
-                subnet_resp = self.network_client.subnets.delete(resource_group, virtual_network_name, name)
-                # TODO: check response
+    def create_or_update_subnet(self):
+        subnet = Subnet(
+            address_prefix=self.address_prefix_cidr
+        )
+        poller = self.network_client.subnets.create_or_update(self.resource_group,
+                                                              self.virtual_network_name,
+                                                              self.name,
+                                                              subnet)
+        new_subnet = self.get_poller_result(poller)
+        self.check_provisioning_state(new_subnet)
+        return subnet_to_dict(new_subnet)
 
-        return results
+    def delete_subnet(self):
+        self.log('Deleting subnet {0}'.format(self.name))
+        try:
+            poller = self.network_client.subnets.delete(self.resource_group,
+                                                        self.virtual_network_name,
+                                                        self.name)
+        except Exception, exc:
+            self.fail("Error deleting subnet {0} - {1}".format(self.name, str(exc)))
+
+        return self.get_poller_result(poller)
+
 
 def main():
     if '--interactive' in sys.argv:
@@ -115,13 +191,11 @@ def main():
             virtual_network_name='test-vnet',
             address_prefix_cidr='10.0.1.0/24',
             state='absent',
-            location='West US',
+            #location='West US',
             log_mode='stderr',
-            #filter_logger=False,
         ))
 
     AzureRMSubnet().exec_module()
-
 
 
 main()

@@ -308,13 +308,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.storage_account)
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
-        except AzureHttpError as e:
+        except AzureHttpError, e:
             self.fail("Error getting keys for account {0}: {1}".format(self.storage_account, str(e)))
 
         try:
             self.log('Create blob service')
             self.blob_client = CloudStorageAccount(self.storage_account, keys['key1']).create_block_blob_service()
-        except Exception as e:
+        except Exception, e:
             self.fail("Error creating blob service client: {0}".format(str(e)))
 
         self.container_obj = self.get_container()

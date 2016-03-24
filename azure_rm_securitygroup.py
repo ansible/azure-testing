@@ -367,9 +367,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             default_rules=dict(type='list'),
             location=dict(type='str'),
             name=dict(type='str', required=True),
-
-            # TODO: move nic/subnet association to those resources, otherwise we can't do one-shot deletion/update
-
             network_interfaces=dict(type='list'),
             subnets=dict(type='list'),
             purge_network_interfaces=dict(type='bool', default=False),
@@ -529,14 +526,9 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                 results['network_interfaces'] = new_nics
 
             if self.tags:
-                for tag_key, tag_value in self.tags.iteritem():
-                    if results['tags'].get(tag_key, None):
-                        if results['tags'][tag_key] != tag_value:
-                            changed = True
-                            results['tags'][tag_key] = tag_value
-                    else:
-                        changed = True
-                        results['tags'][tag_key] = tag_value
+                if self.results['tags'] != self.tags:
+                    changed = True
+                    results['tags'] = self.tags
 
             self.results['changed'] = changed
             self.results['results'] = results

@@ -21,10 +21,11 @@
 #
 
 import ConfigParser
-import os
-import sys
-import logging
 import json
+import logging
+import os
+import re
+import sys
 
 from logging import Handler, NOTSET
 from os.path import expanduser
@@ -55,6 +56,11 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
 AZURE_COMMON_REQUIRED_IF = [
     ('log_mode', 'file', ['log_path'])
 ]
+
+CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1"
+                          "[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))")
+
+AZURE_SUCCESS_STATE = "Succeeded"
 
 HAS_AZURE = True
 
@@ -245,6 +251,19 @@ class AzureRMModuleBase(object):
             return default_credentials
 
         return None
+
+    def get_poller_result(self, poller):
+        '''
+        Consistent method of waiting on and retrieving results from Azure's long poller
+        '''
+        try:
+            while not poller.done():
+                delay = 20
+                self.log("Waiting for {0} sec".format(delay))
+                poller.wait(timeout=delay)
+            return poller.result()
+        except Exception, exc:
+            self.fail("Error: {0}".format(str(exc)))
 
     @property
     def storage_client(self):
