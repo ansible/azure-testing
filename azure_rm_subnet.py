@@ -199,11 +199,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             subnet = self.network_client.subnets.get(self.resource_group,
                                                      self.virtual_network_name,
                                                      self.name)
-
-            if subnet.provisioning_state != AZURE_SUCCESS_STATE:
-                self.fail("Error subnet {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
-                    self.name, subnet.provisioning_state, AZURE_SUCCESS_STATE))
-
+            self.check_provisioning_state(subnet)
             if self.state == 'present':
                 results = subnet_to_dict(subnet)
             elif self.state == 'absent':

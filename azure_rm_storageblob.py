@@ -42,15 +42,20 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_storageblob
 
-short_description: Create and manage blob containers and blob objects.
+short_description: Manage blob containers and blob objects.
 
 description:
-    - Create and manage blob containers and blobs within a given storage account. Upload and download blobs. Set blob
-
-    - For authentication with Azure pass subscription_id, client_id, secret and tenant, or create a
-      ~/.azure/credentials file with one or more profiles and pass a profile to the module. When using a credentials
-      file, if no profile option is provided, the module will look for a 'default' profile. Each profile should include
-      subscription_id, client_id, secret and tenant values.
+    - Create and manage blob containers and blobs within a given storage account, and upload and download blobs.
+    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
+      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
+    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
+      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
+    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
+      AZURE_PASSWORD in the environment.
+    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
+      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
+      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
@@ -259,7 +264,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             content_disposition=dict(type='str'),
             cache_control=dict(type='str'),
             content_md5=dict(type='str'),
-            # TODO: implement object security
         )
 
         mutually_exclusive = [('src', 'dest')]
@@ -366,44 +370,45 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         return self.results
 
     def get_container(self):
+        result  = None
         container = None
-        response = None
         try:
-            response = self.blob_client.get_container_properties(self.container)
+            container = self.blob_client.get_container_properties(self.container)
         except AzureMissingResourceHttpError:
             pass
-        if response is not None:
-            container = dict(
-                name=response.name,
-                tags=response.metadata,
-                last_mdoified=response.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z')
+        if container:
+            result = dict(
+                name=container.name,
+                tags=container.metadata,
+                last_mdoified=container.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z'),
+                provisioning_state=container.provisioning_state,
             )
-        return container
+        return result
 
     def get_blob(self):
+        result = None
         blob = None
-        response = None
         try:
-            response = self.blob_client.get_blob_properties(self.container, self.blob)
+            blob = self.blob_client.get_blob_properties(self.container, self.blob)
         except AzureMissingResourceHttpError:
             pass
-        if response:
-            blob = dict(
-                name=response.name,
-                tags=response.metadata,
-                last_modified=response.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z'),
-                type=response.properties.blob_type,
-                content_length=response.properties.content_length,
+        if blob:
+            result = dict(
+                name=blob.name,
+                tags=blob.metadata,
+                last_modified=blob.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z'),
+                type=blob.properties.blob_type,
+                content_length=blob.properties.content_length,
                 content_settings=dict(
-                    content_type=response.properties.content_settings.content_type,
-                    content_encoding=response.properties.content_settings.content_encoding,
-                    content_language=response.properties.content_settings.content_language,
-                    content_disposition=response.properties.content_settings.content_disposition,
-                    cache_control=response.properties.content_settings.cache_control,
-                    content_md5 =response.properties.content_settings.content_md5
+                    content_type=blob.properties.content_settings.content_type,
+                    content_encoding=blob.properties.content_settings.content_encoding,
+                    content_language=blob.properties.content_settings.content_language,
+                    content_disposition=blob.properties.content_settings.content_disposition,
+                    cache_control=blob.properties.content_settings.cache_control,
+                    content_md5 =blob.properties.content_settings.content_md5
                 )
             )
-        return blob
+        return result
 
     def create_container(self):
         self.log('Create container %s' % self.container)
@@ -603,22 +608,9 @@ def main():
             account_name="mdavistest12341",
             container_name="testcontainer",
             mode="delete",
-            # x_ms_meta_name_values,
-            # x_ms_blob_public_access,
-            # x_ms_blob_cache_control,
-            # x_ms_blob_content_encoding,
-            # x_ms_blob_content_language,
             x_ms_blob_content_type = 'application/diskimage',
-            # prefix,
-            # marker,
-            # max_results,
             blob_name="jsci.dmg",
             file_path="/Users/mdavis/Downloads/JuniperSetupClientInstaller.dmg",
-            # overwrite,
-            # permissions,
-            # hours,
-            # days,
-            # access_token,
             log_mode="stderr"
         ))
 

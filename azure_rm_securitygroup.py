@@ -409,11 +409,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, self.name)
-
-            if nsg.provisioning_state != AZURE_SUCCESS_STATE:
-                self.fail("Error security group {0} has a provisioning state of {1}. Expecting state "
-                          "to be {2}.".format(self.name, nsg.provisioning_state, AZURE_SUCCESS_STATE))
-
+            self.check_provisioning_state(nsg)
             if self.state == 'present':
                 results = create_network_security_group_dict(nsg)
                 self.log("Found security group:")

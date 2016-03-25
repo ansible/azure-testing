@@ -265,6 +265,20 @@ class AzureRMModuleBase(object):
         except Exception, exc:
             self.fail("Error: {0}".format(str(exc)))
 
+    def check_provisioning_state(self, azure_object):
+        '''
+        Check an Azure object's provisioning state. If something did not complete the provisioning
+        process, then we cannot operate on it.
+
+        :param azure_object An object such as a subnet, storageaccount, etc. Must have provisioning_state
+                            and name attributes.
+        '''
+        if not hasattr(azure_object, 'provisioning_state') or not hasattr(azure_object, name):
+            return
+        if azure_object.provisioning_state != AZURE_SUCCESS_STATE:
+            self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
+
     @property
     def storage_client(self):
         self.log('Creating storage client...')

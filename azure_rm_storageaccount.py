@@ -244,21 +244,19 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         self.account_dict = self.get_account()
 
-        if self.account_dict and self.account_dict['provisioning_state'] != AZURE_SUCCESS_STATE:
-            self.fail("Error: storage account {0} has a provisioning state of {1}. Expecting state "
-                      "to be {2}.".format(self.account_dict['name'], self.account['provisioning_state'],
-                                          AZURE_SUCCESS_STATE))
+        if self.account_dict and self.account_dict['provisioning_state'] != AZURE_SUCCESS_STATE :
+            self.fail("Error: storage account {0} has not completed provisioning. State is {1}. Expecting state "
+                      "to be {2}.".format(self.name, self.account_dict['provisioning_state'], AZURE_SUCCESS_STATE))
+
         if self.account_dict is not None:
             self.results['results'] = self.account_dict
         else:
             self.results['results'] = dict()
-        self.log("existing account:")
-        self.log(self.results['results'], pretty_print=True)
+
         if self.state == 'present':
             if not self.account_dict:
                 self.results['results'] = self.create_account()
             else:
-                self.log("calling update account")
                 self.update_account()
         elif self.state == 'absent':
             if self.account_dict:
@@ -293,7 +291,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         return account_dict
 
     def account_obj_to_dict(self, account_obj):
-        self.log('here 1')
         account_dict = dict(
             id=account_obj.id,
             name=account_obj.name,
@@ -309,7 +306,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                                  if account_obj.status_of_secondary is not None else None),
             primary_location=account_obj.primary_location
         )
-        self.log('here 2')
         account_dict['custom_domain'] = None
         if account_obj.custom_domain:
             account_dict['custom_domain'] = dict(
@@ -317,7 +313,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 use_sub_domain=account_obj.custom_domain.use_sub_domain
             )
 
-        self.log('here 3')
         account_dict['primary_endpoints'] = None
         if account_obj.primary_endpoints:
             account_dict['primary_endpoints'] = dict(
@@ -325,7 +320,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 queue=account_obj.primary_endpoints.queue,
                 table=account_obj.primary_endpoints.table
             )
-        self.log('here 4')
         account_dict['secondary_endpoints'] = None
         if account_obj.secondary_endpoints:
             account_dict['secondary_endpoints'] = dict(
@@ -333,12 +327,9 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 queue=account_obj.secondary_endpoints.queue,
                 table=account_obj.secondary_endpoints.table
             )
-        self.log('here 5')
         account_dict['tags'] = None
         if account_obj.tags:
             account_dict['tags'] = account_obj.tags
-        self.log("storage account:")
-        self.log(account_dict, pretty_print=True)
         return account_dict
 
     def update_account(self):
@@ -363,7 +354,9 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                                                                     self.name,
                                                                     parameters)
                     except AzureHttpError, e:
-                        self.fail("Failed to update account_type: {0}".format(str(e)))
+                        self.fail("Failed to update account type: {0}".format(str(e)))
+                    except CloudError, e:
+                        self.fail("Failed to update account type: {0}".format(str(e)))
 
         if self.custom_domain:
             if not self.account_dict['custom_domain'] or \
@@ -379,6 +372,8 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
                 except AzureHttpError, e:
                     self.fail("Failed to update custom domain: {0}".format(str(e)))
+                except CloudError, e:
+                    self.fail("Failed to update custom domain: {0}".format(str(e)))
 
         if self.tags:
             if self.account_dict['tags'] != self.tags:
@@ -390,6 +385,8 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
                 except AzureHttpError, e:
+                    self.fail("Failed to update tags: {0}".format(str(e)))
+                except CloudError, e:
                     self.fail("Failed to update tags: {0}".format(str(e)))
 
     def create_account(self):
