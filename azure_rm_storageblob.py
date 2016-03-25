@@ -601,6 +601,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.results['container'] = self.container_obj
         self.results['blob'] = self.blob_obj
 
+
 def main():
     if '--interactive' in sys.argv:
         # import the module here so we can reset the default complex args value
