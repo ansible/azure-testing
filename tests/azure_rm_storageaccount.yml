@@ -2,19 +2,14 @@
 - name: Test azuzre_rm_storageaccount
   hosts: localhost
   vars:
-    debug_playbook: yes
-    new_account_name: "mystorage{{ 100 |random }}"
+      debug_playbook: yes
+      new_account_name: "mystorage{{ 100 |random }}"
+      resource_group: Testing 
   tasks:
-     - name: Create resource group
-       azure_rm_resourcegroup:
-           name: chousetest 
-           location: westus 
-           state: present
-           debug: "{{ debug_playbook }}"
 
      - name: Test invalid account name
        azure_rm_storageaccount:
-           resource_group: chousetest
+           resource_group: "{{ resource_group }}" 
            name: "invalid_char$"
            state: present
        register: invalid_name     
@@ -25,22 +20,24 @@
 
      - name: Delete storage account
        azure_rm_storageaccount:
-           resource_group: chousetest
+           resource_group: "{{ resource_group }}" 
            name: "{{ new_account_name }}"
            state: absent
+           debug: "{{ debug_playbook }}"
+           log_mode: file 
        register: test_004
 
-     - name: Assert delete succeeded
-       assert: { that: "test_004['status_code'] in [200,204]" }
+     - debug: var=test_004
+       when: debug_playbook
 
      - name: Create new storage account
        azure_rm_storageaccount:
-           resource_group: chousetest
-           name: "{{ test_004['name'] }}" 
+           resource_group: "{{ resource_group }}" 
+           name: "{{ new_account_name }}"
            location: eastus
            account_type: Standard_LRS
-           state: present
            debug: "{{ debug_playbook }}" 
+           log_mode: file
            tags:
                test: test
                galaxy: galaxy
@@ -53,30 +50,12 @@
      - name: Assert status succeeded and results include an Id value 
        assert:
          that:
-           - "test_005['status'] == 'Succeeded'"
-           - "test_005['id'] is defined"
-
-     - name: Gather facts
-       azure_rm_storageaccount:
-           resource_group: chousetest
-           name: "{{ test_005['name'] }}"
-           gather_facts: yes
-           debug: "{{ debug_playbook }}" 
-       register: gathered_facts
-
-     - name: Debug
-       debug: var=gathered_facts
-       when: debug_playbook
-     
-     - name: Assert facts are as expected 
-       assert:
-           that:
-               - "gathered_facts['id'] == test_005['id']"
-               - "gathered_facts['account_type'] == test_005['account_type']"
+           - test_005.changed
+           - test_005.results.id is defined
 
      - name: Change account type 
        azure_rm_storageaccount:
-           resource_group: chousetest
+           resource_group: "{{ resource_group }}" 
            name: "{{ test_005['name'] }}"
            account_type: Premium_LRS
        register: change_account
@@ -87,13 +66,14 @@
 
      - name: Change account type and add custom domain
        azure_rm_storageaccount:
-           resource_group: chousetest
+           resource_group: "{{ resource_group }}" 
            name: "{{ test_005['name'] }}"
            account_type: Standard_GRS
            custom_domain:
                name: "ansible.com"
                use_sub_domain: no  
            debug: "{{ debug_playbook }}" 
+           log_mode: file
        register: change_account
        ignore_errors: true
 
@@ -104,26 +84,11 @@
      - name: Assert CNAME failure
        assert: { that: "'custom domain name could not be verified' in  change_account['msg']" }
 
-     - name: List all storage accounts in resource group
-       azure_rm_storageaccount:
-           resource_group: chousetest
-           gather_list: yes
-       register: gathered_list
-      
-     - name: Assert storage account list has a length > 0
-       assert: { that: "{{ gathered_list['storage_accounts'] | length }} > 0" }
-
      - name: Delete acccounts - anything not in use will be deleted
        azure_rm_storageaccount:
-           resource_group: chousetest
+           resource_group: "{{ resource_group }}" 
            name: "{{ item['name'] }}"
            state: absent
            debug: "{{ debug_playbook }}" 
+           log_mode: file
        with_items: "{{ gathered_list['storage_accounts'] }}"
-
-     - name: Delete resource group
-       azure_rm_resourcegroup:
-           name: chousetest 
-           location: westus 
-           state: absent 
-           debug: "{{ debug_mode }}"

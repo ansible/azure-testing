@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# (c) 2016 Chris Houseknecht, <chouseknecht@ansible.com>
+# (c) 2016 Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -44,15 +44,20 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_storageaccount
 
-short_description: Create, read, update and delete Azure storage accounts.
+short_description: Manage Azure storage accounts.
 
 description:
-    - Create and manage storage accounts within a given resource group. Use gather_facts option to get all the attributes,
-      including endpoints and keys for a particular storage account, or use the gather_list option to gather facts for
-      all storage accounts within a resource group.
-    - For authentication pass subscription_id, client_id, secret and tenant. Or, create a ~/.azure/credentials
-      file with one or more profiles. When using a credentials file, if no profile option is provided, the module will
-      look for a 'default' profile. Each profile should include subscription_id, client_id, secret and tenant values.
+    - Create, update and delete storage accounts within a given resource group.
+    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
+      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
+    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
+      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
+    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
+      AZURE_PASSWORD in the environment.
+    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
+      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
+      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
@@ -91,9 +96,8 @@ options:
         default: null
     state:
         description:
-            - Assert the state of the storage account.
-            - "present" will created the account, if it does not exist, or update it, if it does exist.
-            - "absent" will remove the storage account.
+            - Assert the state of the storage account. Use 'present' to create or update a storage account and
+              'absent' to delete an account.
         required: false
         default: present
         choices:
@@ -125,17 +129,6 @@ options:
             - Dictionary of string:string pairs to assign as tags to the storage account.
         required: false
         default: null
-    gather_facts:
-        description:
-            - Set to True to get all attributes including endpoints for a given storage account. Expects resource_group
-              and name to be present.
-        required: false
-        default: false
-    gather_list:
-        description:
-            - Set to True to get all attributes for all storage accounts within a given resource group.
-        required: false
-        default: false
 
 requirements:
     - "python >= 2.7"
@@ -204,12 +197,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             custom_domain=dict(type='dict'),
             force=dict(type='bool', default=False),
             location=dict(type='str'),
-            name=dict(type='str'),
+            name=dict(type='str', required=True),
             resource_group=dict(required=True, type='str'),
             state=dict(default='present', choices=['present', 'absent']),
             tags=dict(type='dict'),
-
-            # TODO: implement object security
+            log_path=dict(type='str', default='azure_rm_storageaccount.log')
         )
 
         for key in AccountType:
@@ -230,14 +222,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.location = None
         self.account_type = None
         self.custom_domain = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
-
-        if not self.name:
-            self.fail("Parameter error: name cannot be None.")
 
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must contain numbers and lowercase letters only.")
@@ -246,7 +236,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             self.fail("Parameter error: name length must be between 3 and 24 characters.")
 
         if self.custom_domain:
-            self.log("custom_domain: {0}".format(self.custom_domain))
             if self.custom_domain.get('name', None) is None:
                 self.fail("Parameter error: expecting custom_domain to have a name attribute of type string.")
             if self.custom_domain.get('use_sub_domain', None) is None:
@@ -254,21 +243,27 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                           "attribute of type boolean.")
 
         self.account_dict = self.get_account()
+
+        if self.account_dict and self.account_dict['provisioning_state'] != AZURE_SUCCESS_STATE:
+            self.fail("Error: storage account {0} has a provisioning state of {1}. Expecting state "
+                      "to be {2}.".format(self.account_dict['name'], self.account['provisioning_state'],
+                                          AZURE_SUCCESS_STATE))
         if self.account_dict is not None:
             self.results['results'] = self.account_dict
         else:
             self.results['results'] = dict()
-
+        self.log("existing account:")
+        self.log(self.results['results'], pretty_print=True)
         if self.state == 'present':
-            if self.account_dict is None:
+            if not self.account_dict:
                 self.results['results'] = self.create_account()
             else:
+                self.log("calling update account")
                 self.update_account()
         elif self.state == 'absent':
-            if self.account_dict is not None:
+            if self.account_dict:
                 self.delete_account()
-                self.results['results'] = dict()
-
+                self.results['results'] = dict(Status='Deleted')
         return self.results
 
     def check_name_availability(self):
@@ -289,15 +284,16 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         try:
             account_obj = self.storage_client.storage_accounts.get_properties(self.resource_group, self.name)
-        except CloudError:
+        except CloudError, exc:
             pass
 
-        if account_obj is not None:
+        if account_obj:
             account_dict = self.account_obj_to_dict(account_obj)
 
         return account_dict
 
     def account_obj_to_dict(self, account_obj):
+        self.log('here 1')
         account_dict = dict(
             id=account_obj.id,
             name=account_obj.name,
@@ -313,12 +309,15 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                                  if account_obj.status_of_secondary is not None else None),
             primary_location=account_obj.primary_location
         )
+        self.log('here 2')
         account_dict['custom_domain'] = None
         if account_obj.custom_domain:
             account_dict['custom_domain'] = dict(
                 name=account_obj.custom_domain.name,
                 use_sub_domain=account_obj.custom_domain.use_sub_domain
             )
+
+        self.log('here 3')
         account_dict['primary_endpoints'] = None
         if account_obj.primary_endpoints:
             account_dict['primary_endpoints'] = dict(
@@ -326,7 +325,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 queue=account_obj.primary_endpoints.queue,
                 table=account_obj.primary_endpoints.table
             )
-
+        self.log('here 4')
         account_dict['secondary_endpoints'] = None
         if account_obj.secondary_endpoints:
             account_dict['secondary_endpoints'] = dict(
@@ -334,11 +333,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 queue=account_obj.secondary_endpoints.queue,
                 table=account_obj.secondary_endpoints.table
             )
-
+        self.log('here 5')
         account_dict['tags'] = None
         if account_obj.tags:
             account_dict['tags'] = account_obj.tags
-
+        self.log("storage account:")
+        self.log(account_dict, pretty_print=True)
         return account_dict
 
     def update_account(self):
@@ -402,36 +402,31 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             self.fail('Parameter error: account_type required when creating a storage account.')
 
         self.check_name_availability()
-        
+        self.results['changed'] = True
+
         if self.check_mode:
             account_dict = dict(
                 location=self.location,
                 account_type=self.account_type,
-                name =self.name,
+                name=self.name,
                 resource_group=self.resource_group,
                 tags=dict()
             )
             if self.tags:
                 account_dict['tags'] = self.tags
             return account_dict
-        else:
-            self.results['changed'] = True
-            try:
-                parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
-                                                            tags=self.tags)
-                poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
-            except AzureHttpError, e:
-                self.log('Error creating storage account.')
-                self.fail("Failed to create account: {0}".format(str(e)))
 
-            self.log('Checking poller for result:')
-            while not poller.done():
-                delay = 20
-                self.log("Waiting for {0} sec".format(delay))
-                poller.wait(timeout=delay)
-            # The actual result we finally get back from poller.result() seems to be empty.
-            # Make a call to the API to get actual results
-            return self.get_account()
+        try:
+            parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
+                                                        tags=self.tags)
+            poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
+        except AzureHttpError, e:
+            self.log('Error creating storage account.')
+            self.fail("Failed to create account: {0}".format(str(e)))
+
+        self.get_poller_result(poller)
+        # the poller doesn't actually return anything
+        return self.get_account()
 
     def delete_account(self):
         if self.account_dict['provisioning_state'] != ProvisioningState.succeeded.value:
@@ -446,9 +441,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.results['changed'] = True
         if not self.check_mode:
             try:
-                self.storage_client.storage_accounts.delete(self.resource_group, self.name)
+                status = self.storage_client.storage_accounts.delete(self.resource_group, self.name)
+                self.log("delete status: ")
+                self.log(str(status))
             except AzureHttpError, e:
                 self.fail("Failed to delete the account: {0}".format(str(e)))
+        return True
 
     def account_has_blob_containers(self):
         '''

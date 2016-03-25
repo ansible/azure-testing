@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# (c) 2016 Chris Houseknecht, <chouseknecht@ansible.com>
+# (c) 2016 Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,7 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import re
 
 # normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
 # without playing games with __metaclass__ or runtime base type hackery.
@@ -45,15 +44,22 @@ module: azure_rm_securitygroup
 short_description: Manage Azure network security groups.
 
 description:
-    - A Network security group (NSG) contains Access Control List (ACL) rules that allow\deny network traffic to
-      subnets or individual network interfaces. An NSG is created with a set of default security rules and an empty
-      set of security rules. Add rules to the empty set of security rules to allow or deny traffic flow.
+    - A network security group contains Access Control List (ACL) rules that allow\deny network traffic to
+      subnets or individual network interfaces. An security group is created with a set of default security
+      rules and an empty set of security rules. Add rules to the empty set of security rules to allow or deny
+      traffic flow.
     - Use this module to create and manage network security groups including adding security rules and
-      modifying default rules. Add and remove subnets and network interfaces.
-    - For authentication with Azure pass subscription_id, client_id, client_secret and tenant_id. Or, create a
-      ~/.azure/credentials file with one or more profiles. When using a credentials file, if no profile option is
-      provided, Azure modules look for a 'default' profile. Each profile should include subscription_id, client_id,
-      client_secret and tenant_id values.
+      modifying default rules.
+    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
+      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
+    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
+      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
+    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
+      AZURE_PASSWORD in the environment.
+    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
+      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
+      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
@@ -83,37 +89,21 @@ options:
               destination_address_prefix, access, priority and direction.
               See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
         default: null
-    location:
-        description:
-            - set to the value of an Azure region such as 'eastus'. Required when creating an NSG.
-        default: null
     name:
         description:
             - name of the NSG.
-        default: null
-    network_interfaces:
-        description:
-            - a list of network interface Id values to associate with the NSG.
         default: null
     purge_default_rules:
         description:
             - Remove existing default security rules.
         default: false
-    purge_network_interfaces:
-        description:
-            - Remove existing network interfaces.
-        default: false
     purge_rules:
         description:
             - Remove existing security rules.
         default: false
-    purge_subnets:
-        description:
-            - Remove existing subnets.
-        default: false
     resource_group:
         description:
-            - Name of the resource group the NSG belongs to.
+            - Name of the resource group the security group belongs to.
         required: true
         default: null
     rules:
@@ -126,17 +116,14 @@ options:
         default: null
     state:
         description:
-            - State of the NSG. Set to 'present' to create or update an NSG. Set to 'absent' to remove an NSG.
+            - Assert the state of the security group. Set to 'present' to create or update a security group. Set to
+              'absent' to remove a security group.
         required: true
         default: present
-    subnets:
-        description:
-            - List of subnet Id values to associate with the NSG.
-        required: false
-        default: null
     tags:
         description:
-            - Dictionary of key/value pairs to associate with the NSG as metadata.
+            - Dictionary of key/value pairs to associate with the security group as metadata. Must string:string
+              pairs.
         required: false
         default: null
 
@@ -153,7 +140,6 @@ EXAMPLES = '''
 - azure_rm_securitygroup:
       resource_group: mygroup
       name: mysecgroup
-      location: 'eastus'
       purge_rules: yes
       rules:
           - name: DenySSH
@@ -180,7 +166,6 @@ EXAMPLES = '''
 - azure_rm_securitygroup:
       resource_group: mygroup
       name: mysecgroup
-      location: 'eastus'
       rules:
           - name: DenySSH
             protocol: TCP
@@ -367,17 +352,13 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             default_rules=dict(type='list'),
             location=dict(type='str'),
             name=dict(type='str', required=True),
-            network_interfaces=dict(type='list'),
-            subnets=dict(type='list'),
-            purge_network_interfaces=dict(type='bool', default=False),
-            purge_subnets=dict(type='bool', default=False),
             purge_default_rules=dict(type='bool', default=False),
             purge_rules=dict(type='bool', default=False),
             resource_group=dict(required=True, type='str'),
             rules=dict(type='list'),
             state=dict(default='present', choices=['present', 'absent']),
             tags=dict(type='dict'),
-            log_path=dict(type='str', default='azure_rm_security_group.log')
+            log_path=dict(type='str', default='azure_rm_securitygroup.log')
         )
 
         super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
@@ -387,12 +368,8 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
         self.default_rules = None
         self.location = None
         self.name = None
-        self.network_interfaces = None
-        self.subnets = None
-        self.purge_network_interfaces = None
         self.purge_default_rules = None
         self.purge_rules = None
-        self.purge_subnets = None
         self.resource_group = None
         self.rules = None
         self.state = None
@@ -400,12 +377,14 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
+            check_mode=self.check_mode,
             results=()
         )
-        
+
     def exec_module_impl(self, **kwargs):
         
         for key in self.module_arg_spec:
+            self.log("set attribute: {0}: {1}".format(key, str(kwargs[key])))
             setattr(self, key, kwargs[key])
 
         changed = False
@@ -413,9 +392,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         if not NAME_PATTERN.match(self.name):
             raise Exception("Parameter error: name must contain only word characters and '.','-','_'")
-
-        if self.tags:
-            self.validate_tags(self.tags)
 
         if self.rules:
             for rule in self.rules:
@@ -429,13 +405,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                 try:
                     validate_rule(rule, 'default')
                 except Exception, exc:
-                    self.fail("Error validating dfault rule {0} - {1}".format(rule, str(exc)))
+                    self.fail("Error validating default rule {0} - {1}".format(rule, str(exc)))
 
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, self.name)
+
+            if nsg.provisioning_state != AZURE_SUCCESS_STATE:
+                self.fail("Error security group {0} has a provisioning state of {1}. Expecting state "
+                          "to be {2}.".format(self.name, nsg.provisioning_state, AZURE_SUCCESS_STATE))
+
             if self.state == 'present':
                 results = create_network_security_group_dict(nsg)
-                self.log("found security group:")
+                self.log("Found security group:")
                 self.log(results, pretty_print=True)
             elif self.state == 'absent':
                 changed = True
@@ -490,43 +471,8 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                             new_default_rules.append(rule)
                 results['default_rules'] = new_default_rules
 
-            if self.subnets:
-                for subnet in self.subnets:
-                    matched = False
-                    for s in results['subnets']:
-                        if subnet == s:
-                            matched = True
-                    if not matched:
-                        results['subnets'].append(subnet)
-                        changed = True
-
-            if self.purge_subnets:
-                new_subnets = []
-                for subnet in self.results['subnets']:
-                    for s in self.subnets:
-                        if subnet == s:
-                            new_subnets.append(subnet)
-                results['subnets'] = new_subnets
-
-            if self.network_interfaces:
-                for interface in self.network_interfaces:
-                    matched = False
-                    for i in results['network_interfaces']:
-                        if interface == i:
-                            matched = True
-                    if not matched:
-                        results['network_interfaces'].append(interface)
-                        changed = True
-            if self.purge_network_interfaces:
-                new_nics = []
-                for interface in results['network_interfaces']:
-                    for i in self.network_interfaces:
-                        if interface == i:
-                            new_nics.append(interface)
-                results['network_interfaces'] = new_nics
-
             if self.tags:
-                if self.results['tags'] != self.tags:
+                if results['tags'] != self.tags:
                     changed = True
                     results['tags'] = self.tags
 
@@ -540,24 +486,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             self.debug("Create security group {0}".format(self.name))
 
             if not self.location:
-                raise Exception("Location is required when creating a new security group.")
+                self.fail("Parameter error: location required when creating a security group.")
 
             results['name'] = self.name
             results['location'] = self.location
             results['rules'] = []
             results['default_rules'] = []
-            results['subnets'] = []
-            results['network_interfaces'] = []
             results['tags'] = {}
 
             if self.rules:
                 results['rules'] = self.rules
             if self.default_rules:
                 results['default_rules'] = self.default_rules
-            if self.subnets:
-                results['subnets'] = self.subnets
-            if self.network_interfaces:
-                results['network_interfaces'] = self.network_interfaces
             if self.tags:
                 results['tags'] = self.tags
 
@@ -568,58 +508,44 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         elif self.state == 'absent' and changed:
             self.log("Delete security group {0}".format(self.name))
-
             self.results['changed'] = changed
             self.results['results'] = dict()
             if not self.check_mode:
-                self.results['status'] = self.delete()
+                self.delete()
+                # the delete does not actually return anything. if no exception, then we'll assume
+                # it worked.
+                self.results['results']['status'] = 'Deleted'
 
         return self.results
 
     def create_or_update(self, results):
-        try:
-            # perform the update
-            parameters = NetworkSecurityGroup(default_security_rules=[], network_interfaces=[], security_rules=[],
-                                              subnets=[], tags={})
+        parameters = NetworkSecurityGroup()
+        if results.get('rules'):
+            parameters.security_rules = []
             for rule in results.get('rules'):
                 parameters.security_rules.append(create_rule_instance(rule))
+        if results.get('default_rules'):
+            parameters.default_security_rules = []
             for rule in results.get('default_rules'):
                 parameters.default_security_rules.append(create_rule_instance(rule))
-            for subnet in results.get('subnets'):
-                parameters.subnets.append(Subnet(subnet))
-            for interface in results.get('network_interfaces'):
-                parameters.network_interfaces.append(NetworkInterface(interface))
-            parameters.tags = results.get('tags')
-            parameters.location = results.get('location')
-            parameters.type = results.get('type')
-            parameters.id = results.get('id')
+        parameters.tags = results.get('tags')
+        parameters.location = results.get('location')
+
+        try:
             poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
                                                                                   self.name,
                                                                                   parameters)
         except AzureHttpError, exc:
-            self.fail("Error updating security group {0} - {1}".format(self.name, str(exc)))
+            self.fail("Error creating/upating security group {0} - {1}".format(self.name, str(exc)))
 
-        self.log('Checking poller:')
-        while not poller.done():
-            delay = 20
-            self.log("Waiting for {0} sec".format(delay))
-            poller.wait(timeout=delay)
-
-        return create_network_security_group_dict(poller.result())
+        return create_network_security_group_dict(self.get_poller_result(poller))
 
     def delete(self):
         try:
             poller = self.network_client.network_security_groups.delete(self.resource_group, self.name)
-        except AzureHttpError as e:
-            raise Exception(str(e.message))
-
-        self.log('Checking poller:')
-        while not poller.done():
-            delay = 20
-            self.log("Waiting for {0} sec".format(delay))
-            poller.wait(timeout=delay)
-
-        return poller.result()
+        except AzureHttpError, exc:
+            raise Exception("Error deleting security group {0} - {1}".format(self.name, str(exc)))
+        return self.get_poller_result(poller)
 
 
 def main():

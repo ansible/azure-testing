@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# (c) 2015 Matt Davis, <mdavis@ansible.com>
+# (c) 2016 Matt Davis, <mdavis@ansible.com>
 #
 # This file is part of Ansible
 #
@@ -18,11 +18,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-DOCUMENTATION = '''
----
-module: azure_rm_subnet
-'''
-
 # normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
@@ -37,6 +32,108 @@ except ImportError:
     # This is handled in azure_rm_common
     pass
 
+
+DOCUMENTATION = '''
+---
+module: azure_rm_subnet
+short_description: Manage Azure subnets.
+
+description:
+    - Create, update and delete subnets within a given virtual network. Allows setting and updating the address
+      prefix CIDR, which must be valid within the context of the virtual network. Use the azure_rm_network_interface
+      module to associate interfaces with the subnet and assign specific IP addresses.
+    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
+      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
+    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
+      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
+    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
+      AZURE_PASSWORD in the environment.
+    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
+      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
+      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      by passing profile or setting AZURE_PROFILE in the environment.
+
+options:
+    profile:
+        description:
+            - security profile found in ~/.azure/credentials file
+        required: false
+        default: null
+    subscription_id:
+        description:
+            - Azure subscription Id that owns the resource group and storage accounts.
+        required: false
+        default: null
+    client_id:
+        description:
+            - Azure client_id used for authentication.
+        required: false
+        default: null
+    secret:
+        description:
+            - Azure client_secrent used for authentication.
+        required: false
+        default: null
+    tenant:
+        description:
+            - Azure tenant_id used for authentication.
+        required: false
+        default: null
+    resource_group:
+        description:
+            - name of resource group.
+        required: true
+        default: null
+    name:
+        description:
+            - name of the subnet.
+        required: true
+        default: null
+    address_prefix_cidr:
+        description:
+            - CIDR defining IPv4 address space of the subnet. Must be valid within the context of the
+              virtual network.
+        default: null
+        required: true
+    state:
+        description:
+            - Assert the state of the subnet. Use 'present' to create or update a subnet and
+              'absent' to delete a subnet.
+        required: true
+        default: present
+        choices:
+            - absent
+            - present
+    virtual_network_name:
+        description:
+            - Name of an existing virtual network with which the subnet is or will be associated.
+        default: null
+        required: true
+
+requirements:
+    - "python >= 2.7"
+    - "azure >= 1.0.2"
+
+authors:
+    - "Matt Davis <mdavis@ansible.com>"
+    - "Chris Houseknecht @chouseknecht"
+'''
+
+EXAMPLES = '''
+    - name: Create a subnet
+      azure_rm_subnet:
+        name: foobar
+        virtual_network_name: My_Virtual_Network
+        resource_group: Testing
+        address_prefix_cidr: "10.1.0.0/24"
+
+    - name: Delete a subnet
+      azure_rm_subnet:
+        name: foobar
+        virtual_network_name: My_Virtual_Network
+        resource_group: Testing
+        state: absent
+'''
 
 NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-_]+[a-zA-Z0-9_]$")
 
@@ -57,10 +154,8 @@ class AzureRMSubnet(AzureRMModuleBase):
             resource_group=dict(required=True),
             name=dict(required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
-            #location=dict(type='str'),
             virtual_network_name=dict(type='str', required=True),
             address_prefix_cidr=dict(type='str'),
-            tags=dict(type='dict'),
             log_file=dict(type='str', default='azure_rm_subnet.log')
         )
 
@@ -75,16 +170,15 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
+            check_mode=self.check_mode,
             results={}
         )
 
         self.resource_group = None
         self.name = None
         self.state = None
-        # self.location = None
         self.virtual_etwork_name = None
         self.address_prefix_cidr = None
-        self.tags = None
 
     def exec_module_impl(self, **kwargs):
         for key in self.module_arg_spec:
@@ -96,9 +190,6 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         if self.state == 'present' and not CIDR_PATTERN.match(self.address_prefix_cidr):
             self.fail("Invalid address_prefix_cidr value {0}".format(self.address_prefix_cidr))
-
-        if self.tags:
-            self.validate_tags(self.tags)
 
         results = dict()
         changed = False
@@ -127,8 +218,6 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         if self.state == 'present' and changed:
             # create new subnet
-            #if not self.location:
-            #    self.fail('Parameter error: location is required when creating a new subnet')
             if not self.check_mode:
                 self.log('Creating subnet {0}'.format(self.name))
                 self.results['results'] = self.create_or_update_subnet()

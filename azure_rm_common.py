@@ -149,9 +149,9 @@ class AzureRMModuleBase(object):
         if self.credentials.get('client_id') is not None and \
            self.credentials.get('secret') is not None and \
            self.credentials.get('tenant') is not None:
-           self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
-                                                                secret=self.credentials['secret'],
-                                                                tenant=self.credentials['tenant'])
+            self.azure_credentials = ServicePrincipalCredentials(client_id=self.credentials['client_id'],
+                                                                 secret=self.credentials['secret'],
+                                                                 tenant=self.credentials['tenant'])
         elif self.credentials.get('ad_user') is not None and self.credentials.get('password') is not None:
             self.azure_credentials = UserPassCredentials(self.credentials['ad_user'], self.credentials['password'])
         else:
@@ -159,7 +159,7 @@ class AzureRMModuleBase(object):
                       "Credentials must include client_id, secret and tenant or ad_user and password.")
 
         # common parameter validation
-        if self.module.params.get('tags', None) is not None:
+        if self.module.params.get('tags'):
             self.validate_tags(self.module.params['tags'])
 
     def fail(self, msg):
@@ -268,7 +268,6 @@ class AzureRMModuleBase(object):
     @property
     def storage_client(self):
         self.log('Creating storage client...')
-        self.log("subscription_id: {0}".format(self.subscription_id))
         if not self._storage_client:
             self._storage_client = StorageManagementClient(
                 StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id))

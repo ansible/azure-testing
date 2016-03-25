@@ -45,13 +45,28 @@
     
     - assert:  
         that: output.changed
+    
+    - name: Update the subnet
+      azure_rm_subnet:
+        name: foobar
+        virtual_network_name: My_Virtual_Network
+        resource_group: Testing
+        address_prefix_cidr: "10.1.0.0/16"
+        tags:
+           testing: testing
+           delete: on-fini 
+        debug: "{{ playbook_debug }}"
+      register: output
 
     - name: Should be idempotent 
       azure_rm_subnet:
         name: foobar
         virtual_network_name: My_Virtual_Network
         resource_group: Testing  
-        address_prefix_cidr: "10.1.0.0/24"
+        address_prefix_cidr: "10.1.0.0/16"
+        tags:
+           testing: testing
+           delete: on-fini 
         debug: "{{ playbook_debug }}"
       register: output
 
