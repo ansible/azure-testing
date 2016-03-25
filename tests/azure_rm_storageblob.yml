@@ -1,274 +1,169 @@
 ---
 - name: Test azure_rm_storageblob
-  hosts: localhost
+  hosts: all 
+  connection: local
   vars:
-      debug_mode: no
+      playbook_debug: yes 
+      resource_group: Testing 
   tasks:
-      - name: Create resource group
-        azure_rm_resourcegroup:
-            name: testgroup03
-            location: eastus
-            state: present
-            debug: "{{ debug_mode }}"
-
       - name: Create storage account
         azure_rm_storageaccount:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             location: eastus
             name: testgroup03blobs
             account_type: Standard_LRS
             state: present
-            debug: "{{ debug_mode }}"
+            debug: "{{ playbook_debug }}"
+            log_mode: file
 
       - name: Create container
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs 
             container_name: my-blobs
-            mode: create
-            debug: "{{ debug_mode }}"
+            debug: "{{ playbook_debug }}"
+            log_mode: file
         register: create_facts
 
       - debug: var=create_facts
-        when: debug_mode
-
-      - assert: { that: "create_facts['container']['etag'] is defined" }
-
-      - name: Update container set access to container
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs 
-            container_name: my-blobs
-            x_ms_blob_public_access: private
-            mode: update
-            debug: "{{ debug_mode }}"
-        register: update_facts    
-
-      - debug: var=update_facts
-        when: debug_mode
-
-      - assert: { that: "update_facts['changed'] == True" }
-
-      - name: Update container set signed permissions  
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: my-blobs
-            permissions: rw
-            hours: 12 
-            mode: update
-            debug: "{{ debug_mode }}"
-        register: update_facts
-
-      - debug: var=update_facts
-        when: debug_mode
-
-      - assert: { that: "'{{ update_facts.container.permissions[0].id }}' == 'my-blobs-rw'" }
+        when: playbook_debug
 
       - name: Force upload blob
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs
             container_name: my-blobs
-            mode: put
-            blob_name: 'Ratings.png'
-            file_path: './files/Ratings.png'
-            x_ms_blob_content_type: image/png
-            x_ms_meta_name_values:
+            blob: 'Ratings.png'
+            src: './files/Ratings.png'
+            content_type: image/png
+            tags:
                 val1: foo
                 val2: bar
-            force: always 
-            debug: "{{ debug_mode }}"
+            force: yes 
+            debug: "{{ playbook_debug }}"
+            log_mode: file
         register: upload_facts 
 
       - debug: var=upload_facts
-        when: debug_mode
+        when: playbook_debug
 
-      - assert: { that: "upload_facts['changed'] == True" }
-
-      - name: Upload blob
+      - name: Upload blob idempotence
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs
             container_name: my-blobs
-            mode: put
-            blob_name: 'Ratings.png'
-            file_path: './files/Ratings.png'
-            debug: "{{ debug_mode }}"
-            overwrite: different
+            blob: 'Ratings.png'
+            src: './files/Ratings.png'
+            content_type: image/png
+            tags:
+                val1: foo
+                val2: bar
+            debug: "{{ playbook_debug }}"
+            log_mode: file
         register: upload_facts 
 
-      - assert: { that: "upload_facts['changed'] == False" }
+      - debug: var=upload_facts
+        when: playbook_debug
 
-      - name: Make url for Ratings.png  
+      - assert:
+            that: "not upload_facts.changed"
+
+      - name: Download file idempotence 
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs
             container_name: my-blobs
-            mode: get_url 
-            blob_name: 'Ratings.png'
-            debug: "{{ debug_mode }}"
-        register: make_url_facts 
-
-      - debug: var=make_url_facts
-        when: debug_mode
-
-      - name: List blobs
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: my-blobs
-            mode: list
-            debug: "{{ debug_mode }}"
-        register: list_facts
-
-      - debug: var=list_facts
-        when: debug_mode
-
-      - name: Get token
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: my-blobs  
-            blob_name: 'Ratings.png'
-            mode: get_token
-            hours: 24
-            permissions: 'rwd'
-            debug: "{{ debug_mode }}"
-        register: access_token
-
-      - debug: var=access_token
-        when: debug_mode
-
-      - assert: { that: "access_token['access_token'] is defined" }
-
-      - name: Generate secure URL
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: my-blobs
-            blob_name: 'Ratings.png' 
-            mode: get_url
-            access_token: "{{ access_token['access_token'] }}"
-            debug: "{{ debug_mode }}"
-        register: secure_access
-
-      - assert: { that: "secure_access['url'] is defined" }
-
-      - name: Should not download file 
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: my-blobs
-            blob_name: 'Ratings.png'
-            mode: get
-            file_path: './files/Ratings.png'
-            overwrite: never
-            debug: "{{ debug_mode }}"
+            blob: 'Ratings.png'
+            dest: './files/Ratings.png'
+            debug: "{{ playbook_debug }}"
         register: download_results
 
       - debug: var=download_results 
-        when: debug_mode
+        when: playbook_debug
 
-      - assert: { that: "'identical' in  download_results['msg']" }
+      - assert: 
+            that: not download_results.changed
 
       - file: path="/tmp/Ratings.png" state=absent
 
-      - name: Should download file 
+      - name: Download file 
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs
             container_name: my-blobs
-            blob_name: 'Ratings.png'
-            mode: get
-            file_path: '/tmp/Ratings.png'
-            overwrite: always
-            debug: "{{ debug_mode }}"
+            blob: 'Ratings.png'
+            dest: '/tmp/Ratings.png'
+            debug: "{{ playbook_debug }}"
+            log_mode: file
         register: download_results
 
-      - assert: { that: "download_results['changed'] == True" }
+      - assert: 
+            that: "download_results.changed"
 
       - find: paths='/tmp' patterns="Ratings.png"
         register: find_results
 
       - assert: { that: "find_results['matched'] == 1" }
-
-      - name: Create a container with an object
-        azure_rm_storageblob:
-            resource_group: testgroup03 
-            account_name: testgroup03blobs 
-            container_name: newcontainer
-            blob_name: graylog.png
-            file_path: './files/graylog.png'
-            mode: put
-            debug: "{{ debug_mode }}"
-        register: new_container
-
-      - name: List contents of new container
-        azure_rm_storageblob:
-            resource_group: testgroup03 
-            account_name: testgroup03blobs 
-            container_name: newcontainer
-            mode: list
-            debug: "{{ debug_mode }}"
-        register: new_contents
-
-      # if we're re-running the test, there may actually be 2 files in the container
-      - assert: { that: "{{ new_contents.blobs | length }} >= 1 " }
-
-      - name: Upload file to new container
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: newcontainer
-            blob_name: Ratings.png
-            file_path: './files/Ratings.png'
-            mode: put
-            debug: "{{ debug_mode }}"
-        register: new_container
       
-      - name: List contents of new container
+      - name: Do not delete container that has blobs 
         azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: newcontainer
-            mode: list
-            debug: "{{ debug_mode }}"
-        register: new_contents
+            resource_group: "{{ resource_group }}" 
+            account_name: testgroup03blobs 
+            container_name: my-blobs 
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+            state: absent
+        register: output
 
-      - assert: { that: "{{ new_contents.blobs | length }} == 2" }
-      
+      - debug: var=output
+        when: playbook_debug
+
+      - assert:
+            that: "not output.changed"
+
       - name: Delete blob object
         azure_rm_storageblob:
-            resource_group: testgroup03
+            resource_group: "{{ resource_group }}" 
             account_name: testgroup03blobs
-            container_name: newcontainer
-            mode: delete_blob
-            debug: "{{ debug_mode }}"
-            blob_name: Ratings.png
-
-      - name: List contents of new container
-        azure_rm_storageblob:
-            resource_group: testgroup03
-            account_name: testgroup03blobs
-            container_name: newcontainer
-            mode: list
-            debug: "{{ debug_mode }}"
-        register: new_contents
-      
-      - assert: { that: "{{ new_contents.blobs | length }} == 1" }
-
-      - name: Delete new container
-        azure_rm_storageblob:
-            resource_group: testgroup03 
-            account_name: testgroup03blobs 
-            container_name: newcontainer
-            debug: "{{ debug_mode }}"
-            mode: delete
-
-      - name: Delete resource group
-        azure_rm_resourcegroup:
-            name: testgroup03
-            location: eastus
+            container_name: my-blobs 
+            blob: "Ratings.png"
             state: absent
-            debug: "{{ debug_mode }}"
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output 
+
+      - debug: var=output
+        when: playbook_debug
+
+      - assert:
+            that: "output.changed"
+
+      - name: Delete container 
+        azure_rm_storageblob:
+            resource_group: "{{ resource_group }}" 
+            account_name: testgroup03blobs 
+            container_name: my-blobs 
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+            state: absent
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+
+      - assert:
+            that: "output.changed"
+
+      - name: Delete storage account
+        azure_rm_storageaccount:
+            resource_group: "{{ resource_group }}" 
+            location: eastus
+            name: testgroup03blobs
+            state: absent 
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+  
+      - debug: var=output
+        when: playbook_debug
+

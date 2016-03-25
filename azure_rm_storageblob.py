@@ -83,11 +83,13 @@ options:
             - Azure tenant_id used for authentication.
         required: false
         default: null
-    storage_account:
+    storage_account_name:
         description:
             - name of the storage account.
         required: true
         default: null
+        aliases:
+            - account_name
     blob:
         description:
             - name of a blob object within the container.
@@ -134,7 +136,8 @@ options:
             - destination
     force:
         description:
-            - When uploading or downloading overwrite an existing file or blob.
+            - Overwrite existing file or blob when uploading or download. Force deletion of a container
+              containing blobs.
         default: false
     resource_group:
         description:
@@ -186,14 +189,14 @@ EXAMPLES = '''
 - name: Remove container foo
   azure_rm_storageblob:
     resource_group: testing
-    storage_account: clh0002
+    storage_account_name: clh0002
     container: foo
     state: absent
 
 - name: Create container foo and upload a file
   azure_rm_storageblob:
     resource_group: Testing
-    storage_account: clh0002
+    storage_account_name: clh0002
     container: foo
     blob: graylog.png
     src: ./files/graylog.png
@@ -203,7 +206,7 @@ EXAMPLES = '''
 - name: Download the file
   azure_rm_storageblob:
     resource_group: Testing
-    storage_account: clh0002
+    storage_account_name: clh0002
     container: foo
     blob: graylog.png
     dest: ~/tmp/images/graylog.png
@@ -248,7 +251,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
-            storage_account=dict(required=True, type='str'),
+            storage_account_name=dict(required=True, type='str', aliases=['account_name']),
             blob=dict(type='str', aliases=['blob_name']),
             container=dict(required=True, type='str', aliases=['container_name']),
             dest=dict(type='str'),
@@ -264,6 +267,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             content_disposition=dict(type='str'),
             cache_control=dict(type='str'),
             content_md5=dict(type='str'),
+            log_path=dict(type='str', default='azure_rm_storageblob.log')
         )
 
         mutually_exclusive = [('src', 'dest')]
@@ -275,7 +279,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         self.blob_client = None
         self.blob_details = None
-        self.storage_account = None
+        self.storage_account_name = None
         self.blob = None
         self.blob_obj = None
         self.container = None
@@ -309,15 +313,15 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             # Get keys from the storage account
             self.log('Getting keys')
             keys = dict()
-            account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.storage_account)
+            account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.storage_account_name)
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
         except AzureHttpError, e:
-            self.fail("Error getting keys for account {0}: {1}".format(self.storage_account, str(e)))
+            self.fail("Error getting keys for account {0}: {1}".format(self.storage_account_name, str(e)))
 
         try:
             self.log('Create blob service')
-            self.blob_client = CloudStorageAccount(self.storage_account, keys['key1']).create_block_blob_service()
+            self.blob_client = CloudStorageAccount(self.storage_account_name, keys['key1']).create_block_blob_service()
         except Exception, e:
             self.fail("Error creating blob service client: {0}".format(str(e)))
 
@@ -381,7 +385,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 name=container.name,
                 tags=container.metadata,
                 last_mdoified=container.properties.last_modified.strftime('%d-%b-%Y %H:%M:%S %z'),
-                provisioning_state=container.provisioning_state,
             )
         return result
 
@@ -461,13 +464,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                                                                             self.blob,
                                                                             self.dest,
                                                                             exc))
-            self.results['changed'] = True
-            self.results['actions'].append('downloaded blob {0}:{1} to {2}'.format(self.container,
-                                                                                   self.blob,
-                                                                                   self.dest))
+        self.results['changed'] = True
+        self.results['actions'].append('downloaded blob {0}:{1} to {2}'.format(self.container,
+                                                                               self.blob,
+                                                                               self.dest))
 
-            self.results['container'] = self.container_obj
-            self.results['blob'] = self.blob_obj
+        self.results['container'] = self.container_obj
+        self.results['blob'] = self.blob_obj
 
     def src_is_valid(self):
         if not os.path.isfile(self.src):
