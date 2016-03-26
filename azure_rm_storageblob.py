@@ -175,9 +175,11 @@ options:
         default: null
     tags:
         description:
-            - Dictionary of key:value pairs to add to either a container or blob.
+            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata 
+              for the object. In other words, existing metadata will be replaced with provided values. If no values 
+              provided, existing metadata will be removed.
+        required: false
         default: null
-
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"

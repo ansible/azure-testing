@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 # (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <chouseknecht@redhat.com>
+#          Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -126,11 +126,11 @@ options:
             - present
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the storage account. Treated as the explicit
-              metadata for the object. In other words, existing metadata will be replaced with provided values.
+            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
+              for the object. In other words, existing metadata will be replaced with provided values. If no values
+              provided, existing metadata will be removed.
         required: false
         default: null
-
 
 requirements:
     - "python >= 2.7"
