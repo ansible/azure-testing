@@ -273,7 +273,7 @@ class AzureRMModuleBase(object):
         :param azure_object An object such as a subnet, storageaccount, etc. Must have provisioning_state
                             and name attributes.
         '''
-        if not hasattr(azure_object, 'provisioning_state') or not hasattr(azure_object, name):
+        if not hasattr(azure_object, 'provisioning_state') or not hasattr(azure_object, 'name'):
             return
         if azure_object.provisioning_state != AZURE_SUCCESS_STATE:
             self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(

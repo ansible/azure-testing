@@ -126,7 +126,8 @@ options:
         default: null
     tags:
         description:
-            - Dictionary of string:string pairs to assign as tags to the storage account.
+            - Dictionary of string:string pairs to assign as metadata to the storage account. Treated as the explicit
+              metadata for the object. In other words, existing metadata will be replaced with provided values.
         required: false
         default: null
 
