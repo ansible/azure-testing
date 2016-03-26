@@ -186,7 +186,7 @@ EXAMPLE_OUTPUT = '''
 }
 '''
 
-NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.-_]+[a-zA-Z0-9_]$")
+NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9_]$")
 
 
 def virtual_network_to_dict(vnet):
@@ -370,14 +370,13 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                         location=results['location'],
                         address_space=AddressSpace(
                             address_prefixes=results['address_prefixes']
-                        )
+                        ),
+                        tags=results['tags']
                     )
                     if results['dns_servers']:
                         vnet.dhcp_options = DhcpOptions(
                             dns_servers=results['dns_servers']
                         )
-                    if self.tags:
-                        vnet.tags = results['tags']
                     self.results['results'] = self.create_or_update_vnet(vnet)
             elif self.state == 'absent':
                 self.delete_virtual_network()

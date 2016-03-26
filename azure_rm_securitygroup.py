@@ -384,7 +384,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
     def exec_module_impl(self, **kwargs):
         
         for key in self.module_arg_spec:
-            self.log("set attribute: {0}: {1}".format(key, str(kwargs[key])))
             setattr(self, key, kwargs[key])
 
         changed = False

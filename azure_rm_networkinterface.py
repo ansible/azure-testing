@@ -31,7 +31,8 @@ from ansible.module_utils.azure_rm_common import *
 
 try:
     from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.network import NetworkInterface, NetworkInterfaceIpConfiguration, ResourceId
+    from azure.mgmt.network.models import NetworkInterface, NetworkInterfaceIpConfiguration, ResourceId
+    from azure.mgmt.network.models.network_management_client_enums import IPAllocationMethod
 except ImportError:
     # This is handled in azure_rm_common
     pass
@@ -39,17 +40,16 @@ except ImportError:
 class AzureRMNetworkInterface(AzureRMModuleBase):
     def __init__(self, **kwargs):
         module_arg_spec = dict(
-            resource_group = dict(required=True),
-            name = dict(required=True),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(required=True),
-            subnet_id = dict(required=True),
-            public_ip_id = dict(default=None),
-            
+            resource_group=dict(required=True),
+            name=dict(required=True),
+            state=dict(default='present', choices=['present', 'absent']),
+            location=dict(required=True),
+            subnet_id=dict(required=True),
+
             # TODO: implement tags
             # TODO: implement object security
         )
-
+    
         AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
 
 

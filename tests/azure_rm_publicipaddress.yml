@@ -1,0 +1,73 @@
+- name: Test public ip address
+  hosts: all
+  connection: local
+  vars:
+      resource_group: Testing
+      playbook_debug: yes
+  tasks:
+
+      - name: Remove public ip
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            name: testing01 
+            state:  absent
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+
+      - name: Create public ip
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            name: testing01 
+            allocation_method: Static 
+            domain_name: testing 
+            location: eastus
+            tags:
+                testing: testing
+                delete: on-exit
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+     
+      - debug: var=output
+        when: playbook_debug
+     
+      - assert:
+            that: 
+                - output.results.public_ip_allocation_method == 'Static'
+                - output.results.dns_settings.domain_name_label == 'testing'
+                - output.results.tags.testing == 'testing'
+
+      - name: Should be idempotent 
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            name: testing01
+            allocation_method: Static
+            domain_name: testing
+            location: eastus
+            tags:
+                testing: testing
+                delete: on-exit
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+     
+      - debug: var=output
+    
+      - assert:
+            that: not output.changed
+
+      - name: Remove public ip
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            name: testing01 
+            state:  absent
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+
+      - debug: var=output
+        when: playbook_debug

@@ -40,7 +40,7 @@ short_description: Manage Azure subnets.
 
 description:
     - Create, update and delete subnets within a given virtual network. Allows setting and updating the address
-      prefix CIDR, which must be valid within the context of the virtual network. Use the azure_rm_network_interface
+      prefix CIDR, which must be valid within the context of the virtual network. Use the azure_rm_networkinterface
       module to associate interfaces with the subnet and assign specific IP addresses.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
