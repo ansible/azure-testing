@@ -27,6 +27,7 @@ from ansible.module_utils.azure_rm_common import *
 
 
 try:
+    from msrestazure.azure_exceptions import CloudError
     from azure.common import AzureMissingResourceHttpError
     from azure.mgmt.resource.resources.models import ResourceGroup
 except ImportError:
@@ -39,67 +40,119 @@ module: azure_rm_resourcegroup
 '''
 
 
-class AzureRMResourceGroup(AzureRMModuleBase):
-    def __init__(self, **kwargs):
-        module_arg_spec = dict(
-            name = dict(required=True),
-            state = dict(default='present', choices=['present', 'absent']),
-            location = dict(required=True),
+def resource_group_to_dict(rg):
+    return dict(
+        id=rg.id,
+        name=rg.name,
+        location=rg.location,
+        tags=rg.tags,
+        provisioning_state=rg.properties.provisioning_state
+    )
 
-            # TODO: implement tags
-            # TODO: implement object security
+
+class AzureRMResourceGroup(AzureRMModuleBase):
+    
+    def __init__(self, **kwargs):
+        self.module_arg_spec = dict(
+            name=dict(type='str', required=True),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
+            location=dict(type='str'),
+            tags=dict(type='dict'),
+            log_path=dict(type='str', default='azure_rm_resourcegroup.log')
+        )
+        super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
+                                                   supports_check_mode=True,
+                                                   **kwargs)
+
+        self.name = None
+        self.state = None
+        self.location = None
+        self.tags = None
+
+        self.results = dict(
+            changed=False,
+            check_mode=self.check_mode,
+            results=dict()
         )
 
-        AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
+    def exec_module_impl(self, **kwargs):
 
-    def exec_module_impl(self, name, state, location, **kwargs):
-        results = dict(changed=False)
+        for key in self.module_arg_spec:
+            setattr(self, key, kwargs[key])
 
-        resource_client = self.resource_client
+        results = dict()
+        changed = False
+        rg = None
 
         try:
-            self.debug('fetching resource group...')
-            rg = resource_client.resource_groups.get(name)
-            # TODO: there's a weird state where this doesn't 404 for a bit after deletion (check resource_group.provisioningState != Succeeded or Deleting)
-            if state == 'absent':
-                self.debug("CHANGED: resource group exists but requested state is 'absent'...")
-                results['changed'] = True
-            elif state == 'present':
-                self.debug('comparing resource group attributes...')
-                # TODO: reenable this check after canonicalizing location (lowercase, remove spaces)
-                # if rg.resource_group.location != location:
-                #     return dict(failed=True, msg="Resource group '{0}' already exists in location '{1}' and cannot be moved.".format(name, location))
-        except AzureMissingResourceHttpError:
-            self.debug('resource group does not exist')
-            if state == 'present':
-                self.debug("CHANGED: resource group does not exist but requested state is 'present'")
-                results['changed'] = True
+            self.log('Fetching resource group {0}'.format(self.name))
+            rg = self.rm_client.resource_groups.get(self.name)
+            self.check_provisioning_state(rg)
 
-        if self._module.check_mode:
-            self.debug('check mode, exiting early...')
-            return results
+            results = resource_group_to_dict(rg)
+            if self.state == 'absent':
+                self.debug("CHANGED: resource group {0} exists but requested state is 'absent'".format(self.name))
+                changed = True
+            elif self.state == 'present':
+                if results['tags'] != self.tags:
+                    changed = True
+                    results['tags'] = self.tags
+                if results['location'] != self.location:
+                    self.fail("Resource group '{0}' already exists in location '{1}' and cannot be "
+                              "moved.".format(self.name, self.location))
+        except CloudError:
+            self.log('Resource group {0} does not exist'.format(self.name))
+            if self.state == 'present':
+                self.log("CHANGED: resource group {0} does not exist but requested state is "
+                         "'present'".format(self.name))
+                changed = True
 
-        if not results['changed']:
-            self.debug('no changes to make, exiting...')
-            return results
+        self.results['changed'] = changed
+        self.results['results'] = results
 
-        if state == 'present':
-            self.debug('calling create_or_update...')
-            res = resource_client.resource_groups.create_or_update(
-                name,
-                ResourceGroup(location=location)
-            )
-            self.debug('finished')
-            # TODO: check anything in result?
+        if self.check_mode:
+            return self.results
 
-        elif state == 'absent':
-            self.debug('calling delete...')
-            res = resource_client.resource_groups.delete(name)
-            self.debug('finished')
-            # TODO: poll for actual completion- looks like deletion is slow and async (even w/o begin_deleting)...
-            # TODO: check anything in result?
+        if changed:
+            if self.state == 'present':
+                if not rg:
+                    self.log("Creating resource group {0}".format(self.name))
+                    if not self.location:
+                        self.fail("Parameter error: location is required when creating a resource "
+                                  "group.".format(self.name))
+                    params = ResourceGroup(
+                        location=self.location,
+                        tags=self.tags
+                    )
+                else:
+                    params = ResourceGroup(
+                        location=rg['location'],
+                        tags=rg['tags']
+                    )
+                self.results['results'] = self.create_or_update_resource_group(params)
+            elif self.state == 'absent':
+                self.delete_resource_group()
 
-        return results
+        return self.results
+
+    def create_or_update_resource_group(self, params):
+        try:
+            result = self.rm_client.resource_groups.create_or_update(self.name, params)
+        except Exception, exc:
+            self.fail("Error creating or updating resource group {0} - {1}".format(self.name, str(exc)))
+        return resource_group_to_dict(result)
+
+    def delete_resource_group(self):
+        try:
+            poller = self.rm_client.resource_groups.delete(self.name)
+        except Exception, exc:
+            self.fail("Error delete resource group {0} - {1}".format(self.name, str(exc)))
+
+        self.get_poller_result(poller)
+        # The delete operation doesn't return anything.
+        # If we got here, assume all is good
+        self.results['results'] = 'Deleted'
+        return True
 
 
 def main():
@@ -111,8 +164,7 @@ def main():
             name='mdavis-test-rg5',
             state='present',
             location='West US',
-            log_mode='stderr',
-            #filter_logger=False,
+            log_mode='stderr'
         ))
 
     AzureRMResourceGroup().exec_module()
