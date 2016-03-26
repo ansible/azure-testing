@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@ansible.com>
+# (c) 2016 Matt Davis, <mdavis@redhat.com>
+#          Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
