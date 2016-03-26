@@ -37,6 +37,97 @@ except ImportError:
 DOCUMENTATION = '''
 ---
 module: azure_rm_resourcegroup
+short_description: Manage Azure resource groups.
+
+description:
+    - Create, update and delete resource groups. Allows setting and updating resource group tags. Use the other
+      Azure modules to associate resource with a resource group.
+    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
+      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
+    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
+      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
+    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
+      AZURE_PASSWORD in the environment.
+    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
+      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
+      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      by passing profile or setting AZURE_PROFILE in the environment.
+
+options:
+    profile:
+        description:
+            - security profile found in ~/.azure/credentials file
+        required: false
+        default: null
+    subscription_id:
+        description:
+            - Azure subscription Id that owns the resource group and storage accounts.
+        required: false
+        default: null
+    client_id:
+        description:
+            - Azure client_id used for authentication.
+        required: false
+        default: null
+    secret:
+        description:
+            - Azure client_secrent used for authentication.
+        required: false
+        default: null
+    tenant:
+        description:
+            - Azure tenant_id used for authentication.
+        required: false
+        default: null
+    location:
+        description:
+            - Azure location for the resource group. Required when creating a new resource group. Cannot
+              be changed once resource group is created.
+        default: null
+    name:
+        description:
+            - Name of the resource group.
+        required: true
+        default: null
+    state:
+        description:
+            - Assert the state of the resource group. Use 'present' to create or update and
+              'absent' to delete.
+        required: true
+        default: present
+        choices:
+            - absent
+            - present
+    tags:
+        description:
+            - Dictionary of string:string pairs to assign as metadata to the resource group. Treated as the explicit
+              metadata for the object. In other words, existing metadata will be replaced with provided values. If no
+              values provided, existing metadata will be removed.
+        required: false
+        default: null
+
+requirements:
+    - "python >= 2.7"
+    - "azure >= 2.0.0"
+
+authors:
+    - "Matt Davis <mdavis@ansible.com>"
+    - "Chris Houseknecht @chouseknecht"
+'''
+
+EXAMPLES = '''
+    - name: Create a resource group
+      azure_rm_resource_group:
+        name: Testing
+        location: westus
+        tags:
+            testing: testing
+            delete: never
+
+    - name: Delete a resource group
+      azure_rm_resourcegroup:
+        name: Testing
+        state: absent
 '''
 
 
