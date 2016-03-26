@@ -113,7 +113,7 @@ options:
 
 requirements:
     - "python >= 2.7"
-    - "azure >= 1.0.2"
+    - "azure >= 2.0.0"
 
 authors:
     - "Matt Davis <mdavis@ansible.com>"

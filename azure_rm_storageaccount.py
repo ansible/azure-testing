@@ -133,9 +133,11 @@ options:
 
 requirements:
     - "python >= 2.7"
-    - "azure >= 1.0.2"
+    - "azure >= 2.0.0"
 
-author: "Chris Houseknecht @chouseknecht"
+authors:
+    - "Chris Houseknecht house@redhat.com"
+    - "Matt Davis mdavis@redhat.com"
 '''
 EXAMPLES = '''
     - name: remove account, if it exists

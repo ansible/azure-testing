@@ -61,9 +61,11 @@ CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){
 
 AZURE_SUCCESS_STATE = "Succeeded"
 
+AZURE_MIN_VERSION = "1.1.1"  # should be 2.0.0 but SDK versions contains 1.1.1
 HAS_AZURE = True
 
 try:
+    from azure.common import __version__ as azure_version
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
                                                              NetworkManagementClientConfiguration
@@ -107,7 +109,10 @@ class AzureRMModuleBase(object):
                                     required_if=merged_required_if)
 
         if not HAS_AZURE:
-            self.fail("The Azure python sdk is not installed (try 'pip install azure')")
+            self.fail("The Azure Python SDK is not installed (try 'pip install azure')")
+
+        if azure_version < AZURE_MIN_VERSION:
+            self.fail("Expecting Azure Python SDK version to be >= {0}".format(AZURE_MIN_VERSION))
 
         self._network_client = None
         self._storage_client = None

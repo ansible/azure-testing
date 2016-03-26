@@ -35,14 +35,8 @@ try:
     from msrestazure.azure_exceptions import CloudError
     from azure.storage.cloudstorageaccount import CloudStorageAccount
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
-    # from azure.mgmt.storage.models import AccountType,\
-    #                                       AccountStatus, \
-    #                                       ProvisioningState, \
-    #                                       StorageAccountUpdateParameters,\
-    #                                      CustomDomain, StorageAccountCreateParameters, KeyName
 except:
     HAS_AZURE = False
-
 
 
 DOCUMENTATION = '''
@@ -96,9 +90,11 @@ options:
 
 requirements:
     - "python >= 2.7"
-    - "azure >= 1.0.2"
+    - "azure >= 2.0.0"
 
-author: "Chris Houseknecht @chouseknecht"
+authors:
+    - "Chris Houseknecht house@redhat.com"
+    - "Matt Davis mdavis@redhat.com"
 '''
 
 EXAMPLES = '''
