@@ -1,0 +1,39 @@
+- name: Test azure_rm_networkinterface_facts
+  hosts: all
+  connection: local
+  vars:
+      resource_group: Testing
+      playbook_debug: yes
+  tasks:
+      - name: Create public IP 
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            name: "{{ item }}"
+        with_items:
+            - pip2001
+            - pip2002
+
+      - name: Get public IP facts
+        azure_rm_publicipaddress_facts:
+            resource_group: "{{ resource_group }}"
+            name: pip2001 
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+    
+      - assert:
+            that:
+                - output.results | length == 1 
+
+      - name: Get all public IP facts
+        azure_rm_publicipaddress_facts:
+            resource_group: "{{ resource_group }}"
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+    
+      - assert:
+            that:
+                - output.results | length >= 1 

@@ -36,12 +36,13 @@ except:
 
 DOCUMENTATION = '''
 ---
-module: azure_rm_storageaccount_facts
+module: azure_rm_virtualnetwork_facts
 
-short_description: Get storage account facts.
+short_description: Get public IP facts.
 
 description:
-    - Get facts for one storage account or all storage accounts within a resource group.
+    - Get facts for a specific public IP or all public IPs within a resource group.
+
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -81,11 +82,11 @@ options:
         default: null
     name:
         description:
-            - Only show results for a specific account.
+            - Only show results for a specific security group.
         default: null
     resource_group:
         description:
-            - name of resource group.
+            - Name of a resource group.
         required: true
         default: null
 
@@ -99,49 +100,46 @@ authors:
 '''
 
 EXAMPLES = '''
-    - name: Get facts for one account
-      azure_rm_storageaccount_facts:
+    - name: Get facts for one public IP
+      azure_rm_virtualnetwork_facts:
         resource_group: Testing
-        name: clh0002
+        name: secgroup001
 
-    - name: Get facts for all accounts
-      azure_rm_storageaccount_facts:
+    - name: Get facts for all public IPs
+      azure_rm_virtualnetwork_facts:
         resource_group: Testing
 
 '''
 
 RETURNS = '''
 {
-    "changed": false,
-    "check_mode": false,
-    "results": [
-        {
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/testaccount001",
-            "location": "eastus2",
-            "name": "testaccount001",
-            "properties": {
-                "accountType": "Standard_LRS",
-                "creationTime": "2016-03-28T02:46:58.290113Z",
-                "primaryEndpoints": {
-                    "blob": "https://testaccount001.blob.core.windows.net/",
-                    "file": "https://testaccount001.file.core.windows.net/",
-                    "queue": "https://testaccount001.queue.core.windows.net/",
-                    "table": "https://testaccount001.table.core.windows.net/"
+    "output": {
+        "changed": false,
+        "check_mode": false,
+        "results": [
+            {
+                "etag": "W/\"a31a6d7d-cb18-40a5-b16d-9f4a36c1b18a\"",
+                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
+                "location": "eastus2",
+                "name": "pip2001",
+                "properties": {
+                    "idleTimeoutInMinutes": 4,
+                    "provisioningState": "Succeeded",
+                    "publicIPAllocationMethod": "Dynamic",
+                    "resourceGuid": "29de82f4-a7da-440e-bd3d-9cabb79af95a"
                 },
-                "primaryLocation": "eastus2",
-                "provisioningState": "Succeeded",
-                "statusOfPrimary": "Available"
-            },
-            "tags": {},
-            "type": "Microsoft.Storage/storageAccounts"
-        },
+                "type": "Microsoft.Network/publicIPAddresses"
+            }
+        ]
+    }
 }
 '''
 
-NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
+AZURE_OBJECT_CLASS = 'VirtualNetwork'
 
 
-class AzureRMStorageAccountFacts(AzureRMModuleBase):
+class AzureRMPublicIPFacts(AzureRMModuleBase):
+
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
@@ -149,8 +147,8 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             resource_group=dict(required=True, type='str'),
         )
 
-        super(AzureRMStorageAccountFacts, self).__init__(self.module_arg_spec,
-                                                         **kwargs)
+        super(AzureRMPublicIPFacts, self).__init__(self.module_arg_spec,
+                                                           **kwargs)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode,
@@ -166,38 +164,37 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name is not None:
-            self.results['results'] = [self.get_account()]
+            self.results['results'] = [self.get_item()]
         else:
-            self.results['results'] = self.list_accounts()
+            self.results['results'] = self.list_items()
 
         return self.results
 
-    def get_account(self):
-        self.log('Get properties for account {0}'.format(self.name))
-        account = None
-        account_dict = dict()
+    def get_item(self):
+        self.log('Get properties for {0}'.format(self.name))
+        item = None
+        item_dict = dict()
 
         try:
-            account = self.storage_client.storage_accounts.get_properties(self.resource_group, self.name)
+            item = self.network_client.public_ip_addresses.get(self.resource_group, self.name)
         except CloudError:
             pass
 
-        if account is not None:
-            account_dict = self.serialize_obj(account, 'StorageAccount')
+        if item:
+            item_dict = self.serialize_obj(item, AZURE_OBJECT_CLASS)
 
-        return account_dict
+        return item_dict
 
-    def list_accounts(self):
-        self.log('List storage accounts for resource group {0}'.format(self.resource_group))
+    def list_items(self):
+        self.log('List all for resource group {0}'.format(self.resource_group))
         try:
-            response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
-        except AzureHttpError as e:
-            self.log('Error listing storage accounts for resource group %s' % resource_group)
-            self.fail("Failed to list storage accounts for resource group: {0}".format(str(e)))
+            response = self.network_client.public_ip_addresses.list(self.resource_group)
+        except AzureHttpError, exc:
+            self.fail("Failed to list all for resource group: {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, 'StorageAccount'))
+            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 
@@ -207,17 +204,11 @@ def main():
         import ansible.module_utils.basic
 
         ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            name='mdavis12341',
-            resource_group="rm_demo",
-            state='absent',
-            location='West US',
-            account_type="Premium_LRS",
-
-            log_mode='stderr',
-            #filter_logger=False,
+            resource_group='Testing'
         ))
 
-    AzureRMStorageAccountFacts().exec_module()
+    AzureRMPublicIPFacts().exec_module()
 
 if __name__ == '__main__':
     main()
+

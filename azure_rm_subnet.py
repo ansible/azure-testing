@@ -110,6 +110,8 @@ options:
             - Name of an existing virtual network with which the subnet is or will be associated.
         default: null
         required: true
+        aliases:
+            - virtual_network
 
 requirements:
     - "python >= 2.7"
@@ -155,7 +157,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             resource_group=dict(required=True),
             name=dict(required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
-            virtual_network_name=dict(type='str', required=True),
+            virtual_network_name=dict(type='str', required=True, aliases=['virtual_network']),
             address_prefix_cidr=dict(type='str'),
             log_path=dict(type='str', default='azure_rm_subnet.log')
         )

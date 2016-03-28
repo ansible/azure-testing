@@ -65,6 +65,7 @@ AZURE_MIN_VERSION = "1.1.1"
 HAS_AZURE = True
 
 try:
+    from msrest.serialization import Serializer
     from msrestazure.azure_exceptions import CloudError
     from azure.common import __version__ as azure_common_version
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
@@ -295,6 +296,17 @@ class AzureRMModuleBase(object):
             return default_credentials
 
         return None
+
+    def serialize_obj(self, obj, class_name):
+        '''
+        Return a JSON representation of an Azure object.
+
+        :param obj: Azure object
+        :param class_name: Name of the object's class
+        :return: serialized result
+        '''
+        serializer = Serializer()
+        return serializer.body(obj, class_name)
 
     def get_poller_result(self, poller):
         '''

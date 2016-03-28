@@ -109,11 +109,19 @@ options:
         default: resource_group location
     account_type:
         description:
-            - type of storage account. Can be one of 'Premium_LRS', 'Standard_GRS', 'Standard_LRS', 'Standard_RAGRS',
-              'Standard_ZRS'. Required when creating a storage account. Note that StandardZRS and PremiumLRS accounts cannot be
-              changed to other account types, and other account types cannot be changed to StandardZRS or PremiumLRS.
+            - Type of storage account. Required when creating a storage account. Note that StandardZRS and PremiumLRS
+              accounts cannot br changed to other account types, and other account types cannot be changed to
+              StandardZRS or PremiumLRS.
         required: false
         default: null
+        choices:
+            - Premium_LRS
+            - Standard_GRS
+            - Standard_LRS
+            - Standard_RAGRS
+            - Standard_ZRS
+        aliases:
+            - type
     custom_domain:
         description:
             - User domain assigned to the storage account. Must be a dictionary with 'name' and 'use_sub_domain' keys where 'name' 

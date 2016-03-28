@@ -19,6 +19,23 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
+# without playing games with __metaclass__ or runtime base type hackery.
+# TODO: figure out a better way...
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.network.models import NetworkInterface, NetworkInterfaceIPConfiguration, Subnet, \
+                                          PublicIPAddress, NetworkSecurityGroup
+    from azure.mgmt.network.models.network_management_client_enums import IPAllocationMethod
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
+
+
 DOCUMENTATION = '''
 ---
 module: azure_rm_networkinterface
@@ -196,23 +213,6 @@ RETURNS = '''
     }
 }
 '''
-
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrest.serialization import Serializer
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.network.models import NetworkInterface, NetworkInterfaceIPConfiguration, Subnet, \
-                                          PublicIPAddress, NetworkSecurityGroup
-    from azure.mgmt.network.models.network_management_client_enums import IPAllocationMethod
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
 
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9]$")
 
@@ -479,6 +479,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                 serializer = Serializer()
                 request_body = serializer.body(nic, 'NetworkInterface')
                 self.log(request_body, pretty_print=True)
+
                 self.results['results'] = self.create_or_update_nic(nic)
 
             elif self.state == 'absent':

@@ -1,0 +1,37 @@
+- name: Test azure_rm_networkinterface_facts
+  hosts: all
+  connection: local
+  vars:
+      resource_group: Testing
+      playbook_debug: yes
+  tasks:
+      - name: Create virtual network
+        azure_rm_virtualnetwork:
+            resource_group: "{{ resource_group }}"
+            name: vnet2001
+            address_prefixes_cidr: "10.10.0.0/16"
+
+      - name: Get virtual network facts
+        azure_rm_virtualnetwork_facts:
+            resource_group: "{{ resource_group }}"
+            name: vnet2001
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+    
+      - assert:
+            that:
+                - output.results | length == 1 
+
+      - name: Get all virtual network facts
+        azure_rm_virtualnetwork_facts:
+            resource_group: "{{ resource_group }}"
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+    
+      - assert:
+            that:
+                - output.results | length >= 1 
