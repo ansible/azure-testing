@@ -105,10 +105,8 @@ options:
             - present
     location:
         description:
-            - name of the Azure location where the storage account will reside on creation. Required when the storage account
-              is created. Cannot be changed after storage account creation.
-        required: false
-        default: null
+            - Valid azure location. Defaults to location of the resource group.
+        default: resource_group location
     account_type:
         description:
             - type of storage account. Can be one of 'Premium_LRS', 'Standard_GRS', 'Standard_LRS', 'Standard_RAGRS',
@@ -231,6 +229,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
+
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
 
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must contain numbers and lowercase letters only.")

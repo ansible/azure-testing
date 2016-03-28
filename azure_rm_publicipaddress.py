@@ -104,9 +104,8 @@ options:
             - present
     location:
         description:
-            - A valid Azure location. Should match the location attribute of the resource group. Required
-              when creating a new public IP.
-        default: null
+            - Valid azure location. Defaults to location of the resource group.
+        default: resource_group location
     tags:
         description:
             - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
@@ -159,23 +158,23 @@ NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9]$")
 
 
 def pip_to_dict(pip):
-    return dict(
+    result = dict(
         name=pip.name,
         type=pip.type,
         location=pip.location,
         tags=pip.tags,
         public_ip_allocation_method=pip.public_ip_allocation_method.value,
-        dns_settings=dict(
-            domain_name_label=pip.dns_settings.domain_name_label,
-            fqdn=pip.dns_settings.fqdn,
-            reverse_fqdn=pip.dns_settings.reverse_fqdn
-        ),
+        dns_settings=dict(),
         ip_address=pip.ip_address,
         idle_timeout_in_minutes=pip.idle_timeout_in_minutes,
         provisioning_state=pip.provisioning_state,
         etag=pip.etag
     )
-
+    if pip.dns_settings:
+        result['dns_settings']['domain_name_label'] = pip.dns_settings.domain_name_label
+        result['dns_settings']['fqdn'] = pip.dns_settings.fqdn
+        result['dns_settings']['reverse_fqdn'] = pip.dns_settings.reverse_fqdn
+    return result
 
 class AzureRMPublicIPAddress(AzureRMModuleBase):
 
@@ -218,6 +217,11 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
         changed = False
         pip = None
 
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
+
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must begin with a letter or number, end with a letter or number "
                       "and contain at least one number.")
@@ -229,7 +233,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
             self.log("PIP {0} exists".format(self.name))
             if self.state == 'present':
                 results = pip_to_dict(pip)
-                if self.domain_name != results['dns_settings']['domain_name_label']:
+                if self.domain_name != results['dns_settings'].get('domain_name_label'):
                     self.log('CHANGED: domain_name_label')
                     changed = True
                     results['dns_settings']['domain_name_label'] =self.domain_name
@@ -239,11 +243,10 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
                     changed = True
                     results['public_ip_allocation_method'] = self.allocation_method
 
-                if self.tags:
-                    if self.tags != results['tags']:
-                        self.log("CHANGED: tags")
-                        changed = True
-                        results['tags'] = self.tags
+                if self.tags != results['tags']:
+                    self.log("CHANGED: tags")
+                    changed = True
+                    results['tags'] = self.tags
 
             elif self.state == 'absent':
                 self.log("CHANGED: public ip {0} exists but requested state is 'absent'".format(self.name))
@@ -274,7 +277,6 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
                         pip.dns_settings = PublicIPAddressDnsSettings(
                             domain_name_label=self.domain_name
                         )
-                    self.results['results'] = self.create_or_update_pip(pip)
                 else:
                     self.log("Update Public IP {0}".format(self.name))
                     pip = PublicIPAddress(
@@ -286,7 +288,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
                         pip.dns_settings = PublicIPAddressDnsSettings(
                             domain_name_label=self.domain_name
                         )
-                    self.results['results'] = self.create_or_update_pip(pip)
+                self.results['results'] = self.create_or_update_pip(pip)
             elif self.state == 'absent':
                 self.log('Delete public ip {0}'.format(self.name))
                 self.delete_pip()

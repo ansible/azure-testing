@@ -100,8 +100,8 @@ options:
               default Azure servers.
     location:
         description:
-            - Valid Azure location. Required when creating a new virtual network.
-        default: null
+            - Valid azure location. Defaults to location of the resource group.
+        default: resource_group location
     name:
         description:
             - name of the virtual network.
@@ -266,6 +266,11 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
+
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must begin with a letter or number, end with a letter, number "
                       "or underscore and may contain only letters, numbers, periods, underscores or hyphens.")
@@ -347,8 +352,6 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                 if not results:
                     # create a new virtual network
                     self.log("Create virtual network {0}".format(self.name))
-                    if not self.location:
-                        self.fail('Parameter error: location required when creating new virtual network')
                     if not self.address_prefixes_cidr:
                         self.fail('Parameter error: address_prefixes_cidr required when creating a virtual network')
                     vnet = VirtualNetwork(

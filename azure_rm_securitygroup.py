@@ -89,9 +89,13 @@ options:
               destination_address_prefix, access, priority and direction.
               See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
         default: null
+    location:
+        description:
+            - Valid azure location. Defaults to location of the resource group.
+        default: resource_group location
     name:
         description:
-            - name of the NSG.
+            - name of the security group.
         default: null
     purge_default_rules:
         description:
@@ -390,6 +394,11 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         changed = False
         results = dict()
+
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
 
         if not NAME_PATTERN.match(self.name):
             raise Exception("Parameter error: name must contain only word characters and '.','-','_'")

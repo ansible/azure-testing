@@ -65,6 +65,7 @@ AZURE_MIN_VERSION = "1.1.1"
 HAS_AZURE = True
 
 try:
+    from msrestazure.azure_exceptions import CloudError
     from azure.common import __version__ as azure_common_version
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
@@ -168,15 +169,34 @@ class AzureRMModuleBase(object):
             self.validate_tags(self.module.params['tags'])
 
     def fail(self, msg):
+        '''
+        Shortcut for calling module.fail()
+
+        :param msg: Errot message text.
+        :return: None
+        '''
         self.module.fail_json(msg=msg)
 
     def log(self, msg, pretty_print=False):
+        '''
+        Call logger.debug with message text or JSON.
+
+        :param msg: string or blob of JSON.
+        :param pretty_print: set to True if msg is JSON.
+        :return: None
+        '''
         if pretty_print:
             self.debug(json.dumps(msg, indent=4, sort_keys=True))
         else:
             self.debug(msg)
 
     def validate_tags(self, tags):
+        '''
+        Check if tags dictionary contains string:string pairs.
+
+        :param tags: dictionary of string:string pairs
+        :return: None
+        '''
         # tags must be a dictionary of string:string mappings.
         if not isinstance(tags, dict):
             self.fail("Tags must be a dictionary of string:string values.")
@@ -185,8 +205,27 @@ class AzureRMModuleBase(object):
                 self.fail("Tags values must be strings. Found {0}:{1}".format(str(key), str(value)))
 
     def exec_module(self):
+        '''
+        Execute module implementation.
+
+        :return: None
+        '''
         res = self.exec_module_impl(**self.module.params)
         self.module.exit_json(**res)
+
+    def get_resource_group(self, resource_group):
+        '''
+        Fetch a resource group.
+
+        :param resource_group: name of a resource group
+        :return: resource group object
+        '''
+        try:
+            return self.rm_client.resource_groups.get(resource_group)
+        except CloudError:
+            self.fail("Parameter error: resource group {0} not found".format(resource_group))
+        except Exception, exc:
+            self.fail("Error retrieving resource group {0} - {1}".format(resource_group, str(exc)))
 
     def _get_profile(self, profile="default"):
         path = expanduser("~")
@@ -260,14 +299,18 @@ class AzureRMModuleBase(object):
     def get_poller_result(self, poller):
         '''
         Consistent method of waiting on and retrieving results from Azure's long poller
+
+        :param poller Azure poller object
+        :return object resulting from the original request
         '''
         try:
+            delay = 20
             while not poller.done():
-                delay = 20
                 self.log("Waiting for {0} sec".format(delay))
                 poller.wait(timeout=delay)
             return poller.result()
         except Exception, exc:
+            self.log(str(exc))
             self.fail("Error: {0}".format(str(exc)))
 
     def check_provisioning_state(self, azure_object):
@@ -277,6 +320,7 @@ class AzureRMModuleBase(object):
 
         :param azure_object An object such as a subnet, storageaccount, etc. Must have provisioning_state
                             and name attributes.
+        :return None
         '''
 
         if hasattr(azure_object, 'properties') and hasattr(azure_object.properties, 'provisioning_state') and \
@@ -301,16 +345,6 @@ class AzureRMModuleBase(object):
         if not self._storage_client:
             self._storage_client = StorageManagementClient(
                 StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id))
-
-        # TODO: only attempt to register provider on a well-known unregistered provider error
-        #try:
-        #    if not self._resource_client:
-        #        self._resource_client = ResourceManagementClient(
-        #            ResourceManagementClientConfiguration(self.azure_credentials, self.subscription_id))
-        #        self._resource_client.providers.register('Microsoft.Storage')
-        #except:
-            # fail
-
         return self._storage_client
 
     @property
@@ -335,11 +369,6 @@ class AzureRMModuleBase(object):
         if not self._compute_client:
             self._compute_client = ComputeManagementClient(
                 ComputeManagementClientConfiguration(self.azure_credentials, self.subscription_id))
-        # TODO: only attempt to register provider on a well-known unregistered provider error
-        # if not self._resource_client:
-        #    self._resource_client = ResourceManagementClient(
-        #        ResourceManagementClientConfiguration(self.azure_credentials, self.subscription_id))
-        # self._resource_client.providers.register('Microsoft.Compute')
         return self._compute_client
 
 
