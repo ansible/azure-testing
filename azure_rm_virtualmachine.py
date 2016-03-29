@@ -91,7 +91,8 @@ try:
     from msrestazure.azure_exceptions import CloudError
     from azure.common import AzureMissingResourceHttpError
     from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile,\
-        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile
+        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile, LinuxConfiguration,\
+        SshConfiguration, SshPublicKey
     from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
         VirtualMachineSizeTypes
 except ImportError:
@@ -147,10 +148,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         required_if = [
             ('state', 'started', ['image_publisher', 'image_offer', 'image_sku',
-                                  'image_version', 'storage_account_name',
-                                  'storage_container_name', 'storage_blob_name',
-                                  'network_interface_names', 'network_interface_names',
-                                  'admin_username']
+                                  'image_version', 'admin_username']
              ),
         ]
 
@@ -203,7 +201,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         results = dict()
         vm = None
         network_interfaces = []
-
+        image_version = None
+        requested_vhd_uri = None
+        disable_ssh_password = None
+        vm_dict = None
+        
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
             # Set default location
@@ -213,45 +215,139 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             # Verify parameters and resolve any defaults
             self.vm_size_is_valid()
 
-            for name in self.network_interface_names:
-                nic = self.get_network_interface(name)
-                network_interfaces.append(NetworkInterfaceReference(id=nic.id))
-
-            if not self.storage_blob_name:
-                self.storage_blob_name = self.name + '.vsd'
+            if self.network_interface_names:
+                for name in self.network_interface_names:
+                    nic = self.get_network_interface(name)
+                    network_interfaces.append(nic.id)
 
             image_version = self.get_image_version()
-            if not image_version:
-                self.fail("Error could not find image {0} {1} {2} {3}".format(self.image_publisher,
-                                                                              self.image_offer,
-                                                                              self.image_sku,
-                                                                              self.image_version))
             if self.image_version == 'latest':
                 self.image_version = image_version.name
                 self.log("Using image version {0}".format(self.image_version))
 
-            self.get_storage_account()
+            if self.storage_account_name:
+                self.get_storage_account()
+
+                if not self.storage_blob_name:
+                    self.storage_blob_name = self.name + '.vhd'
+
+                requested_vhd_uri = 'https://{0}.blob.core.windows.net/{1}/{2}'.format(self.storage_account_name,
+                                                                                       self.storage_container_name,
+                                                                                       self.storage_blob_name)
+
+            disable_ssh_password = not self.ssh_password
 
         try:
             self.log("Fetching virtual machine {0}".format(self.name))
             vm = self.compute_client.virtual_machines.get(self.resource_group, self.name)
             self.check_provisioning_state(vm)
 
-            self.log('Virtual machine {0} exists'.format(self.name))
             vm_dict = self.serialize_obj(vm, AZURE_OBJECT_CLASS)
             self.log(vm_dict, pretty_print=True)
 
             if self.state == 'started' and self.force:
                 self.log('CHANGED: virtual machine {0} exists and forced option set.'.format(self.name))
                 changed = True
+
             elif self.state == 'started':
-                self.log('validating vm attributes against args...')
-                # TODO: validate attributes (name, tags, what else?)
+                differences = []
+                current_nics = []
+                results = vm_dict
+
+                if self.network_interface_names:
+                    for nic in vm_dict['properties']['networkProfile']['networkInterfaces']:
+                        current_nics.append(nic['id'])
+
+                    if set(current_nics) != set(network_interfaces):
+                        self.log('CHANGED: virtual machine {0} - network interfaces are different.'.format(self.name))
+                        differences.append('Network Interfaces')
+                        updated_nics = [dict(id=id) for id in network_interfaces]
+                        vm_dict['properties']['networkProfile']['networkInterfaces'] = updated_nics
+                        changed = True
+
+                if self.vm_size != vm_dict['properties']['hardwareProfile']['vmSize']:
+                    self.log('CHANGED: virtual machine {0} - vm size is different.'.format(self.name))
+                    differences.append('VM Size')
+                    vm_dict['properties']['hardwareProfile']['vmSize'] = self.vm_size
+                    changed = True
+
+                if self.image_publisher != vm_dict['properties']['storageProfile']['imageReference']['publisher'] or \
+                   self.image_offer != vm_dict['properties']['storageProfile']['imageReference']['offer'] or \
+                   self.image_sku != vm_dict['properties']['storageProfile']['imageReference']['sku']:
+                    self.log('CHANGED: virtual machine {0} - image is different.'.format(self.name))
+                    differences.append('Image')
+                    vm_dict['properties']['storageProfile']['imageReference']['publisher'] = self.image_publisher
+                    vm_dict['properties']['storageProfile']['imageReference']['offer'] = self.image_offer
+                    vm_dict['properties']['storageProfile']['imageReference']['sku'] = self.image_sku
+                    changed = True
+
+                if self.image_version != 'latest' and \
+                   self.image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
+                    self.log('CHANGED: virtual machine {0} - image version is different.'.format(self.name))
+                    differences.append('Image versions')
+                    vm_dict['properties']['storageProfile']['imageReference']['version'] = self.image_version
+                    changed = True
+
+                if self.image_version == 'latest' and \
+                   image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
+                    self.log('CHANGED: virtual machine {0} - image not at latest version.'.format(self.name))
+                    differences.append('Image version not at latest')
+                    vm_dict['properties']['storageProfile']['imageReference']['version'] = image_version
+                    changed = True
+
+                if self.os_disk_caching != vm_dict['properties']['storageProfile']['osDisk']['caching']:
+                    self.log('CHANGED: virtual machine {0} - OS disk caching'.format(self.name))
+                    differences.append('OS Disk caching')
+                    changed = True
+                    vm_dict['properties']['storageProfile']['osDisk']['caching'] = self.os_disk_caching
+
+                if self.storage_account_name:
+                    if requested_vhd_uri != vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri']:
+                        self.log('CHANGED: virtual machine {0} - OS disk VHD uri'.format(self.name))
+                        differences.append('OS Disk VHD uri')
+                        changed = True
+                        vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'] = requested_vhd_uri
+
+                if self.tags != vm_dict.get('tags'):
+                    self.log('CHANGED: virtual machine {0} - Tags'.format(self.name))
+                    differences.append('Tags')
+                    vm_dict['tags'] = self.tags
+                    changed = True
+
+                if self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
+                    self.log('CHANGED: virtual machine {0} - admin username'.format(self.name))
+                    differences.append('Admin Username')
+                    vm_dict['properties']['osProfile']['adminUsername'] = self.admin_username
+                    changed = True
+                    if self.admin_password:
+                        vm_dict['properties']['osProfile']['adminPassword'] = self.admin_password
+
+                if self.short_hostname != vm_dict['properties']['osProfile']['computerName']:
+                    self.log('CHANGED: virtual machine {0} - short hostname'.format(self.name))
+                    differences.append('Short Hostname')
+                    changed = True
+                    vm_dict['properties']['osProfile']['computerName'] = self.short_hostname
+
+                if vm_dict['properties']['osProfile'].get('linuxConfigurtion'):
+                    # linux host
+                    if vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] != \
+                       disable_ssh_password:
+                        self.log('CHANGED: virtual machine {0} - ssh password disable'.format(self.name))
+                        differences.append('SSH Password')
+                        changed = True
+                        vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] = \
+                            disable_ssh_password
+
+                results['differences'] = differences
+
             elif self.state == 'stopped':
                 pass
+
             elif self.state == 'absent':
                 self.log("CHANGED: virtual machine {0} exists and requested state is 'absent'".format(self.name))
-                changed = True # we should hit the exception handler below if the vm doesn't exist, so we know it does
+                results = dict()
+                changed = True
+
         except CloudError:
             self.log('Virtual machine {0} does not exist'.format(self.name))
             if self.state == 'started':
@@ -275,28 +371,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     # Create the VM
                     self.log("Create virtual machine {0}".format(self.name))
 
-                    # TODO: add this back in once we're ready to create a default nic
-                    # # ensure nic/pip exist
-                    # try:
-                    #     log('fetching nic...')
-                    #     nic_resp = network_client.network_interfaces.get(resource_group, network.get('virtual_nic_name'))
-                    #     nic_id = nic_resp.network_interface.id
-                    # except AzureMissingResourceHttpError:
-                    #     log('nic does not exist...')
-                    #     # TODO: create nic
-                    #     raise Exception('nic does not exist')
-
-                    vhd = VirtualHardDisk(uri='https://{0}.blob.core.windows.net/{1}/{2}.vhd'.format(
-                        self.storage_account_name,
-                        self.storage_container_name,
-                        self.storage_blob_name,
-                    ))
-
-                    # vm_size = None
-                    # for key in VirtualMachineSizeTypes:
-                    #     if key.value == self.vm_size:
-                    #         vm_size = key
-
+                    if not self.network_interface_names:
+                        self.create_default_nic()
+                    
+                    nics = [NetworkInterfaceReference(id=id) for id in network_interfaces]
+                    vhd = VirtualHardDisk(uri=requested_vhd_uri)
                     vm_resource = VirtualMachine(
                         location=self.location,
                         name=self.name,
@@ -324,32 +403,78 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                             ),
                         ),
                         network_profile=NetworkProfile(
-                            network_interfaces=network_interfaces
+                            network_interfaces=nics
                         ),
                     )
-                    self.log("Creating virtual machine with parameters:")
-                    vm_dict = self.serialize_obj(vm_resource, 'VirtualMachine')
-                    self.log(vm_dict, pretty_print=True)
-                    self.results['results'] = self.create_vm(vm_resource)
+                else:
+                    # update existing VM
 
-                    #
-                    # # TODO: reuse this code section for check mode
-                    #
-                    # for nic_ref in vm.network_profile.network_interfaces:
-                    #     nic_values = self._extract_names_from_uri_id(nic_ref.reference_uri)
-                    #     nic_resp = self.network_client.network_interfaces.get(nic_values.get('rg_name'), nic_values.get('name'))
-                    #     nic = nic_resp.network_interface
-                    #     is_primary = nic.primary
-                    #     # TODO: can there be more than one?
-                    #
-                    #     if is_primary:
-                    #         ip_cfg = nic.ip_configurations[0]
-                    #         result['primary_private_ip'] = ip_cfg.private_ip_address
-                    #         public_ip_ref = ip_cfg.public_ip_address
-                    #         if public_ip_ref: # look up the public ip object to get the address
-                    #             pip_values = self._extract_names_from_uri_id(public_ip_ref.id)
-                    #             pip_resp = self.network_client.public_ip_addresses.get(pip_values.get('rg_name'), pip_values.get('name'))
-                    #             result['primary_public_ip'] = pip_resp.public_ip_address.ip_address
+                    self.log("Update virtual machine {0}".format(self.name))
+
+                    nics = [NetworkInterfaceReference(id=interface['id'])
+                            for interface in vm_dict['properties']['networkProfile']['networkInterfaces']]
+                    vhd = VirtualHardDisk(uri=vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'])
+                    vm_resource = VirtualMachine(
+                        id=vm_dict['id'],
+                        location=vm_dict['location'],
+                        name=vm_dict['name'],
+                        type=vm_dict['type'],
+                        os_profile=OSProfile(
+                            admin_username=vm_dict['properties']['osProfile']['adminUsername'],
+                            computer_name=vm_dict['properties']['osProfile']['computerName']
+                        ),
+                        hardware_profile=HardwareProfile(
+                            vm_size=vm_dict['properties']['hardwareProfile']['vmSize']
+                        ),
+                        storage_profile=StorageProfile(
+                            os_disk=OSDisk(
+                                vm_dict['properties']['storageProfile']['osDisk']['name'],
+                                vhd,
+                                vm_dict['properties']['storageProfile']['osDisk']['createOption'],
+                                os_type=vm_dict['properties']['storageProfile']['osDisk']['osType'],
+                                caching=vm_dict['properties']['storageProfile']['osDisk']['caching']
+                            ),
+                            image_reference=ImageReference(
+                                publisher=vm_dict['properties']['storageProfile']['imageReference']['publisher'],
+                                offer=vm_dict['properties']['storageProfile']['imageReference']['offer'],
+                                sku=vm_dict['properties']['storageProfile']['imageReference']['sku'],
+                                version=vm_dict['properties']['storageProfile']['imageReference']['version']
+                            ),
+                        ),
+                        network_profile=NetworkProfile(
+                            network_interfaces=nics
+                        ),
+                    )
+
+                    if vm_dict.get('tags'):
+                        vm_resource.tags = vm_dict['tags']
+
+                    # Add admin password, if one provided
+                    if vm_dict['properties']['osProfile'].get('adminPassword'):
+                        vm_resource.os_profile.admin_password = vm_dict['properties']['osProfile']['adminPassword']
+
+                    # Add linux configuration, if applicable
+                    linux_config = vm_dict['properties']['osProfile'].get('linuxConfiguration')
+                    if linux_config:
+                        ssh_config = linux_config.get('ssh', None)
+                        vm_resource.os_profile.linux_configuration = LinuxConfiguration(
+                            disable_password_authentication=linux_config.get('disablePasswordAuthentication', False)
+                        )
+                        if ssh_config:
+                            public_keys = ssh_config.get('publicKeys')
+                            if public_keys:
+                                vm_resource.os_profile.linux_configuration.ssh = SshConfiguration(public_keys=[])
+                                for key in public_keys:
+                                    vm_resource.os_profile.linux_configuration.ssh.public_keys.append(
+                                        SshConfiguration(
+                                            path=key['path'],
+                                            key_data=key['keyData']
+                                        )
+                                    )
+
+                self.log("Create or update virtual machine with parameters:")
+                self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
+                self.results['results'] = self.create_or_update_vm(vm_resource)
 
         return self.results
 
@@ -467,7 +592,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             for version in versions:
                 if version.name == self.image_version:
                     return version
-        return None
+
+        self.fail("Error could not find image {0} {1} {2} {3}".format(self.image_publisher,
+                                                                      self.image_offer,
+                                                                      self.image_sku,
+                                                                      self.image_version))
 
     def get_storage_account(self):
         try:
@@ -477,7 +606,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         except Exception, exc:
             self.fail("Error fetching storage account {0} - {1}".format(self.storage_account_name, str(exc)))
 
-    def create_vm(self, params):
+    def create_or_update_vm(self, params):
         try:
             poller = self.compute_client.virtual_machines.create_or_update(self.resource_group, self.name, params)
         except Exception, exc:
@@ -509,7 +638,70 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         pass
 
     def create_default_nic(self):
-        pass
+        '''
+        Create a default Network Interface named <vm name>_NIC01. Requires an existing virtual network
+        with one subnet.
+
+        Checks to see if the NIC already exists. If it does, then use it.
+
+        :return:
+        '''
+
+        network_interface_name = self.name + '_NIC01'
+        nic = None
+
+        self.log("Create default NIC {0}".format(network_interface_name))
+        self.log("Check to see if the NIC already exists")
+        try:
+            nic = self.network_client.network_interfaces.get(self.resource_group, network_interface_name)
+        except CloudError:
+            pass
+
+        if nic:
+            self.log("NIC {0} found.".format(network_interface_name))
+            return nic
+
+        self.log("NIC {0} does not exist.".format(network_interface_name))
+
+        # Find a virtual network
+        no_vnets_msg = "Error: unable to find virtual network in resource group {0}. A virtual network " \
+                       "with at least one subnet must exist in order to create a NIC for the virtual " \
+                       "machine.".format(self.resource_group)
+
+        try:
+            vnets = self.network_client.virtual_networks.list(self.resource_group)
+        except CloudError:
+            self.fail(no_vnets_msg)
+
+        if len(vnets) == 0:
+            self.fail(no_vnets_msg)
+
+        virtual_network_name = vents[0].name
+
+
+        no_subnets_msg = "Error: unable to find subnet in virtual network {0}. A virtual network " \
+                         "with at least one subnet must exist in order to create a NIC for the virtual " \
+                         "machine.".format(virtual_network_name)
+
+        try:
+            subnets = self.network_client.subnets.list(self.resource_group, virtual_network_name)
+        except CloudError:
+            self.fail(no_subnets_msg)
+
+        if len(subnets) == 0:
+            self.fail(no_subnets_msg)
+
+        subnet_name = subnets[0].name
+
+
+
+
+    def create_default_pip(self):
+        '''
+        
+        :return:
+        '''
+
 
 def main():
     # standalone debug setup
