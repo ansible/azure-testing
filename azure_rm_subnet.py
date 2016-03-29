@@ -96,6 +96,8 @@ options:
               virtual network.
         default: null
         required: true
+        aliases:
+            - address_prefix
     state:
         description:
             - Assert the state of the subnet. Use 'present' to create or update a subnet and
@@ -158,7 +160,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             name=dict(required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
             virtual_network_name=dict(type='str', required=True, aliases=['virtual_network']),
-            address_prefix_cidr=dict(type='str'),
+            address_prefix_cidr=dict(type='str', aliases=['address_prefix']),
             log_path=dict(type='str', default='azure_rm_subnet.log')
         )
 

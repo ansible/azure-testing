@@ -313,22 +313,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         # add file path validation
 
-        try:
-            # Get keys from the storage account
-            self.log('Getting keys')
-            keys = dict()
-            account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.storage_account_name)
-            keys['key1'] = account_keys.key1
-            keys['key2'] = account_keys.key2
-        except AzureHttpError, e:
-            self.fail("Error getting keys for account {0}: {1}".format(self.storage_account_name, str(e)))
-
-        try:
-            self.log('Create blob service')
-            self.blob_client = CloudStorageAccount(self.storage_account_name, keys['key1']).create_block_blob_service()
-        except Exception, e:
-            self.fail("Error creating blob service client: {0}".format(str(e)))
-
+        self.blob_client = self.get_blob_client(self.resource_group, self.storage_account_name)
         self.container_obj = self.get_container()
 
         if self.blob is not None:

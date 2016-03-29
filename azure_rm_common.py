@@ -62,6 +62,7 @@ CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){
 AZURE_SUCCESS_STATE = "Succeeded"
 
 AZURE_MIN_VERSION = "1.1.1"
+
 HAS_AZURE = True
 
 try:
@@ -77,8 +78,19 @@ try:
                                                              StorageManagementClientConfiguration
     from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
                                                              ComputeManagementClientConfiguration
+    from azure.storage.cloudstorageaccount import CloudStorageAccount
 except ImportError:
     HAS_AZURE = False
+
+
+def azure_id_to_dict(id):
+    pieces = re.sub(r'^\/', '', id).split('/')
+    result = {}
+    index = 0
+    while index < len(pieces) - 1:
+        result[pieces[index]] = pieces[index + 1]
+        index += 1
+    return result
 
 
 class AzureRMModuleBase(object):
@@ -350,6 +362,24 @@ class AzureRMModuleBase(object):
         if azure_object.provisioning_state != AZURE_SUCCESS_STATE:
             self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
                 azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
+
+    def get_blob_client(self, resource_group_name, storage_account_name):
+        keys = dict()
+        try:
+            # Get keys from the storage account
+            self.log('Getting keys')
+            account_keys = self.storage_client.storage_accounts.list_keys(resource_group_name, storage_account_name)
+            keys['key1'] = account_keys.key1
+            keys['key2'] = account_keys.key2
+        except Exception, exc:
+            self.fail("Error getting keys for account {0} - {1}".format(storage_account_name, str(exc)))
+
+        try:
+            self.log('Create blob service')
+            return CloudStorageAccount(storage_account_name, keys['key1']).create_block_blob_service()
+        except Exception, exc:
+            self.fail("Error creating blob service client for storage account {0} - {1}".format(storage_account_name,
+                                                                                                str(exc)))
 
     @property
     def storage_client(self):

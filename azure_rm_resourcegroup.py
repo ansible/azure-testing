@@ -79,6 +79,10 @@ options:
             - Azure tenant_id used for authentication.
         required: false
         default: null
+    force:
+        description:
+            - When state is present, force the deletion and re-creation of the resource group.
+        default: false
     location:
         description:
             - Azure location for the resource group. Required when creating a new resource group. Cannot
@@ -148,7 +152,8 @@ class AzureRMResourceGroup(AzureRMModuleBase):
             state=dict(type='str', default='present', choices=['present', 'absent']),
             location=dict(type='str'),
             tags=dict(type='dict'),
-            log_path=dict(type='str', default='azure_rm_resourcegroup.log')
+            log_path=dict(type='str', default='azure_rm_resourcegroup.log'),
+            force=dict(type='bool', default=False)
         )
         super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
                                                    supports_check_mode=True,
@@ -158,6 +163,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.state = None
         self.location = None
         self.tags = None
+        self.force = None
 
         self.results = dict(
             changed=False,
@@ -184,6 +190,8 @@ class AzureRMResourceGroup(AzureRMModuleBase):
                 self.debug("CHANGED: resource group {0} exists but requested state is 'absent'".format(self.name))
                 changed = True
             elif self.state == 'present':
+                if self.force:
+                    changed = True
                 if results['tags'] != self.tags:
                     changed = True
                     results['tags'] = self.tags
@@ -204,6 +212,10 @@ class AzureRMResourceGroup(AzureRMModuleBase):
             return self.results
 
         if changed:
+            if self.state == 'present' and self.force:
+                self.delete_resource_group()
+                rg = None
+
             if self.state == 'present':
                 if not rg:
                     self.log("Creating resource group {0}".format(self.name))

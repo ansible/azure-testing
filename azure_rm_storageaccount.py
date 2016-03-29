@@ -103,6 +103,11 @@ options:
         choices:
             - absent
             - present
+    force:
+        description:
+            - Force the deletion of an account when it contains blobs. Force the deletion and recreation of an
+              account when changing the account type.
+        default: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
@@ -232,6 +237,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.account_type = None
         self.custom_domain = None
         self.tags = None
+        self.force = None
 
     def exec_module_impl(self, **kwargs):
 
@@ -279,12 +285,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         return self.results
 
     def check_name_availability(self):
+        self.log('Checking name availability for {0}'.format(self.name))
         try:
             response = self.storage_client.storage_accounts.check_name_availability(self.name)
         except AzureHttpError, e:
             self.log('Error attempting to validate name.')
             self.fail("Error checking name availability: {0}".format(str(e)))
-
         if not response.name_available:
             self.log('Error name not available.')
             self.fail("{0} - {1}".format(response.message, response.reason))
@@ -351,12 +357,20 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         if self.account_type:
             if self.account_type != self.account_dict['account_type']:
                 # change the account type
+
+                if self.force:
+                    self.log("Force option is true. Attempt to delete the account.")
+                    self.delete_account()
+                    self.create_account()
+                    return True
+
                 if self.account_dict['account_type'] in [AccountType.premium_lrs, AccountType.standard_zrs]:
                     self.fail("Storage accounts of type {0} and {1} cannot be changed.".format(
                         AccountType.premium_lrs, AccountType.standard_zrs))
                 if self.account_type in [AccountType.premium_lrs, AccountType.standard_zrs]:
                     self.fail("Storage account of type {0} cannot be changed to a type of {1} or {2}.".format(
                         self.account_dict['account_type'], AccountType.premium_lrs, AccountType.standard_zrs))
+
                 self.results['changed'] = True
                 self.account_dict['account_type'] = self.account_type
 
@@ -426,10 +440,10 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             if self.tags:
                 account_dict['tags'] = self.tags
             return account_dict
-
+        parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
+                                                    tags=self.tags)
+        self.log(str(parameters))
         try:
-            parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
-                                                        tags=self.tags)
             poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
         except AzureHttpError, e:
             self.log('Error creating storage account.')
@@ -440,10 +454,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         return self.get_account()
 
     def delete_account(self):
-        if self.account_dict['provisioning_state'] != ProvisioningState.succeeded.value:
-            self.fail("Account provisioning has not completed. State is: {0}".format(
-                self.account_dict['provisioning_state']))
-
         if self.account_dict['provisioning_state'] == ProvisioningState.succeeded.value and \
            self.account_has_blob_containers() and not self.force:
             self.fail("Account contains blob containers. Is it in use? Use the force option to attempt deletion.")

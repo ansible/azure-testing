@@ -176,6 +176,7 @@ def pip_to_dict(pip):
         result['dns_settings']['reverse_fqdn'] = pip.dns_settings.reverse_fqdn
     return result
 
+
 class AzureRMPublicIPAddress(AzureRMModuleBase):
 
     def __init__(self, **kwargs):

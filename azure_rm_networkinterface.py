@@ -264,16 +264,6 @@ def nic_to_dict(nic):
     return result
 
 
-def azure_id_to_dict(id):
-    pieces = re.sub(r'^\/', '', id).split('/')
-    result = {}
-    index = 0
-    while index < len(pieces) - 1:
-        result[pieces[index]] = pieces[index + 1]
-        index += 1
-    return result
-
-
 class AzureRMNetworkInterface(AzureRMModuleBase):
 
     def __init__(self, **kwargs):

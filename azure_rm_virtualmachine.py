@@ -24,6 +24,58 @@ DOCUMENTATION = '''
 module: azure_rm_virtualmachine
 '''
 
+RETURNS = '''
+{
+    "changed": true,
+    "check_mode": false,
+    "results": {
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm002",
+        "location": "eastus",
+        "name": "testvm002",
+        "properties": {
+            "hardwareProfile": {
+                "vmSize": "Standard_D1"
+            },
+            "networkProfile": {
+                "networkInterfaces": [
+                    {
+                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm001"
+                    }
+                ]
+            },
+            "osProfile": {
+                "adminUsername": "chouseknecht",
+                "computerName": "testvm",
+                "linuxConfiguration": {
+                    "disablePasswordAuthentication": false
+                },
+                "secrets": []
+            },
+            "provisioningState": "Succeeded",
+            "storageProfile": {
+                "dataDisks": [],
+                "imageReference": {
+                    "offer": "CentOS",
+                    "publisher": "OpenLogic",
+                    "sku": "7.1",
+                    "version": "7.1.20160308"
+                },
+                "osDisk": {
+                    "caching": "ReadOnly",
+                    "createOption": "fromImage",
+                    "name": "testvm001.vsd",
+                    "osType": "Linux",
+                    "vhd": {
+                        "uri": "https://testaccount001.blob.core.windows.net/testvm001/testvm001.vsd.vhd"
+                    }
+                }
+            }
+        },
+        "type": "Microsoft.Compute/virtualMachines"
+    }
+}
+
+'''
 
 
 import re
@@ -33,334 +85,431 @@ import sys
 # without playing games with __metaclass__ or runtime base type hackery.
 # TODO: figure out a better way...
 from ansible.module_utils.basic import *
-
-# Assumes running ansible from source and there is a copy or symlink for azure_rm_common
-# found in local lib/ansible/module_utils
 from ansible.module_utils.azure_rm_common import *
 
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile,\
+        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile
+    from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
+        VirtualMachineSizeTypes
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
-from azure.common import AzureMissingResourceHttpError
-from azure.mgmt.common import SubscriptionCloudCredentials
-from azure.storage.blob import BlobService
-import azure.mgmt.compute
+
+AZURE_OBJECT_CLASS = 'VirtualMachine'
+
+
+def extract_names_from_blob_uri(self, blob_uri):
+    # HACK: ditch this once python SDK supports get by URI
+    m = re.match('^https://(?P<accountname>[^\.]+)\.blob\.core\.windows\.net/(?P<containername>[^/]+)/(?P<blobname>.+)$', blob_uri)
+    if not m:
+        raise Exception("unable to parse blob uri '%s'" % blob_uri)
+    extracted_names = m.groupdict()
+    return extracted_names
 
 
 class AzureRMVirtualMachine(AzureRMModuleBase):   
-    def __init__(self, **kwargs):
-        module_arg_spec = dict(
-            # TODO: configure arg validation
-            resource_group=dict(required=True),
-            name=dict(required=True),
-            state=dict(choices=['present','absent'], type='str'),
-            location=dict(required=True),
-            short_hostname=dict(),
-            vm_size=dict(),
-            admin_username=dict(),
-            admin_password=dict(),
-            image_publisher=dict(),
-            image_offer=dict(),
-            image_sku=dict(),
-            image_version=dict(),
-            os_disk_storage_account_name=dict(),
-            os_disk_storage_container_name=dict(),
-            os_disk_storage_blob_name=dict(),
-            os_type=dict(),
-            nic_ids=dict(type='list'),
-            delete_nics=dict(type='bool'),
-            delete_vhds=dict(type='bool'),
-            delete_public_ips=dict(type='bool'),
 
-            # TODO: implement tags
-            # TODO: implement object security
+    def __init__(self, **kwargs):
+
+        self.module_arg_spec = dict(
+            resource_group=dict(type='str', required=True),
+            name=dict(type='str', required=True),
+            state=dict(choices=['stopped','started', 'absent'], default='started', type='str'),
+            location=dict(type='str'),
+            short_hostname=dict(type='str'),
+            vm_size=dict(type='str', choices=[], default='Standard_D1'),
+            force=dict(type='bool', default=False),
+            admin_username=dict(type='str'),
+            admin_password=dict(type='str', ),
+            ssh_password=dict(type='bool', default=True),
+            ssh_public_key=dict(type='str'),
+            image_publisher=dict(type='str'),
+            image_offer=dict(type='str'),
+            image_sku=dict(type='str'),
+            image_version=dict(type='str', default='latest'),
+            storage_account_name=dict(type='str', aliases=['storage_account']),
+            storage_container_name=dict(type='str', aliases=['storage_container'], default='vhds'),
+            storage_blob_name=dict(type='str', aliases=['storage_blob']),
+            os_disk_caching=dict(type='str', aliases=['disk_caching'], choices=['ReadOnly', 'ReadWrite'],
+                                 default='ReadOnly'),
+            os_type=dict(type='str', choices=['linux', 'windows'], default='linux'),
+            network_interface_names=dict(type='list', aliases=['network_interfaces']),
+            delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
+            delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhds']),
+            delete_public_ips=dict(type='bool', default=False),
+            tags=dict(type='dict'),
+            log_path=dict(type='str', default='azure_rm_virtualmachine.log'),
         )
 
-        AzureRMModuleBase.__init__(self, derived_arg_spec=module_arg_spec, supports_check_mode=True, **kwargs)
+        required_if = [
+            ('state', 'started', ['image_publisher', 'image_offer', 'image_sku',
+                                  'image_version', 'storage_account_name',
+                                  'storage_container_name', 'storage_blob_name',
+                                  'network_interface_names', 'network_interface_names',
+                                  'admin_username']
+             ),
+        ]
 
-    
+        for key in VirtualMachineSizeTypes:
+            self.module_arg_spec['vm_size']['choices'].append(getattr(key, 'value'))
 
-    def _extract_names_from_uri_id(self, uri_id):
-        self.debug("extracting names from resource id uri '%s'" % uri_id)
-        # HACK: ditch this once python SDK supports get by URI
-        m = re.match('^/subscriptions/[\da-fA-F\-]+/resourceGroups/(?P<rg_name>[^/]+)/providers/[^/]+/[^/]+/(?P<name>[^/]+)', uri_id)
-        if not m:
-            raise Exception("unable to parse uri_id '%s'" % uri_id)
+        super(AzureRMVirtualMachine, self).__init__(derived_arg_spec=self.module_arg_spec,
+                                                    required_if=required_if,
+                                                    supports_check_mode=True,
+                                                    **kwargs)
 
-        extracted_names = m.groupdict()
+        self.resource_group = None
+        self.name = None
+        self.state = None
+        self.location = None
+        self.short_hostname = None
+        self.vm_size = None
+        self.admin_username = None
+        self.admin_password = None
+        self.ssh_password = None
+        self.ssh_public_key = None
+        self.image_publisher = None
+        self.image_offer = None
+        self.image_sku = None
+        self.image_version = None
+        self.storage_account_name = None
+        self.storage_container_name = None
+        self.storage_blob_name = None
+        self.os_type = None
+        self.os_disk_caching = None
+        self.network_interface_names = None
+        self.delete_network_interfaces = None
+        self.delete_virtual_storage = None
+        self.delete_public_ips = None
+        self.tags = None
+        self.force = None
 
-        self.debug("extracted names: %s" % str(extracted_names))
+        self.results = dict(
+            changed=False,
+            check_mode=self.check_mode,
+            results={}
+        )
 
-        return extracted_names
+    def exec_module_impl(self, **kwargs):
 
+        for key in self.module_arg_spec:
+            setattr(self, key, kwargs[key])
 
-    def _extract_names_from_blob_uri(self, blob_uri):
-        self.debug("extracting blob info from uri '%s'" % blob_uri)
-        # HACK: ditch this once python SDK supports get by URI
-        m = re.match('^https://(?P<accountname>[^\.]+)\.blob\.core\.windows\.net/(?P<containername>[^/]+)/(?P<blobname>.+)$', blob_uri)
-        if not m:
-            raise Exception("unable to parse blob uri '%s'" % blob_uri)
+        changed = False
+        results = dict()
+        vm = None
+        network_interfaces = []
 
-        extracted_names = m.groupdict()
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
 
-        self.debug("extracted names: %s" % str(extracted_names))
+        if self.state == 'started':
+            # Verify parameters and resolve any defaults
+            self.vm_size_is_valid()
 
-        return extracted_names
+            for name in self.network_interface_names:
+                nic = self.get_network_interface(name)
+                network_interfaces.append(NetworkInterfaceReference(id=nic.id))
 
-    # HACK: since the storage client won't take a URI, we have to list all in the subscription,
-    # reverse the name from the blob uri and find it in the list, then reverse the resource group
-    # from the id so we can get the keys. Yuck!
-    def _get_info_from_blob_uri(self, blob_uri):
-        self.debug("getting info from blob uri '%s'" % blob_uri)
-        blob_parts = self._extract_names_from_blob_uri(blob_uri)
-        storage_account_name = blob_parts['accountname']
-        container_name = blob_parts['containername']
-        blob_name = blob_parts['blobname']
+            if not self.storage_blob_name:
+                self.storage_blob_name = self.name + '.vsd'
 
-        self.debug("finding storage account named '%s'" % storage_account_name)
-        list_resp = self.storage_client.storage_accounts.list().storage_accounts
-        rg_names = [self._extract_names_from_uri_id(sa.id)['rg_name'] for sa in list_resp if sa.name == storage_account_name]
+            image_version = self.get_image_version()
+            if not image_version:
+                self.fail("Error could not find image {0} {1} {2} {3}".format(self.image_publisher,
+                                                                              self.image_offer,
+                                                                              self.image_sku,
+                                                                              self.image_version))
+            if self.image_version == 'latest':
+                self.image_version = image_version.name
+                self.log("Using image version {0}".format(self.image_version))
 
-        if len(rg_names) != 1:
-            raise Exception("couldn't find storage account in subscription for blob uri '%s'" % blob_uri)
-
-        BlobInfo = namedtuple('BlobInfo', ['resource_group_name', 'storage_account_name', 'container_name', 'blob_name'])
-
-        blob_info = BlobInfo(resource_group_name=rg_names[0], storage_account_name=storage_account_name, container_name=container_name, blob_name=blob_name)
-
-        self.debug('blob info: %s' % str(blob_info))
-
-        return blob_info
-
-    def _delete_blob(self, blob_uri):
-        self.debug("deleting blob '%s'" % blob_uri)
-        blobinfo = self._get_info_from_blob_uri(blob_uri)
-
-        self.debug("finding storage account keys for account '%s'" % blobinfo.storage_account_name)
-        keys = self.storage_client.storage_accounts.list_keys(blobinfo.resource_group_name, blobinfo.storage_account_name)
-
-        bs = BlobService(account_name=blobinfo.storage_account_name, account_key=keys.storage_account_keys.key1)
-
-        # TODO: check lease status, break if necessary
-
-        self.debug("deleting blob {0} from container {1} in storage account {2}".format(blobinfo.blob_name, blobinfo.container_name, blobinfo.storage_account_name))
-        res = bs.delete_blob(container_name=blobinfo.container_name, blob_name=blobinfo.blob_name)
-        self.debug("delete successful")
-
-    def _delete_nic(self, nic_uri):
-        self.debug("deleting nic '%s'" % nic_uri)
-        nicinfo = self._extract_names_from_uri_id(nic_uri)
-        del_resp = self.network_client.network_interfaces.delete(nicinfo['rg_name'], nicinfo['name'])
-
-        if del_resp.error:
-            raise Exception("error deleting nic '{0}': {1}".format(nic_uri, del_resp.error.message))
-
-        self.debug('delete successful')
-
-    def _delete_public_ip(self, public_ip_uri):
-        # TODO: this is failing...
-        self.debug("deleting public ip '%s'" % public_ip_uri)
-        pipinfo = self._extract_names_from_uri_id(public_ip_uri)
-        del_resp = self.network_client.public_ip_addresses.delete(pipinfo['rg_name'], pipinfo['name'])
-
-        if del_resp.error:
-            raise Exception("error deleting public ip'{0}': {1}".format(public_ip_uri, del_resp.error.message))
-
-        self.debug('delete successful')
-
-    def exec_module_impl(self,
-                    resource_group,
-                    name,
-                    state,
-                    location,
-                    short_hostname=None,
-                    vm_size=None,
-                    admin_username=None,
-                    admin_password=None,
-                    image_publisher=None,
-                    image_offer=None,
-                    image_sku=None,
-                    image_version=None,
-                    os_disk_storage_account_name=None,
-                    os_disk_storage_container_name='vhds',
-                    os_disk_storage_blob_name=None,
-                    os_type=None,
-                    nic_ids=[],
-                    delete_nics=True,
-                    delete_vhds=True,
-                    delete_public_ips=True,
-                    **kwargs):
-
-        result = dict(changed=False)
-        vm_exists = False
+            self.get_storage_account()
 
         try:
-            self.debug('fetching vm...')
-            vm_resp = self.compute_client.virtual_machines.get(resource_group, name)
-            # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
-            # TODO: attempt to delete/rebuild provisioning state 'Failed'?
-            vm_exists = True
-            self.debug('vm exists...')
-            vm = vm_resp.virtual_machine
+            self.log("Fetching virtual machine {0}".format(self.name))
+            vm = self.compute_client.virtual_machines.get(self.resource_group, self.name)
+            self.check_provisioning_state(vm)
 
-            if state == 'present':
-                self.debug('validating vm attributes against args...')
+            self.log('Virtual machine {0} exists'.format(self.name))
+            vm_dict = self.serialize_obj(vm, AZURE_OBJECT_CLASS)
+            self.log(vm_dict, pretty_print=True)
+
+            if self.state == 'started' and self.force:
+                self.log('CHANGED: virtual machine {0} exists and forced option set.'.format(self.name))
+                changed = True
+            elif self.state == 'started':
+                self.log('validating vm attributes against args...')
                 # TODO: validate attributes (name, tags, what else?)
+            elif self.state == 'stopped':
+                pass
+            elif self.state == 'absent':
+                self.log("CHANGED: virtual machine {0} exists and requested state is 'absent'".format(self.name))
+                changed = True # we should hit the exception handler below if the vm doesn't exist, so we know it does
+        except CloudError:
+            self.log('Virtual machine {0} does not exist'.format(self.name))
+            if self.state == 'started':
+                self.log("CHANGED: virtual machine does not exist but state is 'present'".format(self.name))
+                changed = True
 
-            elif state == 'absent':
-                # TODO: plug vm_exists checks here for "needs deletion" or non-standard error
-                self.debug("CHANGED: vhd exists and requested state is 'absent'")
-                result['changed'] = True # we should hit the exception handler below if the vm doesn't exist, so we know it does
+        self.results['changed'] = changed
+        self.results['results'] = results
 
-                if delete_vhds:
-                    # store the attached vhd info so we can nuke it after the VM is gone
-                    self.debug('storing vhd uris for later deletion...')
-                    vhd_uris = [vm.storage_profile.os_disk.virtual_hard_disk.uri]
-                    self.debug("vhd uris to delete are '%s'" % vhd_uris)
-                    result['deleted_vhd_uris'] = vhd_uris
-                    # TODO: add support for deleting data disk vhds
+        if self.check_mode:
+            return self.results
 
-                if delete_nics:
-                    # store the attached nic info so we can nuke them after the VM is gone
-                    self.debug('storing nic uris for later deletion...')
-                    nic_uris = [n.reference_uri for n in vm.network_profile.network_interfaces]
-                    if delete_public_ips:
-                        # also store each nic's attached public IPs and delete after the NIC is gone
-                        public_ip_uris = []
-                        for nic_uri in nic_uris:
-                            nic_info = self._extract_names_from_uri_id(nic_uri)
-                            nic = self.network_client.network_interfaces.get(nic_info['rg_name'], nic_info['name']).network_interface
-                            public_ip_uris.extend([ipc.public_ip_address for ipc in nic.ip_configurations if ipc.public_ip_address])
-                    self.debug('nic uris to delete are %s' % nic_uris)
-                    result['deleted_nic_uris'] = nic_uris
-                    self.debug('public ips to delete are %s' % public_ip_uris)
-                    result['deleted_public_ips'] = public_ip_uris
+        if changed:
+            if self.state == 'started' and self.force:
+                # Remove existing VM
+                self.delete_vm()
+                vm = None
 
-                if self._module.check_mode:
-                    return result
+            if self.state == 'started':
+                if not vm:
+                    # Create the VM
+                    self.log("Create virtual machine {0}".format(self.name))
 
-                del_resp = self.compute_client.virtual_machines.delete(resource_group, name)
-                if del_resp.status != 'Succeeded':
-                    raise Exception("Delete failed with status '%s'" % del_resp.status)
+                    # TODO: add this back in once we're ready to create a default nic
+                    # # ensure nic/pip exist
+                    # try:
+                    #     log('fetching nic...')
+                    #     nic_resp = network_client.network_interfaces.get(resource_group, network.get('virtual_nic_name'))
+                    #     nic_id = nic_resp.network_interface.id
+                    # except AzureMissingResourceHttpError:
+                    #     log('nic does not exist...')
+                    #     # TODO: create nic
+                    #     raise Exception('nic does not exist')
 
-                # TODO: parallelize nic, vhd, and public ip deletions with begin_deleting
-                # TODO: best-effort to keep deleting other linked resources if we encounter an error
-                if delete_vhds:
-                    self.debug('deleting vhds...')
-                    for blob_uri in vhd_uris:
-                        self._delete_blob(blob_uri)
-                    self.debug('done deleting vhds...')
+                    vhd = VirtualHardDisk(uri='https://{0}.blob.core.windows.net/{1}/{2}.vhd'.format(
+                        self.storage_account_name,
+                        self.storage_container_name,
+                        self.storage_blob_name,
+                    ))
 
-                if delete_nics:
-                    self.debug('deleting nics...')
-                    for nic_uri in nic_uris:
-                        self._delete_nic(nic_uri)
-                    self.debug('done deleting nics...')
+                    # vm_size = None
+                    # for key in VirtualMachineSizeTypes:
+                    #     if key.value == self.vm_size:
+                    #         vm_size = key
 
-                if delete_public_ips:
-                    self.debug('deleting public ips...')
-                    for public_ip_uri in public_ip_uris:
-                        self._delete_public_ip(public_ip_uri)
-                    self.debug('deleting public ips...')
-
-                return result
-
-        except AzureMissingResourceHttpError:
-            self.debug('vm does not exist')
-            if state == 'present':
-                result['changed'] = True
-
-        if state == 'present':
-            if not vm_exists:
-            # TODO: add this back in once we're ready to create a default nic
-            # # ensure nic/pip exist
-            # try:
-            #     log('fetching nic...')
-            #     nic_resp = network_client.network_interfaces.get(resource_group, network.get('virtual_nic_name'))
-            #     nic_id = nic_resp.network_interface.id
-            # except AzureMissingResourceHttpError:
-            #     log('nic does not exist...')
-            #     # TODO: create nic
-            #     raise Exception('nic does not exist')
-
-                if not isinstance(nic_ids, list):
-                    nic_ids = [ nic_ids ]
-
-                network_interfaces = [azure.mgmt.compute.NetworkInterfaceReference(reference_uri=x) for x in nic_ids]
-
-                if not os_disk_storage_blob_name:
-                    os_disk_storage_blob_name = name + '.vhd'
-
-                vm_resource = azure.mgmt.compute.VirtualMachine(
-                    location=location,
-                    name=name,
-                    os_profile=azure.mgmt.compute.OSProfile(
-                        admin_username=admin_username,
-                        admin_password=admin_password,
-                        computer_name=short_hostname,
-                    ),
-                    hardware_profile=azure.mgmt.compute.HardwareProfile(
-                        virtual_machine_size=vm_size
-                    ),
-                    storage_profile=azure.mgmt.compute.StorageProfile(
-                        os_disk=azure.mgmt.compute.OSDisk(
-                            # TODO: as arg
-                            caching=azure.mgmt.compute.CachingTypes.read_only,
-                            # TODO: support attach/empty
-                            create_option=azure.mgmt.compute.DiskCreateOptionTypes.from_image,
-                            name=os_disk_storage_blob_name,
-                            virtual_hard_disk=azure.mgmt.compute.VirtualHardDisk(
-                                uri='https://{0}.blob.core.windows.net/{1}/{2}.vhd'.format(
-                                    os_disk_storage_account_name,
-                                    os_disk_storage_container_name or 'vhds',
-                                    os_disk_storage_blob_name,
-                                ),
+                    vm_resource = VirtualMachine(
+                        location=self.location,
+                        name=self.name,
+                        tags=self.tags,
+                        os_profile=OSProfile(
+                            admin_username=self.admin_username,
+                            admin_password=self.admin_password,
+                            computer_name=self.short_hostname,
+                        ),
+                        hardware_profile=HardwareProfile(
+                            vm_size=self.vm_size
+                        ),
+                        storage_profile=StorageProfile(
+                            os_disk=OSDisk(
+                                self.storage_blob_name,
+                                vhd,
+                                DiskCreateOptionTypes.from_image,
+                                caching=self.os_disk_caching,
+                            ),
+                            image_reference=ImageReference(
+                                publisher=self.image_publisher,
+                                offer=self.image_offer,
+                                sku=self.image_sku,
+                                version=self.image_version,
                             ),
                         ),
-                        image_reference = azure.mgmt.compute.ImageReference(
-                            publisher=image_publisher,
-                            offer=image_offer,
-                            sku=image_sku,
-                            version=image_version,
+                        network_profile=NetworkProfile(
+                            network_interfaces=network_interfaces
                         ),
-                    ),
-                    network_profile = azure.mgmt.compute.NetworkProfile(
-                        network_interfaces=network_interfaces
-                    ),
-                )
-                self.debug('creating vm...')
-                vm_resp = self.compute_client.virtual_machines.create_or_update(resource_group, vm_resource)
+                    )
+                    self.log("Creating virtual machine with parameters:")
+                    vm_dict = self.serialize_obj(vm_resource, 'VirtualMachine')
+                    self.log(vm_dict, pretty_print=True)
+                    self.results['results'] = self.create_vm(vm_resource)
 
-                # TODO: improve error-handling
-                if vm_resp.error:
-                    raise Exception('provisioning failed: %s' % vm_resp.error.message)
+                    #
+                    # # TODO: reuse this code section for check mode
+                    #
+                    # for nic_ref in vm.network_profile.network_interfaces:
+                    #     nic_values = self._extract_names_from_uri_id(nic_ref.reference_uri)
+                    #     nic_resp = self.network_client.network_interfaces.get(nic_values.get('rg_name'), nic_values.get('name'))
+                    #     nic = nic_resp.network_interface
+                    #     is_primary = nic.primary
+                    #     # TODO: can there be more than one?
+                    #
+                    #     if is_primary:
+                    #         ip_cfg = nic.ip_configurations[0]
+                    #         result['primary_private_ip'] = ip_cfg.private_ip_address
+                    #         public_ip_ref = ip_cfg.public_ip_address
+                    #         if public_ip_ref: # look up the public ip object to get the address
+                    #             pip_values = self._extract_names_from_uri_id(public_ip_ref.id)
+                    #             pip_resp = self.network_client.public_ip_addresses.get(pip_values.get('rg_name'), pip_values.get('name'))
+                    #             result['primary_public_ip'] = pip_resp.public_ip_address.ip_address
 
-                # TODO: check vm_resp for success or long-running response (that we need to poll on)
-                # TODO: use begin_create_or_update so our async pattern is clean
+        return self.results
 
-                self.debug('fetching vm post-create...')
-                vm_resp = self.compute_client.virtual_machines.get(resource_group, name)
-                vm = vm_resp.virtual_machine
+    def delete_vm(self):
+        vhd_uris = []
+        nic_names = []
+        pip_names = []
 
+        if self.delete_virtual_storage:
+            # store the attached vhd info so we can nuke it after the VM is gone
+            self.log('Storing VHD URI for deletion')
+            vhd_uris.append(vm.storage_profile.os_disk.virtual_hard_disk.uri)
+            self.log("VHD URIs to delete: {0}".format(', '.join(vhd_uris)))
+            self.results['deleted_vhd_uris'] = vhd_uris
 
-            # TODO: reuse this code section for check mode
+            # TODO: add support for deleting data disk vhds
 
-            for nic_ref in vm.network_profile.network_interfaces:
-                nic_values = self._extract_names_from_uri_id(nic_ref.reference_uri)
-                nic_resp = self.network_client.network_interfaces.get(nic_values.get('rg_name'), nic_values.get('name'))
-                nic = nic_resp.network_interface
-                is_primary = nic.primary
-                # TODO: can there be more than one?
+        if self.delete_network_interfaces:
+            # store the attached nic info so we can nuke them after the VM is gone
+            self.log('Storing NIC names for deletion.')
+            for interface_id in vm.network_profile.network_interfaces:
+                id_dict = azure_id_to_dict(interface_id)
+                nic_names.append(id_dict['networkInterfaces'])
+            self.log('NIC names to delete {0}'.format(', '.join(nic_names)))
+            self.results['deleted_network_interfaces'] = nic_names
+            if self.delete_public_ips:
+                # also store each nic's attached public IPs and delete after the NIC is gone
+                for name in nic_names:
+                    nic = self.get_network_interface(name)
+                    for ipc in nic.ip_configurations:
+                        if ipc.public_ip_address:
+                            pip_dict = azure_id_to_dict(ipc.public_ip_address.id)
+                            pip_names.append(pip_dict['publicIPAddresses'])
+                self.log('Public IPs to  delete are {0}'.format(', '.join(pip_names)))
+                self.results['deleted_public_ips'] = pip_names
 
-                if is_primary:
-                    ip_cfg = nic.ip_configurations[0]
-                    result['primary_private_ip'] = ip_cfg.private_ip_address
-                    public_ip_ref = ip_cfg.public_ip_address
-                    if public_ip_ref: # look up the public ip object to get the address
-                        pip_values = self._extract_names_from_uri_id(public_ip_ref.id)
-                        pip_resp = self.network_client.public_ip_addresses.get(pip_values.get('rg_name'), pip_values.get('name'))
-                        result['primary_public_ip'] = pip_resp.public_ip_address.ip_address
+        try:
+            self.compute_client.virtual_machines.delete(self.resource_group, self.name)
+        except Exception, exc:
+            self.fail("Error deleting virtual machine {0} - {1}".format(self.name, str(exc)))
 
-        return result
+        # TODO: parallelize nic, vhd, and public ip deletions with begin_deleting
+        # TODO: best-effort to keep deleting other linked resources if we encounter an error
+        if self.delete_virtual_storage:
+            self.log('Deleting virtual storage')
+            self.delete_virtual_storage(vhd_uris)
 
+        if self.delete_network_interfaces:
+            self.log('Deleting network interfaces')
+            for name in nic_names:
+                self.delete_nic(name)
+
+        if self.delete_public_ips:
+            self.log('Deleting public IPs')
+            for name in pip_names:
+                self.delete_pip(name)
+        return True
+
+    def get_network_interface(self, name):
+        try:
+            nic = self.network_client.network_interfaces.get(self.resource_group, name)
+            return nic
+        except Exception, exc:
+            self.fail("Error fetching network interface {0} - {1}".format(name, str(exc)))
+
+    def delete_nic(self, name):
+        self.log("Deleting network interface {0}".format(name))
+        try:
+            poller = self.network_client.network_interfaces.delete(self.resource_group, name)
+        except Exception, exc:
+            self.fail("Error deleting network interface {0} - {1}".format(name, str(exc)))
+        self.get_poller_result(poller)
+        # Delete doesn't return anything. If we get this far, assume success
+        return True
+
+    def delete_pip(self, name):
+        try:
+            poller = self.network_client.public_ip_addresses.delete(self.resource_group, name)
+        except Exception, exc:
+            self.fail("Error deleting {0} - {1}".format(name, str(exc)))
+        self.get_poller_result(poller)
+        # Delete returns nada. If we get here, assume that all is well.
+        return True
+
+    def delete_virtual_storage(self, vhd_uris):
+        for uri in vhd_uris:
+            self.log("Extracting info from blob uri '{0}'".format(uri))
+            blob_parts = extract_names_from_blob_uri(uri)
+            storage_account_name = blob_parts['accountname']
+            container_name = blob_parts['containername']
+            blob_name = blob_parts['blobname']
+
+            blob_client = self.get_blob_client(self.resource_group, storage_account_name)
+
+            self.log("Delete blob {0}:{1}".format(container_name, blob_name))
+            try:
+                blob_client.delete_blob(container_name, blob_name)
+            except Exception, exc:
+                self.fail("Error deleting blob {0}:{1} - {2}".format(container_name, blob_name, str(exc)))
+
+    def get_image_version(self):
+        try:
+            versions = self.compute_client.virtual_machine_images.list(self.location,
+                                                                       self.image_publisher,
+                                                                       self.image_offer,
+                                                                       self.image_sku)
+        except Exception, exc:
+            self.fail("Error fetching image {0} {1} {2} - {4}".format(self.image_publisher,
+                                                                      self.image_offer,
+                                                                      self.image_sku,
+                                                                      str(exc)))
+        if versions and len(versions) > 0:
+            if self.image_version == 'latest':
+                return versions[len(versions) - 1]
+            for version in versions:
+                if version.name == self.image_version:
+                    return version
+        return None
+
+    def get_storage_account(self):
+        try:
+            account = self.storage_client.storage_accounts.get_properties(self.resource_group,
+                                                                          self.storage_account_name)
+            return account
+        except Exception, exc:
+            self.fail("Error fetching storage account {0} - {1}".format(self.storage_account_name, str(exc)))
+
+    def create_vm(self, params):
+        try:
+            poller = self.compute_client.virtual_machines.create_or_update(self.resource_group, self.name, params)
+        except Exception, exc:
+            self.fail("Error creating or updating virtual machine {0} - {1}".format(self.name, str(exc)))
+        vm = self.get_poller_result(poller)
+        return self.serialize_obj(vm, AZURE_OBJECT_CLASS)
+
+    def vm_size_is_valid(self):
+        '''
+        Validate self.vm_size against the list of virtual machine sizes available for the account and location.
+        :return: list of available sizes
+        '''
+        try:
+            sizes = self.compute_client.virtual_machine_sizes.list(self.location)
+        except Exception, exc:
+            self.fail("Error retrieving available machine sizes - {0}".format(str(exc)))
+        for size in sizes:
+            if size.name == self.vm_size:
+                return True
+        return False
+
+    def create_default_storage_account(self):
+        pass
+
+    def create_default_virtual_network(self):
+        pass
+
+    def create_default_subnet(self):
+        pass
+
+    def create_default_nic(self):
+        pass
 
 def main():
     # standalone debug setup

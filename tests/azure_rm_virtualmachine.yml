@@ -1,0 +1,82 @@
+- name: Test azure_rm_virtualmachine
+  hosts: all
+  connection: local
+  vars:
+      resource_group: Testing
+      playbook_debug: yes
+  tasks:
+
+      - name: Create resource group
+        azure_rm_resourcegroup:
+            name: Testing
+            location: eastus
+            force: yes
+
+      - name: Create storage account
+        azure_rm_storageaccount:
+            resource_group: "{{ resource_group }}"
+            name: testaccount001 
+            account_type: Standard_LRS 
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+            force: yes
+
+      - name: Create virtual network
+        azure_rm_virtualnetwork:
+            resource_group: "{{ resource_group }}"
+            name: testvm001
+            address_prefixes: "10.10.0.0/16"
+
+      - name: Add subnet
+        azure_rm_subnet:
+            resource_group: "{{ resource_group }}"
+            name: testvm001
+            address_prefix: "10.10.0.0/24"
+            virtual_network: testvm001
+
+      - name: Create public ip
+        azure_rm_publicipaddress:
+            resource_group: "{{ resource_group }}"
+            allocation_method: Static
+            name: testvm001
+
+      - name: Create security group
+        azure_rm_securitygroup:
+            resource_group: "{{ resource_group }}"
+            name: testvm001
+
+      - name: Create NIC
+        azure_rm_networkinterface:
+            resource_group: "{{ resource_group }}"
+            name: testvm001
+            virtual_network: testvm001
+            subnet: testvm001
+            public_ip: testvm001 
+            security_group: testvm001
+            
+      - name: Create virtual machine
+        azure_rm_virtualmachine:
+            resource_group: "{{ resource_group }}"
+            name: testvm002
+            vm_size: Standard_D1
+            storage_account: testaccount001 
+            storage_container: testvm001
+            storage_blob: testvm001.vsd 
+            admin_username: chouseknecht
+            admin_password: Password123!
+            short_hostname: testvm
+            os_type: linux
+            network_interfaces: testvm001
+            image_offer: CentOS
+            image_publisher: OpenLogic
+            image_sku: 7.1
+            image_version: latest
+            force: yes
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+
+     
