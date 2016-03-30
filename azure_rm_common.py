@@ -28,14 +28,14 @@ import sys
 
 from logging import Handler, NOTSET
 from os.path import expanduser
-
+from enum import Enum
 
 AZURE_COMMON_ARGS = dict(
     profile=dict(type='str'),
-    subscription_id=dict(type='str'),
-    client_id=dict(type='str'),
-    secret=dict(type='str'),
-    tenant=dict(type='str'),
+    subscription_id=dict(type='str', no_log=True),
+    client_id=dict(type='str', no_log=True),
+    secret=dict(type='str', no_log=True),
+    tenant=dict(type='str', no_log=True),
     log_path=dict(type='str'),
     log_mode=dict(type='str', choices=['stderr', 'file', 'syslog'], default='syslog'),
     filter_logger=dict(type='bool', default=True),
@@ -60,6 +60,7 @@ CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){
                           "[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))")
 
 AZURE_SUCCESS_STATE = "Succeeded"
+AZURE_FAILED_STATE = "Failed"
 
 AZURE_MIN_VERSION = "1.1.1"
 
@@ -337,7 +338,7 @@ class AzureRMModuleBase(object):
             self.log(str(exc))
             self.fail("Error: {0}".format(str(exc)))
 
-    def check_provisioning_state(self, azure_object):
+    def check_provisioning_state(self, azure_object, requested_state='present'):
         '''
         Check an Azure object's provisioning state. If something did not complete the provisioning
         process, then we cannot operate on it.
@@ -350,18 +351,27 @@ class AzureRMModuleBase(object):
         if hasattr(azure_object, 'properties') and hasattr(azure_object.properties, 'provisioning_state') and \
            hasattr(azure_object, 'name'):
             # resource group object fits this model
-            if azure_object.properties.provisioning_state != AZURE_SUCCESS_STATE:
-                self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
-                          azure_object.name, azure_object.properties.provisioning_state, AZURE_SUCCESS_STATE))
-            else:
+            if isinstance(azure_object.properties.provisioning_state, Enum):
+                if azure_object.properties.provisioning_state.value != AZURE_SUCCESS_STATE and \
+                   requested_state != 'absent':
+                    self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                              azure_object.name, azure_object.properties.provisioning_state, AZURE_SUCCESS_STATE))
                 return
-
-        if not hasattr(azure_object, 'provisioning_state') or not hasattr(azure_object, 'name'):
+            if azure_object.properties.provisioning_state != AZURE_SUCCESS_STATE and \
+               requested_state != 'absent':
+                self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                    azure_object.name, azure_object.properties.provisioning_state, AZURE_SUCCESS_STATE))
             return
 
-        if azure_object.provisioning_state != AZURE_SUCCESS_STATE:
-            self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
-                azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
+        if hasattr(azure_object, 'provisioning_state') or not hasattr(azure_object, 'name'):
+            if isinstance(azure_object.provisioning_state, Enum):
+                if azure_object.provisioning_state.value != AZURE_SUCCESS_STATE and requested_state != 'absent':
+                    self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                        azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
+                return
+            if azure_object.provisioning_state != AZURE_SUCCESS_STATE and requested_state != 'absent':
+                self.fail("Error {0} has a provisioning state of {1}. Expecting state to be {2}.".format(
+                    azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
 
     def get_blob_client(self, resource_group_name, storage_account_name):
         keys = dict()

@@ -19,6 +19,28 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
+# without playing games with __metaclass__ or runtime base type hackery.
+# TODO: figure out a better way...
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile, \
+        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile, LinuxConfiguration, \
+        SshConfiguration, SshPublicKey
+    from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
+        NetworkInterfaceIPConfiguration, Subnet
+    from azure.mgmt.storage.models import AccountType, AccountStatus, StorageAccountCreateParameters
+    from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
+        VirtualMachineSizeTypes
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
+
+
 DOCUMENTATION = '''
 ---
 module: azure_rm_virtualmachine
@@ -28,24 +50,67 @@ RETURNS = '''
 {
     "changed": true,
     "check_mode": false,
+    "differences": [],
+    "powerstate_change": "poweron",
     "results": {
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm002",
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10",
         "location": "eastus",
-        "name": "testvm002",
+        "name": "testvm10",
+        "power_state": "running",
         "properties": {
             "hardwareProfile": {
                 "vmSize": "Standard_D1"
             },
+            "instanceView": {
+                "disks": [
+                    {
+                        "name": "testvm10.vhd",
+                        "statuses": [
+                            {
+                                "code": "ProvisioningState/succeeded",
+                                "displayStatus": "Provisioning succeeded",
+                                "level": "Info",
+                                "time": "2016-03-30T07:11:16.187272Z"
+                            }
+                        ]
+                    }
+                ],
+                "statuses": [
+                    {
+                        "code": "ProvisioningState/succeeded",
+                        "displayStatus": "Provisioning succeeded",
+                        "level": "Info",
+                        "time": "2016-03-30T19:47:11.096516Z"
+                    },
+                    {
+                        "code": "PowerState/running",
+                        "displayStatus": "VM running",
+                        "level": "Info"
+                    }
+                ],
+                "vmAgent": {
+                    "statuses": [
+                        {
+                            "code": "ProvisioningState/Unavailable",
+                            "displayStatus": "Not Ready",
+                            "level": "Warning",
+                            "message": "VM Agent is unresponsive.",
+                            "time": "2016-03-30T19:47:14.000Z"
+                        }
+                    ],
+                    "vmAgentVersion": "Unknown"
+                }
+            },
             "networkProfile": {
                 "networkInterfaces": [
                     {
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm001"
+                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01"
                     }
                 ]
             },
             "osProfile": {
                 "adminUsername": "chouseknecht",
-                "computerName": "testvm",
+                "computerName": "test10",
                 "linuxConfiguration": {
                     "disablePasswordAuthentication": false
                 },
@@ -63,10 +128,10 @@ RETURNS = '''
                 "osDisk": {
                     "caching": "ReadOnly",
                     "createOption": "fromImage",
-                    "name": "testvm001.vsd",
+                    "name": "testvm10.vhd",
                     "osType": "Linux",
                     "vhd": {
-                        "uri": "https://testaccount001.blob.core.windows.net/testvm001/testvm001.vsd.vhd"
+                        "uri": "https://testvm10sa1.blob.core.windows.net/vhds/testvm10.vhd"
                     }
                 }
             }
@@ -74,34 +139,9 @@ RETURNS = '''
         "type": "Microsoft.Compute/virtualMachines"
     }
 }
-
 '''
 
-
-import re
-from collections import namedtuple
-import sys
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile,\
-        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile, LinuxConfiguration,\
-        SshConfiguration, SshPublicKey
-    from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
-        VirtualMachineSizeTypes
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
-
 AZURE_OBJECT_CLASS = 'VirtualMachine'
-
 
 def extract_names_from_blob_uri(self, blob_uri):
     # HACK: ditch this once python SDK supports get by URI
@@ -119,15 +159,15 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.module_arg_spec = dict(
             resource_group=dict(type='str', required=True),
             name=dict(type='str', required=True),
-            state=dict(choices=['stopped','started', 'absent'], default='started', type='str'),
+            state=dict(choices=['present', 'absent', 'started', 'stopped'], default='started', type='str'),
             location=dict(type='str'),
             short_hostname=dict(type='str'),
             vm_size=dict(type='str', choices=[], default='Standard_D1'),
             force=dict(type='bool', default=False),
             admin_username=dict(type='str'),
             admin_password=dict(type='str', ),
-            ssh_password=dict(type='bool', default=True),
-            ssh_public_key=dict(type='str'),
+            ssh_password=dict(type='bool', aliases=['ssh_password_enabled'], default=True),
+            ssh_public_keys=dict(type='list'),
             image_publisher=dict(type='str'),
             image_offer=dict(type='str'),
             image_sku=dict(type='str'),
@@ -137,7 +177,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             storage_blob_name=dict(type='str', aliases=['storage_blob']),
             os_disk_caching=dict(type='str', aliases=['disk_caching'], choices=['ReadOnly', 'ReadWrite'],
                                  default='ReadOnly'),
-            os_type=dict(type='str', choices=['linux', 'windows'], default='linux'),
+            os_type=dict(type='str', choices=['Linux', 'Windows'], default='Linux'),
+            public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Static',
+                                             aliases=['public_ip_allocation']),
+            ssh_port=dict(type='int', default=22),
+            rdp_port=dict(type='int', default=3389),
             network_interface_names=dict(type='list', aliases=['network_interfaces']),
             delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
             delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhds']),
@@ -146,17 +190,10 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             log_path=dict(type='str', default='azure_rm_virtualmachine.log'),
         )
 
-        required_if = [
-            ('state', 'started', ['image_publisher', 'image_offer', 'image_sku',
-                                  'image_version', 'admin_username']
-             ),
-        ]
-
         for key in VirtualMachineSizeTypes:
             self.module_arg_spec['vm_size']['choices'].append(getattr(key, 'value'))
 
         super(AzureRMVirtualMachine, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                    required_if=required_if,
                                                     supports_check_mode=True,
                                                     **kwargs)
 
@@ -169,7 +206,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.admin_username = None
         self.admin_password = None
         self.ssh_password = None
-        self.ssh_public_key = None
+        self.ssh_public_keys = None
         self.image_publisher = None
         self.image_offer = None
         self.image_sku = None
@@ -185,10 +222,16 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.delete_public_ips = None
         self.tags = None
         self.force = None
+        self.public_ip_allocation_method = None
+        self.rdp_port = None
+        self.ssh_port = None
 
         self.results = dict(
             changed=False,
             check_mode=self.check_mode,
+            actions=[],
+            differences=None,
+            powerstate_change=None,
             results={}
         )
 
@@ -198,6 +241,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         changed = False
+        powerstate_change = None
         results = dict()
         vm = None
         network_interfaces = []
@@ -211,7 +255,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             # Set default location
             self.location = resource_group.location
 
-        if self.state == 'started':
+        if self.state in ('present', 'started', 'stopped'):
             # Verify parameters and resolve any defaults
             self.vm_size_is_valid()
 
@@ -220,16 +264,17 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     nic = self.get_network_interface(name)
                     network_interfaces.append(nic.id)
 
-            image_version = self.get_image_version()
-            if self.image_version == 'latest':
-                self.image_version = image_version.name
-                self.log("Using image version {0}".format(self.image_version))
+            if self.image_publisher and self.image_offer and self.image_sku:
+                image_version = self.get_image_version()
+                if self.image_version == 'latest':
+                    self.image_version = image_version.name
+                    self.log("Using image version {0}".format(self.image_version))
+
+            if not self.storage_blob_name:
+                    self.storage_blob_name = self.name + '.vhd'
 
             if self.storage_account_name:
                 self.get_storage_account()
-
-                if not self.storage_blob_name:
-                    self.storage_blob_name = self.name + '.vhd'
 
                 requested_vhd_uri = 'https://{0}.blob.core.windows.net/{1}/{2}'.format(self.storage_account_name,
                                                                                        self.storage_container_name,
@@ -239,21 +284,16 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         try:
             self.log("Fetching virtual machine {0}".format(self.name))
-            vm = self.compute_client.virtual_machines.get(self.resource_group, self.name)
-            self.check_provisioning_state(vm)
+            vm = self.compute_client.virtual_machines.get(self.resource_group, self.name, expand='instanceview')
+            self.check_provisioning_state(vm, self.state)
+            vm_dict = self.serialize_vm(vm)
 
-            vm_dict = self.serialize_obj(vm, AZURE_OBJECT_CLASS)
-            self.log(vm_dict, pretty_print=True)
-
-            if self.state == 'started' and self.force:
-                self.log('CHANGED: virtual machine {0} exists and forced option set.'.format(self.name))
-                changed = True
-
-            elif self.state == 'started':
+            if self.state in ('present', 'started', 'stopped'):
                 differences = []
                 current_nics = []
                 results = vm_dict
 
+                # Try to determine if the VM needs to be updated
                 if self.network_interface_names:
                     for nic in vm_dict['properties']['networkProfile']['networkInterfaces']:
                         current_nics.append(nic['id'])
@@ -265,37 +305,40 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         vm_dict['properties']['networkProfile']['networkInterfaces'] = updated_nics
                         changed = True
 
-                if self.vm_size != vm_dict['properties']['hardwareProfile']['vmSize']:
+                if self.vm_size and self.vm_size != vm_dict['properties']['hardwareProfile']['vmSize']:
                     self.log('CHANGED: virtual machine {0} - vm size is different.'.format(self.name))
                     differences.append('VM Size')
                     vm_dict['properties']['hardwareProfile']['vmSize'] = self.vm_size
                     changed = True
 
-                if self.image_publisher != vm_dict['properties']['storageProfile']['imageReference']['publisher'] or \
-                   self.image_offer != vm_dict['properties']['storageProfile']['imageReference']['offer'] or \
-                   self.image_sku != vm_dict['properties']['storageProfile']['imageReference']['sku']:
-                    self.log('CHANGED: virtual machine {0} - image is different.'.format(self.name))
-                    differences.append('Image')
-                    vm_dict['properties']['storageProfile']['imageReference']['publisher'] = self.image_publisher
-                    vm_dict['properties']['storageProfile']['imageReference']['offer'] = self.image_offer
-                    vm_dict['properties']['storageProfile']['imageReference']['sku'] = self.image_sku
-                    changed = True
+                if self.image_publisher:
+                    if self.image_publisher != \
+                       vm_dict['properties']['storageProfile']['imageReference']['publisher'] or \
+                       self.image_offer != vm_dict['properties']['storageProfile']['imageReference']['offer'] or \
+                       self.image_sku != vm_dict['properties']['storageProfile']['imageReference']['sku']:
+                        self.log('CHANGED: virtual machine {0} - image is different.'.format(self.name))
+                        differences.append('Image')
+                        vm_dict['properties']['storageProfile']['imageReference']['publisher'] = self.image_publisher
+                        vm_dict['properties']['storageProfile']['imageReference']['offer'] = self.image_offer
+                        vm_dict['properties']['storageProfile']['imageReference']['sku'] = self.image_sku
+                        changed = True
 
-                if self.image_version != 'latest' and \
-                   self.image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
-                    self.log('CHANGED: virtual machine {0} - image version is different.'.format(self.name))
-                    differences.append('Image versions')
-                    vm_dict['properties']['storageProfile']['imageReference']['version'] = self.image_version
-                    changed = True
+                    if self.image_version != 'latest' and \
+                       self.image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
+                        self.log('CHANGED: virtual machine {0} - image version is different.'.format(self.name))
+                        differences.append('Image versions')
+                        vm_dict['properties']['storageProfile']['imageReference']['version'] = self.image_version
+                        changed = True
 
-                if self.image_version == 'latest' and \
-                   image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
-                    self.log('CHANGED: virtual machine {0} - image not at latest version.'.format(self.name))
-                    differences.append('Image version not at latest')
-                    vm_dict['properties']['storageProfile']['imageReference']['version'] = image_version
-                    changed = True
+                    if self.image_version == 'latest' and \
+                       image_version != vm_dict['properties']['storageProfile']['imageReference']['version']:
+                        self.log('CHANGED: virtual machine {0} - image not at latest version.'.format(self.name))
+                        differences.append('Image version not at latest')
+                        vm_dict['properties']['storageProfile']['imageReference']['version'] = image_version
+                        changed = True
 
-                if self.os_disk_caching != vm_dict['properties']['storageProfile']['osDisk']['caching']:
+                if self.os_disk_caching and \
+                   self.os_disk_caching != vm_dict['properties']['storageProfile']['osDisk']['caching']:
                     self.log('CHANGED: virtual machine {0} - OS disk caching'.format(self.name))
                     differences.append('OS Disk caching')
                     changed = True
@@ -314,7 +357,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     vm_dict['tags'] = self.tags
                     changed = True
 
-                if self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
+                if self.admin_username and self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
                     self.log('CHANGED: virtual machine {0} - admin username'.format(self.name))
                     differences.append('Admin Username')
                     vm_dict['properties']['osProfile']['adminUsername'] = self.admin_username
@@ -322,26 +365,35 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     if self.admin_password:
                         vm_dict['properties']['osProfile']['adminPassword'] = self.admin_password
 
-                if self.short_hostname != vm_dict['properties']['osProfile']['computerName']:
+                if self.short_hostname and self.short_hostname != vm_dict['properties']['osProfile']['computerName']:
                     self.log('CHANGED: virtual machine {0} - short hostname'.format(self.name))
                     differences.append('Short Hostname')
                     changed = True
                     vm_dict['properties']['osProfile']['computerName'] = self.short_hostname
 
-                if vm_dict['properties']['osProfile'].get('linuxConfigurtion'):
-                    # linux host
-                    if vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] != \
-                       disable_ssh_password:
-                        self.log('CHANGED: virtual machine {0} - ssh password disable'.format(self.name))
-                        differences.append('SSH Password')
-                        changed = True
-                        vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] = \
-                            disable_ssh_password
+                # We can't tell if the ssh_password value was changed by user. We may be looking at the default state.
+                # if self.ssh_password is not None:
+                #     if vm_dict['properties']['osProfile'].get('linuxConfigurtion'):
+                #         # linux host
+                #         if vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] != \
+                #            disable_ssh_password:
+                #             self.log('CHANGED: virtual machine {0} - ssh password disable'.format(self.name))
+                #             differences.append('Disable SSH Password')
+                #             changed = True
+                #             vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] = \
+                #                 disable_ssh_password
 
-                results['differences'] = differences
+                self.results['differences'] = differences
 
-            elif self.state == 'stopped':
-                pass
+                if self.state == 'started' and vm_dict['power_state'] != 'running':
+                    self.log("CHANGED: virtual machine {0} not running and requested state 'running'".format(self.name))
+                    changed = True
+                    powerstate_change = 'poweron'
+
+                elif self.state == 'stopped' and vm_dict['power_state'] == 'running':
+                    self.log("CHANGED: virtual machine {0} running and requested state 'stopped'".format(self.name))
+                    changed = True
+                    powerstate_change = 'poweroff'
 
             elif self.state == 'absent':
                 self.log("CHANGED: virtual machine {0} exists and requested state is 'absent'".format(self.name))
@@ -350,29 +402,54 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         except CloudError:
             self.log('Virtual machine {0} does not exist'.format(self.name))
-            if self.state == 'started':
-                self.log("CHANGED: virtual machine does not exist but state is 'present'".format(self.name))
+            if self.state in ('present', 'started', 'stopped'):
+                self.log("CHANGED: virtual machine does not exist but state in ('present','started','stopped')" \
+                    .format(self.name))
                 changed = True
 
         self.results['changed'] = changed
         self.results['results'] = results
+        self.results['powerstate_change'] = powerstate_change
 
         if self.check_mode:
             return self.results
 
         if changed:
-            if self.state == 'started' and self.force:
-                # Remove existing VM
-                self.delete_vm()
-                vm = None
-
-            if self.state == 'started':
+             if self.state in ('present','started','stopped'):
                 if not vm:
                     # Create the VM
                     self.log("Create virtual machine {0}".format(self.name))
+                    self.results['actions'].append('Created VM {0}'.format(self.name))
 
+                    # Validate parameters
+                    if not self.admin_username:
+                        self.fail("Parameter error: admin_username required when creating a virtual machine.")
+
+                    if self.os_type == 'Linux':
+                        if disable_ssh_password and not self.ssh_public_keys:
+                            self.fail("Parameter error: ssh_public_keys required when disabling SSH password.")
+
+                    if not self.image_publisher or not self.image_offer or not self.image_sku:
+                        self.fail("Parameter error: specify an image when creating a virtual machine. "
+                                  "Expecting values for image_publisher, image_offer and image_sku.")
+
+                    if self.ssh_public_keys:
+                        for key in self.ssh_public_keys:
+                            if not key['path'] or not key['key_data']:
+                                self.fail("Parameter error: expecting SSH key to be of type dictionary with "
+                                          "path and key_data keys.")
+
+                    # Get defaults
                     if not self.network_interface_names:
-                        self.create_default_nic()
+                        default_nic = self.create_default_nic()
+                        network_interfaces = [default_nic.id]
+
+                    if not self.storage_account_name:
+                        storage_account = self.create_default_storage_account()
+                        requested_vhd_uri = 'https://{0}.blob.core.windows.net/{1}/{2}'.format(
+                            storage_account.name,
+                            self.storage_container_name,
+                            self.storage_blob_name)
                     
                     nics = [NetworkInterfaceReference(id=id) for id in network_interfaces]
                     vhd = VirtualHardDisk(uri=requested_vhd_uri)
@@ -382,7 +459,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         tags=self.tags,
                         os_profile=OSProfile(
                             admin_username=self.admin_username,
-                            admin_password=self.admin_password,
                             computer_name=self.short_hostname,
                         ),
                         hardware_profile=HardwareProfile(
@@ -406,10 +482,29 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                             network_interfaces=nics
                         ),
                     )
-                else:
-                    # update existing VM
+
+                    if self.admin_password:
+                        vm_resource.os_profile.admin_password = self.admin_password
+
+                    if self.os_type == 'Linux':
+                        vm_resource.os_proifle.linux_configuration = LinuxConfiguration(
+                            disable_password_authentication=disable_ssh_password
+                        )
+                    if self.ssh_public_keys:
+                        ssh_config = SshConfiguration()
+                        ssh_config.public_keys = \
+                            [SshPublicKey(path=key.path, key_data=key.key_data) for key in self.ssh_public_keys]
+                        vm_resource.os_profile.linux_configuration.ssh = ssh_config
+
+                    self.log("Create virtual machine with parameters:")
+                    self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
+                    self.results['results'] = self.create_or_update_vm(vm_resource)
+
+                elif self.results['differences'] is not None:
+                    # Update the VM based on detected config differences
 
                     self.log("Update virtual machine {0}".format(self.name))
+                    self.results['actions'].append('Updated VM {0}'.format(self.name))
 
                     nics = [NetworkInterfaceReference(id=interface['id'])
                             for interface in vm_dict['properties']['networkProfile']['networkInterfaces']]
@@ -471,12 +566,74 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                             key_data=key['keyData']
                                         )
                                     )
+                    self.log("Update virtual machine with parameters:")
+                    self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
+                    self.results['results'] = self.create_or_update_vm(vm_resource)
 
-                self.log("Create or update virtual machine with parameters:")
-                self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
-                self.results['results'] = self.create_or_update_vm(vm_resource)
+                # Make sure we leave the machine in requested power state
+                if powerstate_change == 'poweron' and self.results['results']['power_state'] != 'running':
+                    # Attempt to power on the machine
+                    self.power_on_vm()
+                    self.results['results'] = self.serialize_vm(self.get_vm())
+
+                elif powerstate_change == 'poweroff' and self.results['results']['power_state'] == 'running':
+                    # Attempt to power off the machine
+                    self.power_off_vm()
+                    self.results['results'] = self.serialize_vm(self.get_vm())
+
+             elif self.state == 'absent':
+                 # delete the VM
+                 self.results['actions'].append('Removed VM {0}'.format(self.name))
+                 self.log("Delete virtual machine {0}".format(self.name))
+                 self.delete_vm()
 
         return self.results
+
+    def get_vm(self):
+        '''
+        Get the VM with expanded instanceView
+
+        :return: VirtualMachine object
+        '''
+        try:
+            vm = self.compute_client.virtual_machines.get(self.resource_group, self.name, expand='instanceview')
+            return vm
+        except Exception, exc:
+            self.fail("Error getting virtual machine (0) - {1}".format(self.name, str(exc)))
+
+    def serialize_vm(self, vm):
+        '''
+        Convert a VirtualMachine object to dict.
+
+        :param vm: VirtualMachine object
+        :return: dict
+        '''
+        result = self.serialize_obj(vm, AZURE_OBJECT_CLASS)
+        result['power_state'] = next((s.code.replace('PowerState/', '') for s in vm.instance_view.statuses if s.code.startswith('PowerState')), None)
+        self.log(result, pretty_print=True)
+        if not result['power_state']:
+            self.fail("Failed to determine PowerState of virtual machine {0}".format(self.name))
+        return result
+
+    def power_off_vm(self):
+        self.log("Powered off virtual machine {0}".format(self.name))
+        self.results['actions'].append("Powered off virtual machine {0}".format(self.name))
+        try:
+            poller = self.compute_client.virtual_machines.power_off(self.resource_group, self.name)
+        except Exception, exc:
+            self.fail("Error powering off virtual machine {0} - {1}".format(self.name, str(exc)))
+        self.get_poller_result(poller)
+        return True
+
+    def power_on_vm(self):
+        self.results['actions'].append("Powered on virtual machine {0}".format(self.name))
+        self.log("Power on virtual machine {0}".format(self.name))
+        try:
+            poller = self.compute_client.virtual_machines.start(self.resource_group, self.name)
+        except Exception, exc:
+            self.fail("Error powering on virtual machine {0} - {1}".format(self.name, str(exc)))
+        self.get_poller_result(poller)
+        return True
 
     def delete_vm(self):
         vhd_uris = []
@@ -489,8 +646,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             vhd_uris.append(vm.storage_profile.os_disk.virtual_hard_disk.uri)
             self.log("VHD URIs to delete: {0}".format(', '.join(vhd_uris)))
             self.results['deleted_vhd_uris'] = vhd_uris
-
-            # TODO: add support for deleting data disk vhds
 
         if self.delete_network_interfaces:
             # store the attached nic info so we can nuke them after the VM is gone
@@ -511,6 +666,8 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                 self.log('Public IPs to  delete are {0}'.format(', '.join(pip_names)))
                 self.results['deleted_public_ips'] = pip_names
 
+        self.log("Deleting virtual machine {0}".format(self.name))
+        self.results['actions'].append("Deleted virtual machine {0}".format(self.name))
         try:
             self.compute_client.virtual_machines.delete(self.resource_group, self.name)
         except Exception, exc:
@@ -542,6 +699,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
     def delete_nic(self, name):
         self.log("Deleting network interface {0}".format(name))
+        self.results['actions'].append("Deleted network interface {0}".format(name))
         try:
             poller = self.network_client.network_interfaces.delete(self.resource_group, name)
         except Exception, exc:
@@ -551,6 +709,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         return True
 
     def delete_pip(self, name):
+        self.results['actions'].append("Deleted public IP {0}".format(name))
         try:
             poller = self.network_client.public_ip_addresses.delete(self.resource_group, name)
         except Exception, exc:
@@ -570,6 +729,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             blob_client = self.get_blob_client(self.resource_group, storage_account_name)
 
             self.log("Delete blob {0}:{1}".format(container_name, blob_name))
+            self.results['actions'].append("Deleted blob {0}:{1}".format(container_name, blob_name))
             try:
                 blob_client.delete_blob(container_name, blob_name)
             except Exception, exc:
@@ -611,13 +771,16 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             poller = self.compute_client.virtual_machines.create_or_update(self.resource_group, self.name, params)
         except Exception, exc:
             self.fail("Error creating or updating virtual machine {0} - {1}".format(self.name, str(exc)))
-        vm = self.get_poller_result(poller)
-        return self.serialize_obj(vm, AZURE_OBJECT_CLASS)
+        # The poller does not return the expanded result set containing instanceView. Ignore it and
+        # call get_vm()
+        self.get_poller_result(poller)
+        return self.serialize_vm(self.get_vm())
 
     def vm_size_is_valid(self):
         '''
         Validate self.vm_size against the list of virtual machine sizes available for the account and location.
-        :return: list of available sizes
+
+        :return: boolean
         '''
         try:
             sizes = self.compute_client.virtual_machine_sizes.list(self.location)
@@ -629,29 +792,48 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         return False
 
     def create_default_storage_account(self):
-        pass
+        '''
+        Create a default storage account <vm name>sa1. If <vm name>sa1 exists, use it.
+        Otherwise, create one.
 
-    def create_default_virtual_network(self):
-        pass
+        :return: storage account object
+        '''
+        storage_account_name = self.name + 'sa1'
+        account = None
 
-    def create_default_subnet(self):
-        pass
+        try:
+            account = self.storage_client.storage_accounts.get_properties(self.resource_group, storage_account_name)
+        except CloudError, exc:
+            pass
+
+        if account:
+            self.log("Storage account {0} found.".format(storage_account_name))
+            self.check_provisioning_state(account)
+            return account
+
+        parameters = StorageAccountCreateParameters(account_type='Standard_LRS', location=self.location)
+        self.log("Creating storage account {0}".format(storage_account_name))
+        self.results['actions'].append("Created storage account {0}".format(storage_account_name))
+        try:
+            poller = self.storage_client.storage_accounts.create(self.resource_group, storage_account_name, parameters)
+        except Exception, exc:
+            self.fail("Failed to create storage account: {0} - {1}".format(storage_account_name, str(exc)))
+
+        return self.get_poller_result(poller)
 
     def create_default_nic(self):
         '''
-        Create a default Network Interface named <vm name>_NIC01. Requires an existing virtual network
-        with one subnet.
+        Create a default Network Interface <vm name>_NIC01. Requires an existing virtual network
+        with one subnet. If NIC <vm name>_NIC01 exists, use it. Otherwise, create one.
 
-        Checks to see if the NIC already exists. If it does, then use it.
-
-        :return:
+        :return: NIC object
         '''
 
         network_interface_name = self.name + '_NIC01'
         nic = None
 
         self.log("Create default NIC {0}".format(network_interface_name))
-        self.log("Check to see if the NIC already exists")
+        self.log("Check to see if NIC {0} exists".format(network_interface_name))
         try:
             nic = self.network_client.network_interfaces.get(self.resource_group, network_interface_name)
         except CloudError:
@@ -659,6 +841,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         if nic:
             self.log("NIC {0} found.".format(network_interface_name))
+            self.check_provisioning_state(nic)
             return nic
 
         self.log("NIC {0} does not exist.".format(network_interface_name))
@@ -668,39 +851,165 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                        "with at least one subnet must exist in order to create a NIC for the virtual " \
                        "machine.".format(self.resource_group)
 
+        virtual_network_name = None
         try:
             vnets = self.network_client.virtual_networks.list(self.resource_group)
         except CloudError:
+            self.log('cloud error!')
             self.fail(no_vnets_msg)
 
-        if len(vnets) == 0:
+        for vnet in vnets:
+            virtual_network_name = vnet.name
+            self.log('vnet name: {0}'.format(vnet.name))
+            break
+
+        if not virtual_network_name:
             self.fail(no_vnets_msg)
 
-        virtual_network_name = vents[0].name
-
-
-        no_subnets_msg = "Error: unable to find subnet in virtual network {0}. A virtual network " \
+        no_subnets_msg = "Error: unable to find a subnet in virtual network {0}. A virtual network " \
                          "with at least one subnet must exist in order to create a NIC for the virtual " \
                          "machine.".format(virtual_network_name)
 
+        subnet_id = None
         try:
             subnets = self.network_client.subnets.list(self.resource_group, virtual_network_name)
         except CloudError:
             self.fail(no_subnets_msg)
 
-        if len(subnets) == 0:
+        for subnet in subnets:
+            subnet_id = subnet.id
+            self.log('subnet id: {0}'.format(subnet_id))
+            break
+
+        if not subnet_id:
             self.fail(no_subnets_msg)
 
-        subnet_name = subnets[0].name
+        pip = self.create_default_pip()
+        group = self.create_default_securitygroup()
 
+        parameters = NetworkInterface(
+            location=self.location,
+            name=network_interface_name,
+            ip_configurations=[
+                NetworkInterfaceIPConfiguration(
+                    name='default',
+                    private_ip_allocation_method='Dynamic',
+                )
+            ]
+        )
+        parameters.ip_configurations[0].subnet = Subnet(id=subnet_id)
+        parameters.network_security_group = NetworkSecurityGroup(id=group.id,
+                                                                 name=group.name,
+                                                                 location=group.location,
+                                                                 resource_guid=group.resource_guid)
+        parameters.ip_configurations[0].public_ip_address = PublicIPAddress(id=pip.id,
+                                                                            name=pip.name,
+                                                                            location=pip.location,
+                                                                            resource_guid=pip.resource_guid)
 
-
+        self.log("Creating NIC {0}".format(network_interface_name))
+        self.log(self.serialize_obj(parameters, 'NetworkInterface'), pretty_print=True)
+        self.results['actions'].append("Created NIC {0}".format(network_interface_name))
+        try:
+            poller = self.network_client.network_interfaces.create_or_update(self.resource_group,
+                                                                             network_interface_name,
+                                                                             parameters)
+        except Exception, exc:
+            self.fail("Error creating network interface {0} - {1}".format(network_interface_name, str(exc)))
+        return self.get_poller_result(poller)
 
     def create_default_pip(self):
         '''
-        
-        :return:
+        Create a default public IP address <vm_name>_PIP01 to associate with the default NIC.
+        If a PIP address matching <vm name>_PIP01 exists, use it. Otherwise, create one.
+
+        :return: PIP object
         '''
+        public_ip_name = self.name + '_PIP01'
+        pip = None
+
+        self.log("Create public IP {0}".format(public_ip_name))
+        self.log("Check to see if public IP {0} exists".format(public_ip_name))
+        try:
+            pip = self.network_client.public_ip_addresses.get(self.resource_group, public_ip_name)
+        except CloudError:
+            pass
+
+        if pip:
+            self.log("Public ip {0} found.".format(public_ip_name))
+            self.check_provisioning_state(pip)
+            return pip
+
+        params = PublicIPAddress(
+            location=self.location,
+            public_ip_allocation_method=self.public_ip_allocation_method,
+        )
+        self.log('Creating default public IP {0}'.format(public_ip_name))
+        self.results['actions'].append('Creating default public IP {0}'.format(public_ip_name))
+        try:
+            poller = self.network_client.public_ip_addresses.create_or_update(self.resource_group, public_ip_name, params)
+        except Exception, exc:
+            self.fail("Error creating {0} - {1}".format(public_ip_name, str(exc)))
+
+        return self.get_poller_result(poller)
+
+    def create_default_securitygroup(self):
+        '''
+        Create a default security group <vm_name>_SG01 to associate with the default NIC.
+        If a security group matching <vm name>_SG01 exists, use it. Otherwise, create one.
+
+        :return: security_group object
+        '''
+        security_group_name = self.name + '_SG01'
+        group = None
+
+        self.log("Create security group {0}".format(security_group_name))
+        self.log("Check to see if security group {0} exists".format(security_group_name))
+        try:
+            group = self.network_client.network_security_groups.get(self.resource_group, security_group_name)
+        except CloudError:
+            pass
+
+        if group:
+            self.log("Security group {0} found.".format(security_group_name))
+            self.check_provisioning_state(group)
+            return group
+
+        parameters = NetworkSecurityGroup()
+        if self.os_type == 'Linux':
+            # add an inbound SSH rule
+            parameters.security_rules=[
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow SSH Access',
+                             source_port_range='*', destination_port_range=self.ssh_port, priority=100, name='SSH')
+            ]
+            parameters.location = self.location
+        else:
+            # for windows add an inbound RDP rule
+            parameters.security_rules=[
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow RDP Access',
+                             soruce_port_range='*', destination_port_range=self.rdp_port, priority=100, name='RDP')
+            ]
+            parameters.location = self.location
+
+        self.log('Creating default security group {0}'.format(security_group_name))
+        self.results['actions'].append('Created default security group {0}'.format(security_group_name))
+        try:
+            poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
+                                                                                  security_group_name,
+                                                                                  parameters)
+        except Exception, exc:
+            self.fail("Error creating default security rule {0} - {1}".format(security_group_name, str(exc)))
+
+        return self.get_poller_result(poller)
+
+    def get_deployment_status(self):
+        self.log("Getting resource using filter {0}".format('None'))
+        try:
+            resources = self.rm_client.deployments.list(self.resource_group)
+        except Exception, exc:
+            self.fail("Error getting resources for filter {0} - {1}".format('None', str(exc)))
+
+        return resources
 
 
 def main():

@@ -1,0 +1,65 @@
+- name: Test azure_rm_virtualmachine using default NIC, PIP, Security Group and Storage Account
+  hosts: all
+  connection: local
+  vars:
+      resource_group : Testing
+      playbook_debug: yes
+      remove_vm: no
+  tasks:
+      - name: Remove VM
+        azure_rm_virtualmachine:
+            resource_group: "{{ resource_group }}"
+            name: testvm10
+            state: absent
+        register: output
+        when: remove_vm
+
+      - debug: var=output
+        when: playbook_debug
+        
+      - name: Create VM with defaults
+        azure_rm_virtualmachine:
+            resource_group: "{{ resource_group }}"
+            name: testvm10
+            vm_size: Standard_D1
+            admin_username: chouseknecht
+            admin_password: Password123!
+            short_hostname: test10
+            os_type: Linux
+            image_offer: CentOS
+            image_publisher: OpenLogic
+            image_sku: 7.1
+            image_version: latest
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+
+      - debug: var=output
+        when: playbook_debug
+
+      - name: Power Off 
+        azure_rm_virtualmachine:
+            resource_group: "{{ resource_group }}"
+            name: testvm10
+            state: stopped
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+
+      - assert:
+            that: output.results.power_state != 'running'
+
+      - debug: var=output
+        when: playbook_debug
+
+      - name: Power On
+        azure_rm_virtualmachine:
+            resource_group: "{{ resource_group }}"
+            name: testvm10
+            state: started
+            debug: "{{ playbook_debug }}"
+            log_mode: file
+        register: output
+             
+      - assert:
+            that: output.results.power_state == 'running'

@@ -65,7 +65,7 @@
             admin_username: chouseknecht
             admin_password: Password123!
             short_hostname: testvm
-            os_type: linux
+            os_type: Linux
             network_interfaces: testvm001
             image_offer: CentOS
             image_publisher: OpenLogic
@@ -89,7 +89,7 @@
             admin_username: chouseknecht
             admin_password: Password123!
             short_hostname: testvm
-            os_type: linux
+            os_type: Linux
             network_interfaces: testvm001
             image_offer: CentOS
             image_publisher: OpenLogic
@@ -102,4 +102,3 @@
       - debug: var=output
         when: playbook_debug
 
-     
