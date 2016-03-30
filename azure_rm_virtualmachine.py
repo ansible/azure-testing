@@ -50,7 +50,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             # TODO: configure arg validation
             resource_group=dict(required=True),
             name=dict(required=True),
-            state=dict(choices=['present','absent'], type='str'),
+            state=dict(choices=['present','absent', 'started', 'stopped'], type='str'),
             location=dict(required=True),
             short_hostname=dict(),
             vm_size=dict(),
@@ -190,84 +190,104 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         result = dict(changed=False)
         vm_exists = False
+        vm_powerstatechange = None
 
         try:
             self.debug('fetching vm...')
-            vm_resp = self.compute_client.virtual_machines.get(resource_group, name)
+            vm_resp = self.compute_client.virtual_machines.get_with_instance_view(resource_group, name)
+
             # TODO: check if resource_group.provisioningState != Succeeded or Deleting, equiv to 404 but blocks
             # TODO: attempt to delete/rebuild provisioning state 'Failed'?
             vm_exists = True
+            vm_powerstatechange = None
             self.debug('vm exists...')
             vm = vm_resp.virtual_machine
-
-            if state == 'present':
-                self.debug('validating vm attributes against args...')
-                # TODO: validate attributes (name, tags, what else?)
-
-            elif state == 'absent':
-                # TODO: plug vm_exists checks here for "needs deletion" or non-standard error
-                self.debug("CHANGED: vhd exists and requested state is 'absent'")
-                result['changed'] = True # we should hit the exception handler below if the vm doesn't exist, so we know it does
-
-                if delete_vhds:
-                    # store the attached vhd info so we can nuke it after the VM is gone
-                    self.debug('storing vhd uris for later deletion...')
-                    vhd_uris = [vm.storage_profile.os_disk.virtual_hard_disk.uri]
-                    self.debug("vhd uris to delete are '%s'" % vhd_uris)
-                    result['deleted_vhd_uris'] = vhd_uris
-                    # TODO: add support for deleting data disk vhds
-
-                if delete_nics:
-                    # store the attached nic info so we can nuke them after the VM is gone
-                    self.debug('storing nic uris for later deletion...')
-                    nic_uris = [n.reference_uri for n in vm.network_profile.network_interfaces]
-                    if delete_public_ips:
-                        # also store each nic's attached public IPs and delete after the NIC is gone
-                        public_ip_uris = []
-                        for nic_uri in nic_uris:
-                            nic_info = self._extract_names_from_uri_id(nic_uri)
-                            nic = self.network_client.network_interfaces.get(nic_info['rg_name'], nic_info['name']).network_interface
-                            public_ip_uris.extend([ipc.public_ip_address for ipc in nic.ip_configurations if ipc.public_ip_address])
-                    self.debug('nic uris to delete are %s' % nic_uris)
-                    result['deleted_nic_uris'] = nic_uris
-                    self.debug('public ips to delete are %s' % public_ip_uris)
-                    result['deleted_public_ips'] = public_ip_uris
-
-                if self._module.check_mode:
-                    return result
-
-                del_resp = self.compute_client.virtual_machines.delete(resource_group, name)
-                if del_resp.status != 'Succeeded':
-                    raise Exception("Delete failed with status '%s'" % del_resp.status)
-
-                # TODO: parallelize nic, vhd, and public ip deletions with begin_deleting
-                # TODO: best-effort to keep deleting other linked resources if we encounter an error
-                if delete_vhds:
-                    self.debug('deleting vhds...')
-                    for blob_uri in vhd_uris:
-                        self._delete_blob(blob_uri)
-                    self.debug('done deleting vhds...')
-
-                if delete_nics:
-                    self.debug('deleting nics...')
-                    for nic_uri in nic_uris:
-                        self._delete_nic(nic_uri)
-                    self.debug('done deleting nics...')
-
-                if delete_public_ips:
-                    self.debug('deleting public ips...')
-                    for public_ip_uri in public_ip_uris:
-                        self._delete_public_ip(public_ip_uri)
-                    self.debug('deleting public ips...')
-
-                return result
+            # ew.
+            vm_powerstate = next((s.code.replace('PowerState/','') for s in vm.instance_view.statuses if s.code.startswith('PowerState')), None)
+            if not vm_powerstate:
+                raise Exception("Could not find PowerState of virtual machine")
 
         except AzureMissingResourceHttpError:
             self.debug('vm does not exist')
-            if state == 'present':
+            if state in ['present','started','stopped']:
+                self.debug("CHANGED: vhd does not exist and requested state is '%s'" % state)
                 result['changed'] = True
+                if state == 'stopped':
+                    vm_powerstatechange = 'poweroff' # cause the vm to be stopped after creation
 
-        if state == 'present':
+        if vm_exists and state != 'absent': # vm exists, check properties and start/stop state
+            self.debug('validating vm attributes against args...')
+            # TODO: validate attributes (name, tags, what else?)
+            if state == 'started' and vm_powerstate != 'running':
+                self.debug('CHANGED: requested vm state is started, but vm is not running')
+                result['changed'] = True
+                # HACK: use power_state property instead
+                vm_powerstatechange = 'poweron'
+            elif state == 'stopped' and vm_powerstate == 'running':
+                self.debug('CHANGED: requested vm state is stopped, but vm is running')
+                result['changed'] = True
+                # HACK: use power_state property instead
+                vm_powerstatechange = 'poweroff'
+
+        elif vm_exists and state == 'absent':
+            # TODO: plug vm_exists checks here for "needs deletion" or non-standard error
+            self.debug("CHANGED: vhd exists and requested state is 'absent'")
+            result['changed'] = True # we should hit the exception handler below if the vm doesn't exist, so we know it does
+
+            if delete_vhds:
+                # store the attached vhd info so we can nuke it after the VM is gone
+                self.debug('storing vhd uris for later deletion...')
+                vhd_uris = [vm.storage_profile.os_disk.virtual_hard_disk.uri]
+                self.debug("vhd uris to delete are '%s'" % vhd_uris)
+                result['deleted_vhd_uris'] = vhd_uris
+                # TODO: add support for deleting data disk vhds
+
+            if delete_nics:
+                # store the attached nic info so we can nuke them after the VM is gone
+                self.debug('storing nic uris for later deletion...')
+                nic_uris = [n.reference_uri for n in vm.network_profile.network_interfaces]
+                if delete_public_ips:
+                    # also store each nic's attached public IPs and delete after the NIC is gone
+                    public_ip_uris = []
+                    for nic_uri in nic_uris:
+                        nic_info = self._extract_names_from_uri_id(nic_uri)
+                        nic = self.network_client.network_interfaces.get(nic_info['rg_name'], nic_info['name']).network_interface
+                        public_ip_uris.extend([ipc.public_ip_address for ipc in nic.ip_configurations if ipc.public_ip_address])
+                self.debug('nic uris to delete are %s' % nic_uris)
+                result['deleted_nic_uris'] = nic_uris
+                self.debug('public ips to delete are %s' % public_ip_uris)
+                result['deleted_public_ips'] = public_ip_uris
+
+            if self._module.check_mode:
+                return result
+
+            del_resp = self.compute_client.virtual_machines.delete(resource_group, name)
+            if del_resp.status != 'Succeeded':
+                raise Exception("Delete failed with status '%s'" % del_resp.status)
+
+            # TODO: parallelize nic, vhd, and public ip deletions with begin_deleting
+            # TODO: best-effort to keep deleting other linked resources if we encounter an error
+            if delete_vhds:
+                self.debug('deleting vhds...')
+                for blob_uri in vhd_uris:
+                    self._delete_blob(blob_uri)
+                self.debug('done deleting vhds...')
+
+            if delete_nics:
+                self.debug('deleting nics...')
+                for nic_uri in nic_uris:
+                    self._delete_nic(nic_uri)
+                self.debug('done deleting nics...')
+
+            if delete_public_ips:
+                self.debug('deleting public ips...')
+                for public_ip_uri in public_ip_uris:
+                    self._delete_public_ip(public_ip_uri)
+                self.debug('deleting public ips...')
+
+            return result
+
+        if state in ['present','started','stopped']:
             if not vm_exists:
             # TODO: add this back in once we're ready to create a default nic
             # # ensure nic/pip exist
@@ -342,6 +362,12 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
             # TODO: reuse this code section for check mode
 
+            if vm_powerstatechange == 'poweron':
+                self.debug('starting virtual machine...')
+                self.compute_client.virtual_machines.start(resource_group, name)
+                self.debug('re-fetching VM state')
+                vm_resp = self.compute_client.virtual_machines.get(resource_group, name)
+
             for nic_ref in vm.network_profile.network_interfaces:
                 nic_values = self._extract_names_from_uri_id(nic_ref.reference_uri)
                 nic_resp = self.network_client.network_interfaces.get(nic_values.get('rg_name'), nic_values.get('name'))
@@ -358,6 +384,12 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         pip_resp = self.network_client.public_ip_addresses.get(pip_values.get('rg_name'), pip_values.get('name'))
                         result['primary_public_ip'] = pip_resp.public_ip_address.ip_address
 
+            # if we're stopping, do it very last after we've fetched all other details
+            if vm_powerstatechange == 'poweroff':
+                self.debug('powering off virtual machine...')
+                #self.compute_client.virtual_machines.power_off(resource_group, name)
+                self.compute_client.virtual_machines.deallocate(resource_group, name)
+
         return result
 
 
@@ -368,26 +400,26 @@ def main():
         import ansible.module_utils.basic
 
         ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group='rm_demo',
-            name='mdavis-test1-vm',
-            state='present',
+            resource_group='ansible_ci_123',
+            name='vm-win2008r2_ps2',
+            state='started',
             location='West US',
-            short_hostname='mdavis-test1-vm',
-            vm_size='Standard_A1',
-            admin_username='mdavis',
-            admin_password='R00tpassword#',
-            image_publisher='MicrosoftWindowsServer',
-            image_offer='WindowsServer',
-            image_sku='2012-R2-Datacenter',
-            image_version='4.0.20151214',
-            os_disk_storage_account_name='test',
-            os_disk_storage_container_name='vhds',
-            os_disk_storage_blob_name='mdavis-test1-vm',
-            os_type='windows',
-            delete_nics=True,
-            delete_vhds=True,
-            delete_public_ips=True,
-            nic_ids=['/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/rm_demo/providers/Microsoft.Network/networkInterfaces/test-nic'],
+            # short_hostname='mdavis-test1-vm',
+            # vm_size='Standard_A1',
+            # admin_username='mdavis',
+            # admin_password='R00tpassword#',
+            # image_publisher='MicrosoftWindowsServer',
+            # image_offer='WindowsServer',
+            # image_sku='2012-R2-Datacenter',
+            # image_version='4.0.20151214',
+            # os_disk_storage_account_name='test',
+            # os_disk_storage_container_name='vhds',
+            # os_disk_storage_blob_name='mdavis-test1-vm',
+            # os_type='windows',
+            # delete_nics=True,
+            # delete_vhds=True,
+            # delete_public_ips=True,
+            # nic_ids=['/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/rm_demo/providers/Microsoft.Network/networkInterfaces/test-nic'],
             log_mode="stderr"
         ))
 
