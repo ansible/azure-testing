@@ -55,13 +55,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -86,7 +86,7 @@ options:
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of a resource group where the network interface exists or will be created.
         required: true
         default: null
     name:
@@ -124,34 +124,39 @@ options:
     security_group_name:
         description:
             - Name of an existing security group with which to associate the network interface. Required when
-              state is 'present'. Cannot be changed after network interface is required.
+              creatting a network interface. Cannot be changed after a network interface is required.
         default: null
         required: true
         aliases:
             - security_group
     subnet_name:
         description:
-            - Name of an existing subnet within the specified virtual network. Required when state is 'present'.
-              Cannot be changed after network interface is required.
+            - Name of an existing subnet within the specified virtual network. Required when the network interface
+              is created. Cannot be changed after network interface is required.
         required: true
         default: null
         aliases:
             - subnet
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
     virtual_network_name:
-        desription:
+        description:
             - Name of an existing virtual network with which the network interface will be associated. Required
-              when state is 'present'. Cannot be changed after network interface is required.
+              when creating a network interface. Cannot be changed after network interface is created.
         default: null
         required true
         aliases:
             - virtual_network
+
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -343,15 +348,14 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             nic = self.network_client.network_interfaces.get(self.resource_group, self.name)
 
             self.log('Network interface {0} exists'.format(self.name))
-            self.check_provisioning_state(nic)
+            self.check_provisioning_state(nic, self.state)
             results = nic_to_dict(nic)
 
             if self.state == 'present':
-                if self.tags:
-                    if results['tags'] != self.tags:
-                        self.log("CHANGED: network interface {0} tags".format(self.name))
-                        changed = True
-                        results['tags'] = self.tags
+
+                update_tags, results['tags'] = self.update_tags(results['tags'])
+                if update_tags:
+                    changed = True
 
                 if self.private_ip_address:
                     if results['ip_configuration']['private_ip_address'] != self.private_ip_address:

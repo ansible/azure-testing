@@ -193,7 +193,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         try:
             self.log('Fetching resource group {0}'.format(self.name))
             rg = self.rm_client.resource_groups.get(self.name)
-            self.check_provisioning_state(rg)
+            self.check_provisioning_state(rg, self.state)
             contains_resources = self.resources_exist()
 
             results = resource_group_to_dict(rg)

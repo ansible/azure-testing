@@ -38,11 +38,10 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_securitygroup_facts
 
-short_description: Get storage account facts.
+short_description: Get security group facts.
 
 description:
-    - Get facts for a specific security groups or all security groups within a resource group.
-
+    - Get facts for a specific security group or all security groups within a resource group.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -51,13 +50,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -86,7 +85,7 @@ options:
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of the resource group to use.
         required: true
         default: null
 
@@ -293,11 +292,11 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         return item_dict
 
     def list_items(self):
-        self.log('List all for resource group {0}'.format(self.resource_group))
+        self.log('List all items')
         try:
             response = self.network_client.network_security_groups.list(self.resource_group)
-        except AzureHttpError, exc:
-            self.fail("Failed to list all for resource group: {0} - {1}".format(self.resource_group, str(exc)))
+        except Exception, exc:
+            self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
         for item in response:

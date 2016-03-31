@@ -123,6 +123,36 @@
       - output.failed
       - "'Resources exist' in output.msg"
 
+- name: Create a second resource group
+  azure_rm_resourcegroup:
+      name: Testing2
+      location: westus
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Gather facts for a resource group
+  azure_rm_resourcegroup_facts:
+      name: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that: output.results | length == 1
+
+- name: Gather facts for all resource groups
+  azure_rm_resourcegroup_facts:
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that: output.results | length > 1
+
 - name: Force remove resource group
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
@@ -131,7 +161,20 @@
     log_mode: file
     force: yes
   register: output
-  ignore_errors: yes
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Remove second resource group
+  azure_rm_resourcegroup:
+    name: Testing2
+    state: absent
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
 
 
 

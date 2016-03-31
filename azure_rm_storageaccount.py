@@ -393,16 +393,15 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 except Exception, exc:
                     self.fail("Failed to update custom domain: {0}".format(str(exc)))
 
-        if self.tags:
-            update_tags, self.account_dict['tags'] = self.update_tags(self.account_dict['tags'])
-            if update_tags:
-                self.results['changed'] = True
-                if not self.check_mode:
-                    parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
-                    try:
-                        self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                    except Exception, exc:
-                        self.fail("Failed to update tags: {0}".format(str(exc)))
+        update_tags, self.account_dict['tags'] = self.update_tags(self.account_dict['tags'])
+        if update_tags:
+            self.results['changed'] = True
+            if not self.check_mode:
+                parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
+                try:
+                    self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
+                except Exception, exc:
+                    self.fail("Failed to update tags: {0}".format(str(exc)))
 
     def create_account(self):
         self.log("Creating account {0}".format(self.name))

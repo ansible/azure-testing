@@ -204,7 +204,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             subnet = self.network_client.subnets.get(self.resource_group,
                                                      self.virtual_network_name,
                                                      self.name)
-            self.check_provisioning_state(subnet)
+            self.check_provisioning_state(subnet, self.state)
             if self.state == 'present':
                 results = subnet_to_dict(subnet)
             elif self.state == 'absent':

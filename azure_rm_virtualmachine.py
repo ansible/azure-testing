@@ -700,7 +700,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             return self.results
 
         if changed:
-             if self.state in ('present','started','stopped'):
+            if self.state in ('present','started','stopped'):
                 if not vm:
                     # Create the VM
                     self.log("Create virtual machine {0}".format(self.name))
@@ -862,11 +862,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     self.power_off_vm()
                     self.results['results'] = self.serialize_vm(self.get_vm())
 
-             elif self.state == 'absent':
-                 # delete the VM
-                 self.results['actions'].append('Removed VM {0}'.format(self.name))
-                 self.log("Delete virtual machine {0}".format(self.name))
-                 self.delete_vm()
+            elif self.state == 'absent':
+                # delete the VM
+                self.results['actions'].append('Removed VM {0}'.format(self.name))
+                self.log("Delete virtual machine {0}".format(self.name))
+                self.delete_vm()
 
         return self.results
 

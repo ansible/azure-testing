@@ -297,7 +297,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
             results = virtual_network_to_dict(vnet)
             self.log('Vnet exists {0}'.format(self.name))
             self.log(results, pretty_print=True)
-            self.check_provisioning_state(vnet)
+            self.check_provisioning_state(vnet, self.state)
 
             if self.state == 'present':
                 if self.address_prefixes_cidr:

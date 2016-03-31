@@ -44,8 +44,7 @@ short_description: Manage Azure Public IP Addresses.
 
 description:
     - Create, update and delete Public IPs. Allows setting and updating the address allocation method and domain
-      name label prefix CIDR, which must be valid within the context of the virtual network. Use the
-      azure_rm_networkinterface module to associate an interface with the public IP address.
+      name label. Use the azure_rm_networkinterface module to associate a Public IP with a network interface.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -60,7 +59,7 @@ description:
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -85,19 +84,18 @@ options:
         default: null
     resource_group:
         description:
-            - name of resource group.
+            - Name of resource group with which the Public IP is associated.
         required: true
         default: null
     name:
         description:
-            - name of the subnet.
+            - Name of the Public IP.
         required: true
         default: null
     state:
         description:
-            - Assert the state of the subnet. Use 'present' to create or update a subnet and
-              'absent' to delete a subnet.
-        required: true
+            - Assert the state of the Public IP. Use 'present' to create or update a and
+              'absent' to delete.
         default: present
         choices:
             - absent
@@ -108,16 +106,21 @@ options:
         default: resource_group location
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
     allocation_method:
         description:
-            - Set to 'static' or 'dynamic' to control whether the assigned IP is permanent or ephemeral.
+            - Control whether the assigned Public IP remains permanently assigned to the object ('Static'). If not
+              set to 'Static', the IP address my changed anytime an associated virtual machine is power cycled.
         choices:
-            - Dyanmic
+            - Dynamic
             - Static
         default: Dynamic
     domain_name_label:
@@ -141,9 +144,8 @@ EXAMPLES = '''
     - name: Create a public ip address
       azure_rm_publicipaddress:
         resource_group: testing
-        location: eastus
         name: my_public_ip
-        allocation_method: static
+        allocation_method: Static
         domain_name: foobar
 
     - name: Delete public ip
@@ -186,7 +188,6 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
             name=dict(required=True),
             state=dict(default='present', choices=['present', 'absent']),
             location=dict(type='str'),
-            tags=dict(type='dict'),
             allocation_method=dict(type='str', default='Dynamic', choices=['Dynamic', 'Static']),
             domain_name=dict(type='str', aliases=['domain_name_label']),
             log_path=dict(type='str', default='azure_rm_publicipaddress.log')
@@ -211,7 +212,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         results = dict()
@@ -230,7 +231,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
         try:
             self.log("Fetch public ip {0}".format(self.name))
             pip = self.network_client.public_ip_addresses.get(self.resource_group, self.name)
-            self.check_provisioning_state(pip)
+            self.check_provisioning_state(pip, self.state)
             self.log("PIP {0} exists".format(self.name))
             if self.state == 'present':
                 results = pip_to_dict(pip)
@@ -244,10 +245,9 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
                     changed = True
                     results['public_ip_allocation_method'] = self.allocation_method
 
-                if self.tags != results['tags']:
-                    self.log("CHANGED: tags")
+                update_tags, results['tags'] = self.update_tags(results['tags'])
+                if update_tags:
                     changed = True
-                    results['tags'] = self.tags
 
             elif self.state == 'absent':
                 self.log("CHANGED: public ip {0} exists but requested state is 'absent'".format(self.name))

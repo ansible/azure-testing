@@ -36,13 +36,12 @@ except:
 
 DOCUMENTATION = '''
 ---
-module: azure_rm_virtualnetwork_facts
+module: azure_rm_publicip_facts
 
 short_description: Get public IP facts.
 
 description:
     - Get facts for a specific public IP or all public IPs within a resource group.
-
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -51,13 +50,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -82,11 +81,11 @@ options:
         default: null
     name:
         description:
-            - Only show results for a specific security group.
+            - Only show results for a specific Public IP.
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of the resource group containing the Public IPs.
         required: true
         default: null
 
@@ -100,13 +99,13 @@ authors:
 '''
 
 EXAMPLES = '''
-    - name: Get facts for one public IP
-      azure_rm_virtualnetwork_facts:
+    - name: Get facts for one Public IP
+      azure_rm_publicip_facts:
         resource_group: Testing
-        name: secgroup001
+        name: publicip001
 
-    - name: Get facts for all public IPs
-      azure_rm_virtualnetwork_facts:
+    - name: Get facts for all Public IPs
+      azure_rm_publicip_facts:
         resource_group: Testing
 
 '''
@@ -135,7 +134,7 @@ RETURNS = '''
 }
 '''
 
-AZURE_OBJECT_CLASS = 'VirtualNetwork'
+AZURE_OBJECT_CLASS = 'PublicIp'
 
 
 class AzureRMPublicIPFacts(AzureRMModuleBase):
@@ -186,11 +185,11 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         return item_dict
 
     def list_items(self):
-        self.log('List all for resource group {0}'.format(self.resource_group))
+        self.log('List all items')
         try:
             response = self.network_client.public_ip_addresses.list(self.resource_group)
         except AzureHttpError, exc:
-            self.fail("Failed to list all for resource group: {0} - {1}".format(self.resource_group, str(exc)))
+            self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
         for item in response:
