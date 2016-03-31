@@ -42,7 +42,6 @@ short_description: Get network interface facts.
 
 description:
     - Get facts for a specific network interface or all network interfaces within a resource group.
-
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -51,13 +50,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -82,11 +81,11 @@ options:
         default: null
     name:
         description:
-            - Only show results for a specific security group.
+            - Only show results for a specific network interface.
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of the resource group containing the network interface(s).
         required: true
         default: null
 
@@ -103,7 +102,7 @@ EXAMPLES = '''
     - name: Get facts for one network interface
       azure_rm_networkinterface_facts:
         resource_group: Testing
-        name: secgroup001
+        name: nic001
 
     - name: Get facts for all network interfaces
       azure_rm_networkinterface_facts:
@@ -131,7 +130,6 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
                                                            **kwargs)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=[]
         )
 
@@ -152,12 +150,12 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
     def get_item(self):
         self.log('Get properties for {0}'.format(self.name))
-        item = None
         item_dict = dict()
 
         try:
             item = self.network_client.network_interfaces.get(self.resource_group, self.name)
-        except CloudError:
+        except Exception, exc:
+            self.fail("failed with exception {0}".format(str(exc)))
             pass
 
         if item:
@@ -166,11 +164,11 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         return item_dict
 
     def list_items(self):
-        self.log('List all for resource group {0}'.format(self.resource_group))
+        self.log('List all items')
         try:
             response = self.network_client.network_interfaces.list(self.resource_group)
-        except AzureHttpError, exc:
-            self.fail("Failed to list all for resource group: {0} - {1}".format(self.resource_group, str(exc)))
+        except Exception, exc:
+            self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
         for item in response:

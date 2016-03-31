@@ -407,7 +407,8 @@ class AzureInventory(object):
             try:
                 for resource_group in self.resource_groups:
                     virtual_machine = self._compute_client.virtual_machines.get(resource_group,
-                                                                                self._args.host)
+                                                                                self._args.host,
+                                                                                expand='instanceview')
                     self._get_security_groups(resource_group)
                     self._load_machines([virtual_machine], resource_group)
             except AzureMissingResourceHttpError, e:
@@ -418,7 +419,8 @@ class AzureInventory(object):
         elif len(self.resource_groups) > 0:
             try:
                 for resource_group in self.resource_groups:
-                    virtual_machines = self._compute_client.virtual_machines.list(resource_group)
+                    virtual_machines = self._compute_client.virtual_machines.list(resource_group,
+                                                                                  expand='instanceview')
                     self._get_security_groups(resource_group)
                     self._load_machines(virtual_machines, resource_group)
             except AzureMissingResourceHttpError, e:
@@ -430,7 +432,8 @@ class AzureInventory(object):
             try:
                 resource_groups = self._resource_client.resource_groups.list(None)
                 for resource_group in resource_groups:
-                    virtual_machines = self._compute_client.virtual_machines.list(resource_group.name)
+                    virtual_machines = self._compute_client.virtual_machines.list(resource_group.name,
+                                                                                  expand='instanceview')
                     self._get_security_groups(resource_group.name)
                     self._load_machines(virtual_machines, resource_group.name)
             except AzureHttpError, e:
@@ -638,6 +641,7 @@ class AzureInventory(object):
                     pass
 
         return settings
+
 
 def main():
     if not HAS_AZURE:

@@ -1,0 +1,348 @@
+- name: Create resource group
+  azure_rm_resourcegroup:
+      name: "{{ resource_group }}"
+      location: westus
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create virtual network
+  azure_rm_virtualnetwork:
+      name: vnet001
+      resource_group: "{{ resource_group }}"
+      address_prefixes_cidr: "10.10.0.0/16"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create subnet
+  azure_rm_subnet:
+      name: subnet001
+      resource_group: "{{ resource_group }}"
+      virtual_network_name: vnet001
+      address_prefix_cidr: "10.10.0.0/24"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create second virtual network
+  azure_rm_virtualnetwork:
+      name: vnet002
+      resource_group: "{{ resource_group }}"
+      address_prefixes_cidr: "10.20.0.0/16"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create second subnet
+  azure_rm_subnet:
+      name: subnet002
+      resource_group: "{{ resource_group }}"
+      virtual_network_name: vnet002
+      address_prefix_cidr: "10.20.0.0/24"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create security group
+  azure_rm_securitygroup:
+      name: secgroup001
+      resource_group: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create second security group
+  azure_rm_securitygroup:
+      name: secgroup002
+      resource_group: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create a public ip
+  azure_rm_publicipaddress:
+      name: publicip001
+      resource_group: "{{ resource_group }}"
+      allocation_method: "Static"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create second public ip
+  azure_rm_publicipaddress:
+      name: publicip002
+      resource_group: "{{ resource_group }}"
+      allocation_method: "Static"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Delete network interface, if it exists
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      state: absent
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Should require subnet when creating nic
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      virtual_network_name: vnet001
+      security_group_name: secgroup001
+      public_ip_address_name: publicip001
+  register: output
+  ignore_errors: yes
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.failed
+          - "'subnet' in output.msg"
+
+- name: Should require security group when creating nic
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      virtual_network_name: vnet001
+      public_ip_address_name: publicip001
+      subnet: subnet001
+  register: output
+  ignore_errors: yes
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.failed
+          - "'security_group_name' in output.msg"
+
+- name: Should require virtual network when creating nic
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      security_group_name: secgroup001
+      public_ip_address_name: publicip001
+      subnet: subnet001
+  register: output
+  ignore_errors: yes
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.failed
+          - "'virtual_network_name' in output.msg"
+
+- name: Create nic
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      virtual_network_name: vnet001
+      subnet: subnet001
+      security_group_name: secgroup001
+      public_ip_address_name: publicip001
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Should be idempotent
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+      virtual_network_name: vnet001
+      subnet: subnet001
+      security_group_name: secgroup001
+      public_ip_address_name: publicip001
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that: not output.changed
+
+- name: Should change private IP address
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      debug: "{{ playbook_debug }}"
+      private_ip_address: 10.10.0.10
+      private_ip_allocation_method: Static
+      log_mode: file
+      virtual_network_name: vnet001
+      subnet: subnet001
+      security_group_name: secgroup001
+      public_ip_address_name: publicip001
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.changed
+          - output.results.ip_configuration.private_ip_address == '10.10.0.10'
+          - output.results.ip_configuration.private_ip_allocation_method == 'Static'
+
+- name: Should change virtual network and subnet
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      private_ip_allocation_method: Dynamic
+      virtual_network_name: vnet002
+      subnet: subnet002
+      security_group_name: secgroup002
+      public_ip_address_name: publicip002
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.changed
+          - "'10.20' in output.results.ip_configuration.private_ip_address"
+          - output.results.ip_configuration.private_ip_allocation_method == 'Dynamic'
+          - output.results.ip_configuration.subnet.name == 'subnet002'
+          - output.results.ip_configuration.public_ip_address.name == 'publicip002'
+
+- name: Add tags
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      tags:
+          testing: testing
+          foo: bar
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.changed
+          - output.results.tags | length == 2
+          - output.results.tags.testing == 'testing'
+
+- name: Purge one tag
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      tags:
+          testing: testing
+      purge_tags: yes
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.changed
+          - output.results.tags | length == 1
+
+- name: Purge all tags
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      purge_tags: yes
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.changed
+          - output.results.tags | length == 0
+
+- name: Gather facts for one nic
+  azure_rm_networkinterface_facts:
+      resource_group: "{{ resource_group }}"
+      name: nic003
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results | length == 1
+
+- name: Gather facts for all nics
+  azure_rm_networkinterface_facts:
+      resource_group: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results | length >= 1
+
+- name: Delete nic
+  azure_rm_networkinterface:
+      name: nic003
+      resource_group: "{{ resource_group }}"
+      state: absent
+  register: output
+
+- name: Gather facts for all nics
+  azure_rm_networkinterface_facts:
+      resource_group: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results | length == 0

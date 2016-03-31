@@ -1,15 +1,3 @@
-- name: Remove resource group, if it exists
-  azure_rm_resourcegroup:
-    name: "{{ resource_group }}"
-    state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
-    force: yes
-  register: output
-
-- debug: var=output
-  when: playbook_debug
-
 - name: Create resource group
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"

@@ -538,7 +538,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         if self.state in ('present', 'started', 'stopped'):
             # Verify parameters and resolve any defaults
-            self.vm_size_is_valid()
+
+            if self.vm_size and not self.vm_size_is_valid():
+                self.fail("Parameter error: vm_size {0} is not valid for your subscription and location.".foramt(
+                    self.vm_size
+                ))
 
             if self.network_interface_names:
                 for name in self.network_interface_names:

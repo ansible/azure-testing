@@ -155,6 +155,25 @@ EXAMPLES = '''
         state: absent
 '''
 
+RETURNS = '''
+{
+    "changed": false,
+    "check_mode": false,
+    "results": {
+        "dns_settings": {},
+        "etag": "W/\"a5e56955-12df-445a-bda4-dc129d22c12f\"",
+        "idle_timeout_in_minutes": 4,
+        "ip_address": "52.160.103.93",
+        "location": "westus",
+        "name": "publicip002",
+        "provisioning_state": "Succeeded",
+        "public_ip_allocation_method": "Static",
+        "tags": {},
+        "type": "Microsoft.Network/publicIPAddresses"
+    }
+}
+'''
+
 
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9]$")
 

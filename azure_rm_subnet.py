@@ -240,12 +240,6 @@ class AzureRMSubnet(AzureRMModuleBase):
                 self.results['results']['status'] = 'Deleted'
         return self.results
 
-    def check_provisioning_state(self, subnet):
-        if subnet.provisioning_state != AZURE_SUCCESS_STATE:
-            self.fail("Error subnet {0} has a provisioning state of {1}. "
-                      "Expecting state to be {2}.".format(subnet.name, subnet.provisioning_state,
-                                                          AZURE_SUCCESS_STATE))
-
     def create_or_update_subnet(self):
         subnet = Subnet(
             address_prefix=self.address_prefix_cidr

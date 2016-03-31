@@ -68,14 +68,14 @@ CIDR_PATTERN = re.compile("(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){
 AZURE_SUCCESS_STATE = "Succeeded"
 AZURE_FAILED_STATE = "Failed"
 
-AZURE_MIN_VERSION = "1.1.1"
+AZURE_MIN_VERSION = "2016-03-30"
 
 HAS_AZURE = True
 
 try:
     from msrest.serialization import Serializer
     from msrestazure.azure_exceptions import CloudError
-    from azure.common import __version__ as azure_common_version
+    from azure.mgmt.compute import __version__ as azure_compute_version
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
                                                              NetworkManagementClientConfiguration
@@ -135,9 +135,9 @@ class AzureRMModuleBase(object):
         if not HAS_AZURE:
             self.fail("The Azure Python SDK is not installed (try 'pip install azure')")
 
-        if azure_common_version < AZURE_MIN_VERSION:
-            self.fail("Expecting azure.common.__version__ to be >= {0}. Do you have Azure >= 2.0.0rc1 "
-                      "installed?".format(AZURE_MIN_VERSION))
+        if azure_compute_version < AZURE_MIN_VERSION:
+            self.fail("Expecting azure.mgmt.compute.__version__ to be >= {0}. Found version {1} "
+                      "Do you have Azure >= 2.0.0rc2 installed?".format(AZURE_MIN_VERSION, azure_compute_version))
 
         self._network_client = None
         self._storage_client = None

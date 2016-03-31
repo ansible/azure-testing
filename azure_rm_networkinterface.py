@@ -97,7 +97,6 @@ options:
         description:
             - Assert the state of the network interface. Use 'present' to create or update an interface and
               'absent' to delete an interface.
-        required: false
         default: present
         choices:
             - absent
@@ -112,7 +111,9 @@ options:
         default: null
     private_ip_allocation_method:
         description:
-            - Specify whether or not the assigned IP address is permanent.
+            - Specify whether or not the assigned IP address is permanent. NOTE: when creating a network interface
+              specifying a value of 'Static' requires that a private_ip_address value be provided. You can update
+              the allocation method to 'Static' after a dynamic private ip address has been assigned.
         default: Dynamic
         choices:
             - Dynamic
@@ -121,18 +122,29 @@ options:
         description:
             - Name of an existing public IP address object to associate with the security group.
         default: null
+        aliases:
+            - public_ip
+            - public_ip_address
     security_group_name:
         description:
             - Name of an existing security group with which to associate the network interface. Required when
-              creatting a network interface. Cannot be changed after a network interface is required.
+              creating a network interface.
         default: null
         required: true
         aliases:
             - security_group
+    virtual_network_name:
+        description:
+            - Name of an existing virtual network with which the network interface will be associated. Required
+              when creating a network interface.
+        default: null
+        required true
+        aliases:
+            - virtual_network
     subnet_name:
         description:
             - Name of an existing subnet within the specified virtual network. Required when the network interface
-              is created. Cannot be changed after network interface is required.
+              is created.
         required: true
         default: null
         aliases:
@@ -148,14 +160,6 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
-    virtual_network_name:
-        description:
-            - Name of an existing virtual network with which the network interface will be associated. Required
-              when creating a network interface. Cannot be changed after network interface is created.
-        default: null
-        required true
-        aliases:
-            - virtual_network
 
 requirements:
     - "python >= 2.7"
@@ -170,7 +174,7 @@ EXAMPLES = '''
     - name: Create nic
         azure_rm_networkinterface:
             name: nic003
-            resource_group: "{{ resource_group }}"
+            resource_group: Testing
             virtual_network_name: vnet001
             subnet_name: subnet001
             security_group_name: secgroup001
@@ -178,9 +182,9 @@ EXAMPLES = '''
 
     - name: Delete network interface
         azure_rm_networkinterface:
+            resource_group: Testing
             name: nic003
             state: absent
-            resource_group: "{{ resource_group }}"
 '''
 
 RETURNS = '''
@@ -252,13 +256,15 @@ def nic_to_dict(nic):
 
     if nic.network_security_group:
         result['network_security_group']['id'] = nic.network_security_group.id
-        result['network_security_group']['name'] = nic.network_security_group.name
+        id_keys = azure_id_to_dict(nic.network_security_group.id)
+        result['network_security_group']['name'] = id_keys['networkSecurityGroups']
 
     if nic.ip_configurations[0].subnet:
         result['ip_configuration']['subnet']['id'] = \
             nic.ip_configurations[0].subnet.id
-        result['ip_configuration']['subnet']['id'] = \
-            nic.ip_configurations[0].subnet.name
+        id_keys = azure_id_to_dict(nic.ip_configurations[0].subnet.id)
+        result['ip_configuration']['subnet']['virtual_network_name'] = id_keys['virtualNetworks']
+        result['ip_configuration']['subnet']['name'] = id_keys['subnets']
 
     if nic.ip_configurations[0].public_ip_address:
         result['ip_configuration']['public_ip_address']['id'] = \
@@ -281,19 +287,13 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             state=dict(default='present', choices=['present', 'absent']),
             private_ip_address=dict(type='str'),
             private_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
-            public_ip_address_name=dict(type='str', aliases=['public_ip']),
+            public_ip_address_name=dict(type='str', aliases=['public_ip', 'public_ip_address']),
             subnet_name=dict(type='str', aliases=['subnet']),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
-            tags=dict(type='dict'),
             log_path=dict(type='str', default='azure_rm_networkinterface.log')
         )
 
-        required_if = [
-            ('state', 'present', ['subnet_name', 'virtual_network_name', 'security_group_name'])
-        ]
-
         super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                      required_if=required_if,
                                                       supports_check_mode=True, **kwargs)
 
         self.resource_group = None
@@ -317,12 +317,15 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         results = dict()
         changed = False
         nic = None
+        subnet = None
+        nsg = None
+        public_ip = None
 
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
@@ -334,11 +337,17 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                       "and contain at least one number.")
 
         if self.state == 'present':
-            subnet = self.get_subnet()
+            if self.virtual_network_name and not self.subnet_name:
+                self.fail("Parameter error: a subnet is required when passing a virtual_network_name.")
+
+            if self.subnet_name and not self.virtual_network_name:
+                self.fail("Parameter error: virtual_network_name is required when passing a subnet value.")
+
+            if self.virtual_network_name and self.subnet_name:
+                subnet = self.get_subnet(self.virtual_network_name, self.subnet_name)
+
             if self.public_ip_address_name:
                 public_ip = self.get_public_ip_address(self.public_ip_address_name)
-                self.log("public ip")
-                self.log(str(public_ip))
 
             if self.security_group_name:
                 nsg = self.get_security_group(self.security_group_name)
@@ -350,6 +359,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             self.log('Network interface {0} exists'.format(self.name))
             self.check_provisioning_state(nic, self.state)
             results = nic_to_dict(nic)
+            self.log(results, pretty_print=True)
 
             if self.state == 'present':
 
@@ -367,28 +377,31 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                     if results['ip_configuration']['public_ip_address'].get('id') != public_ip.id:
                         self.log("CHANGED: network interface {0} public ip".format(self.name))
                         changed = True
-                        results['ip_configuration']['public_ip_address_id'] = public_ip.id
-                        results['ip_configuration']['public_ip_address_name'] = public_ip.name
+                        results['ip_configuration']['public_ip_address']['id'] = public_ip.id
+                        results['ip_configuration']['public_ip_address']['name'] = public_ip.name
 
-                # The security group (if there is one) is not returned by the API
-                # if self.security_group_name:
-                #     if results['network_security_group'].get('id') != nsg.id:
-                #         self.log("CHANGED: network interface {0} network security group".format(self.name))
-                #         changed = True
-                #         results['network_security_group']['id'] = nsg.id
-                #         results['network_security_group']['name'] = nsg.name
+                if self.security_group_name:
+                    if results['network_security_group'].get('id') != nsg.id:
+                        self.log("CHANGED: network interface {0} network security group".format(self.name))
+                        changed = True
+                        results['network_security_group']['id'] = nsg.id
+                        results['network_security_group']['name'] = nsg.name
 
-                if results['ip_configuration']['private_ip_allocation_method'] != self.private_ip_allocation_method:
-                    self.log("CHANGED: network interface {0} private ip allocation".format(self.name))
-                    changed = True
-                    results['ip_configuration']['private_ip_allocation_method'] = self.private_ip_allocation_method
+                if self.private_ip_allocation_method:
+                    if results['ip_configuration']['private_ip_allocation_method'] != self.private_ip_allocation_method:
+                        self.log("CHANGED: network interface {0} private ip allocation".format(self.name))
+                        changed = True
+                        results['ip_configuration']['private_ip_allocation_method'] = self.private_ip_allocation_method
+                        if self.private_ip_allocation_method == 'Dynamic':
+                            results['ip_configuration']['private_ip_address'] = None
 
-                # The subnet value is not returned by the API
-                # if results['ip_configuration']['subnet'].get('id') != subnet.id:
-                #     changed = True
-                #     self.log("CHANGED: network interface {0} subnet".format(self.name))
-                #     results['ip_configuration']['subnet']['id'] = subnet.id
-                #     results['ip_configuration']['subnet']['name'] = subnet.name
+                if self.subnet_name:
+                    if results['ip_configuration']['subnet'].get('id') != subnet.id:
+                        changed = True
+                        self.log("CHANGED: network interface {0} subnet".format(self.name))
+                        results['ip_configuration']['subnet']['id'] = subnet.id
+                        results['ip_configuration']['subnet']['name'] = subnet.name
+                        results['ip_configuration']['subnet']['virtual_network_name'] = self.virtual_network_name
 
             elif self.state == 'absent':
                 self.log("CHANGED: network interface {0} exists but requested state is 'absent'".format(self.name))
@@ -412,6 +425,14 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                     # create network interface
                     self.log("Creating network interface {0}.".format(self.name))
 
+                    # check required parameters
+                    if not self.security_group_name:
+                        self.fail("parameter error: security_group_name required when creating a network interface.")
+                    if not self.subnet_name:
+                        self.fail("parameter error: subnet_name required when creating a network interface.")
+                    if not self.virtual_network_name:
+                        self.fail("parameter error: virtual_network_name required when creating a network interface.")
+
                     nic = NetworkInterface(
                         location=self.location,
                         name=self.name,
@@ -424,11 +445,10 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                         ]
                     )
                     nic.ip_configurations[0].subnet = Subnet(id=subnet.id)
-                    if self.security_group_name:
-                        nic.network_security_group = NetworkSecurityGroup(id=nsg.id,
-                                                                          name=nsg.name,
-                                                                          location=nsg.location,
-                                                                          resource_guid=nsg.resource_guid)
+                    nic.network_security_group = NetworkSecurityGroup(id=nsg.id,
+                                                                      name=nsg.name,
+                                                                      location=nsg.location,
+                                                                      resource_guid=nsg.resource_guid)
                     if self.private_ip_address:
                         nic.ip_configurations[0].private_ip_address = self.private_ip_address
                     if self.public_ip_address_name:
@@ -447,13 +467,17 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                             NetworkInterfaceIPConfiguration(
                                 name=results['ip_configuration']['name'],
                                 private_ip_allocation_method=
-                                    results['ip_configuration']['private_ip_allocation_method'],
+                                results['ip_configuration']['private_ip_allocation_method'],
                             )
                         ],
                     )
+                    subnet = self.get_subnet(results['ip_configuration']['subnet']['virtual_network_name'],
+                                             results['ip_configuration']['subnet']['name'])
                     nic.ip_configurations[0].subnet = Subnet(id=subnet.id)
+
                     if results['ip_configuration'].get('private_ip_address'):
                         nic.ip_configurations[0].private_ip_address = results['ip_configuration']['private_ip_address']
+
                     if results['ip_configuration']['public_ip_address'].get('id'):
                         public_ip = \
                             self.get_public_ip_address(results['ip_configuration']['public_ip_address']['name'])
@@ -462,6 +486,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                             name=public_ip.name,
                             location=public_ip.location,
                             resource_guid=public_ip.resource_guid)
+
                     if results['network_security_group'].get('id'):
                         nsg = self.get_security_group(results['network_security_group']['name'])
                         nic.network_security_group = NetworkSecurityGroup(id=nsg.id,
@@ -470,9 +495,8 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                                                                           resource_guid=nsg.resource_guid)
 
                 # See what actually gets sent to the API
-                serializer = Serializer()
-                request_body = serializer.body(nic, 'NetworkInterface')
-                self.log(request_body, pretty_print=True)
+                request = self.serialize_obj(nic, 'NetworkInterface')
+                self.log(request, pretty_print=True)
 
                 self.results['results'] = self.create_or_update_nic(nic)
 
@@ -510,30 +534,31 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         return True
 
     def get_public_ip_address(self, name):
+        self.log("Fetching public ip address {0}".format(name))
         try:
             public_ip = self.network_client.public_ip_addresses.get(self.resource_group, name)
             return public_ip
-        except CloudError:
-            self.fail("Parameter error: public ip address {0} not found in resource group {1}".format(
-                self.public_ip_address_name, self.resource_group))
+        except Exception, exc:
+            self.fail("Error: fetching public ip address {0} - {1}".format(self.name, str(exc)))
 
-    def get_subnet(self):
+    def get_subnet(self, vnet_name, subnet_name):
+        self.log("Fetching subnet {0} in virtual network {1}".format(subnet_name, vnet_name))
         try:
-            subnet = self.network_client.subnets.get(self.resource_group,
-                                                     self.virtual_network_name,
-                                                     self.subnet_name)
+            subnet = self.network_client.subnets.get(self.resource_group, vnet_name, subnet_name)
             return subnet
-        except CloudError:
-            self.fail("Parameter error: subnet {0} not found in virtual network {1}".format(self.subnet_name,
-                                                                                            self.virtual_network_name))
+        except Exception, exc:
+            self.fail("Error: fetching subnet {0} in virtual network {1} - {2}".format(subnet_name,
+                                                                                      vnet_name,
+                                                                                      str(exc)))
 
     def get_security_group(self, name):
+        self.log("Fetching security group {0}".format(name))
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, name)
             return nsg
-        except CloudError:
-            self.fail("Parameter error: network security group {0} not found.".format(
-                self.security_group_name))
+        except Exception, exc:
+            self.fail("Error: fetching network security group {0} - {1}.".format(name, str(exc)))
+
 
 def main():
     if '--interactive' in sys.argv:
