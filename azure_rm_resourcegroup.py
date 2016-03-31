@@ -170,7 +170,6 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.location = None
         self.tags = None
         self.force = None
-        self.purge_tags = None
 
         self.results = dict(
             changed=False,

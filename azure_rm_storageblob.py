@@ -45,7 +45,7 @@ module: azure_rm_storageblob
 short_description: Manage blob containers and blob objects.
 
 description:
-    - Create and manage blob containers and blobs within a given storage account, and upload and download blobs.
+    - Create, update and delete blob containers and blob objects, as well as uupload and download blobs.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -282,6 +282,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
                                                  supports_check_mode=True,
                                                  mutually_exclusive=mutually_exclusive,
+                                                 supports_tags=True,
                                                  **kwargs)
 
         self.blob_client = None
@@ -326,21 +327,22 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             if not self.container_obj:
                 # create the container
                 self.create_container()
-            elif not self.blob:
+            elif self.container_obj and not self.blob:
                 # update container attributes
                 update_tags, self.container_obj['tags'] = self.update_tags(self.container_obj.get('tags'))
                 if update_tags:
                     self.update_container_tags(self.container_obj['tags'])
-                    
-            if self.blob is not None:
-                # create, update or download blob
-                if self.src is not None and self.src_is_valid():
-                    if self.blob_obj is None or self.force:
-                        self.upload_blob()
 
-                elif self.dest is not None:
-                    if self.dest_is_valid():
-                        self.download_blob()
+            if self.blob:
+                # create, update or download blob
+                if self.src and self.src_is_valid():
+                    if self.blob_obj and not self.force:
+                        self.fail("Cannot upload to {0}. Blob with that name already exists. "
+                            "Use the force option".format(self.blob))
+                    else:
+                        self.upload_blob()
+                elif self.dest and self.dest_is_valid():
+                    self.download_blob()
 
                 update_tags, self.blob_obj['tags'] = self.update_tags(self.blob_obj.get('tags'))
                 if update_tags:
@@ -350,29 +352,30 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     self.update_blob_content_settings()
 
         elif self.state == 'absent':
-            if self.container_obj is not None and self.blob is None:
+            if self.container_obj and not self.blob:
                 # Delete container
                 if self.container_has_blobs():
                     if self.force:
                         self.delete_container()
                     else:
-                        self.results['actions'].append("Skipped delete container {0}. Container has blobs.".format(
+                        self.fail("Cannot delete container {0}. It contains blobs. Use the force option.".format(
                             self.container))
                 else:
                     self.delete_container()
-            elif self.container_obj is not None and self.blob_obj is not None:
+            elif self.container_obj and self.blob_obj:
                 # Delete blob
                 self.delete_blob()
 
         return self.results
 
     def get_container(self):
-        result  = None
+        result  = dict()
         container = None
-        try:
-            container = self.blob_client.get_container_properties(self.container)
-        except AzureMissingResourceHttpError:
-            pass
+        if self.container:
+            try:
+                container = self.blob_client.get_container_properties(self.container)
+            except AzureMissingResourceHttpError:
+                pass
         if container:
             result = dict(
                 name=container.name,
@@ -382,12 +385,13 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         return result
 
     def get_blob(self):
-        result = None
+        result = dict()
         blob = None
-        try:
-            blob = self.blob_client.get_blob_properties(self.container, self.blob)
-        except AzureMissingResourceHttpError:
-            pass
+        if self.blob:
+            try:
+                blob = self.blob_client.get_blob_properties(self.container, self.blob)
+            except AzureMissingResourceHttpError:
+                pass
         if blob:
             result = dict(
                 name=blob.name,
@@ -410,7 +414,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.log('Create container %s' % self.container)
 
         tags = None
-        if not self.blob and  self.tags is not None:
+        if not self.blob and  self.tags:
             # when a blob is present, then tags are assigned at the blob level
             tags = self.tags
 
@@ -436,12 +440,12 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 cache_control=self.cache_control,
                 content_md5=self.content_md5
             )
-
-        try:
-            self.blob_client.create_blob_from_path(self.container, self.blob, self.src,
-                                                   metadata=self.tags, content_settings=content_settings)
-        except AzureHttpError, exc:
-            self.fail("Error creating blob {0} - {1}".format(self.blob, str(exc)))
+        if not self.check_mode:
+            try:
+                self.blob_client.create_blob_from_path(self.container, self.blob, self.src,
+                                                       metadata=self.tags, content_settings=content_settings)
+            except AzureHttpError, exc:
+                self.fail("Error creating blob {0} - {1}".format(self.blob, str(exc)))
 
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
@@ -450,13 +454,14 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.results['blob'] = self.blob_obj
 
     def download_blob(self):
-        try:
-            self.blob_client.get_blob_to_path(self.container, self.blob, self.dest)
-        except Exception, exc:
-            self.fail("Failed to download blob {0}:{1} to {2} - {3}".format(self.container,
-                                                                            self.blob,
-                                                                            self.dest,
-                                                                            exc))
+        if not self.check_mode:
+            try:
+                self.blob_client.get_blob_to_path(self.container, self.blob, self.dest)
+            except Exception, exc:
+                self.fail("Failed to download blob {0}:{1} to {2} - {3}".format(self.container,
+                                                                                self.blob,
+                                                                                self.dest,
+                                                                                exc))
         self.results['changed'] = True
         self.results['actions'].append('downloaded blob {0}:{1} to {2}'.format(self.container,
                                                                                self.blob,
@@ -477,43 +482,45 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         return True
 
     def dest_is_valid(self):
-        self.dest = os.path.expanduser(self.dest)
-        self.dest = os.path.expandvars(self.dest)
-        if not os.path.basename(self.dest):
-            # dest is a directory
-            if os.path.isdir(self.dest):
-                self.log("Path is dir. Appending blob name.")
-                self.dest += self.blob
+        if not self.check_mode:
+            self.dest = os.path.expanduser(self.dest)
+            self.dest = os.path.expandvars(self.dest)
+            if not os.path.basename(self.dest):
+                # dest is a directory
+                if os.path.isdir(self.dest):
+                    self.log("Path is dir. Appending blob name.")
+                    self.dest += self.blob
+                else:
+                    try:
+                        self.log('Attempting to makedirs {0}'.format(self.dest))
+                        os.makddirs(self.dest)
+                    except IOError, exc:
+                        self.fail("Failed to create directory {0} - {1}".format(self.dest, exc))
+                    self.dest += self.blob
             else:
-                try:
-                    self.log('Attempting to makedirs {0}'.format(self.dest))
-                    os.makddirs(self.dest)
-                except IOError, exc:
-                    self.fail("Failed to create directory {0} - {1}".format(self.dest, exc))
-                self.dest += self.blob
-        else:
-            # does path exist without basename
-            file_name = os.path.basename(self.dest)
-            path = self.dest.replace(file_name, '')
-            self.log('Checking path {0}'.format(path))
-            if not os.path.isdir(path):
-                try:
-                    self.log('Attempting to makedirs {0}'.format(path))
-                    os.makedirs(path)
-                except IOError, exc:
-                    self.fail("Failed to create directory {0} - {1}".format(path, exc))
-        self.log('Checking final path {0}'.format(self.dest))
-        if os.path.isfile(self.dest) and not self.force:
-            # dest already exists and we're not forcing
-            self.log('Path already exists')
-            return False
+                # does path exist without basename
+                file_name = os.path.basename(self.dest)
+                path = self.dest.replace(file_name, '')
+                self.log('Checking path {0}'.format(path))
+                if not os.path.isdir(path):
+                    try:
+                        self.log('Attempting to makedirs {0}'.format(path))
+                        os.makedirs(path)
+                    except IOError, exc:
+                        self.fail("Failed to create directory {0} - {1}".format(path, exc))
+            self.log('Checking final path {0}'.format(self.dest))
+            if os.path.isfile(self.dest) and not self.force:
+                # dest already exists and we're not forcing
+                self.fail("Dest {0} already exists. Cannot download. Use the force option.".format(self.dest))
+
         return True
 
     def delete_container(self):
-        try:
-            self.blob_client.delete_container(self.container)
-        except AzureHttpError, exc:
-            self.fail("Error deleting container {0} - {1}".format(self.container, str(exc)))
+        if not self.check_mode:
+            try:
+                self.blob_client.delete_container(self.container)
+            except AzureHttpError, exc:
+                self.fail("Error deleting container {0} - {1}".format(self.container, str(exc)))
 
         self.results['changed'] = True
         self.results['actions'].append('deleted container {0}'.format(self.container))
@@ -528,30 +535,33 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         return False
 
     def delete_blob(self):
-        try:
-            self.blob_client.delete_blob(self.container, self.blob)
-        except AzureHttpError, exc:
-            self.fail("Error deleting blob {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
+        if not self.check_mode:
+            try:
+                self.blob_client.delete_blob(self.container, self.blob)
+            except AzureHttpError, exc:
+                self.fail("Error deleting blob {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
 
         self.results['changed'] = True
         self.results['actions'].append('deleted blob {0}:{1}'.format(self.container, self.blob))
         self.results['container'] = self.container_obj
 
-    def update_container_tags(self):
-        try:
-            self.blob_client.set_container_metadata(self.container, metadata=self.tags)
-        except AzureHttpError, exc:
-            self.fail("Error updating container tags {0} - {1}".format(self.container, str(exc)))
+    def update_container_tags(self, tags):
+        if not self.check_mode:
+            try:
+                self.blob_client.set_container_metadata(self.container, metadata=tags)
+            except AzureHttpError, exc:
+                self.fail("Error updating container tags {0} - {1}".format(self.container, str(exc)))
         self.container_obj = self.get_container()
         self.results['changed'] = True
         self.results['actions'].append("updated container {0} tags.".format(self.container))
         self.results['container'] = self.container_obj
 
     def update_blob_tags(self, tags):
-        try:
-            self.blob_client.set_blob_metadata(self.container, self.blob, metadata=tags)
-        except AzureHttpError, exc:
-            self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, exc))
+        if not self.check_mode:
+            try:
+                self.blob_client.set_blob_metadata(self.container, self.blob, metadata=tags)
+            except AzureHttpError, exc:
+                self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, exc))
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
         self.results['actions'].append("updated blob {0}:{1} tags.".format(self.container, self.blob))
@@ -583,10 +593,11 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             cache_control=self.cache_control,
             content_md5=self.content_md5
         )
-        try:
-            self.blob_client.set_blob_properties(self.container, self.blob, content_settings=content_settings)
-        except AzureHttpError, exc:
-            self.fail("Update blob content settings {0}:{1} - {2}".format(self.container, self.blob, exc))
+        if not self.check_mode:
+            try:
+                self.blob_client.set_blob_properties(self.container, self.blob, content_settings=content_settings)
+            except AzureHttpError, exc:
+                self.fail("Update blob content settings {0}:{1} - {2}".format(self.container, self.blob, exc))
 
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
