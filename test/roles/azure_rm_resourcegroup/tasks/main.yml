@@ -1,0 +1,138 @@
+- name: Remove resource group, if it exists
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    state: absent
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+    force: yes
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: Create resource group
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    location: westus
+    tags:
+      testing: testing
+      delete: never
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results.tags.testing == 'testing'
+          - output.results.tags.delete == 'never'
+          - output.results.location == 'westus'
+
+- name: Should be idempotent
+  azure_rm_resourcegroup:
+    name: Testing
+    location: westus
+    tags:
+      testing: testing
+      delete: never
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+    that: not output.changed
+
+- name: Change resource group tags
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    tags:
+      testing: 'no'
+      delete: 'on-exit'
+      foo: 'bar'
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+
+- assert:
+   that:
+     - output.results.tags | length == 3
+     - output.results.tags.testing == 'no'
+     - output.results.tags.delete == 'on-exit'
+     - output.results.tags.foo == 'bar'
+
+- name: Purge one tag
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    tags:
+      testing: 'no'
+      delete: 'on-exit'
+    purge_tags: yes
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+
+- assert:
+    that:
+      - output.results.tags | length == 2
+      - output.results.tags.testing == 'no'
+      - output.results.tags.delete == 'on-exit'
+
+- name: Purge all tags
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    purge_tags: yes
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+
+- assert:
+    that:
+      - output.results.tags | length == 0
+
+- name: Add a resource
+  azure_rm_virtualnetwork:
+    resource_group: "{{ resource_group }}"
+    name: "virtualnet01"
+    address_prefixes_cidr: '10.1.0.0/16'
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- name: Remove resource group should fail
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    state: absent
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+  ignore_errors: yes
+
+- assert:
+    that:
+      - output.failed
+      - "'Resources exist' in output.msg"
+
+- name: Force remove resource group
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+    state: absent
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+    force: yes
+  register: output
+  ignore_errors: yes
+
+
+
+

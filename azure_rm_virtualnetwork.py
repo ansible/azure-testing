@@ -51,7 +51,7 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
@@ -126,11 +126,16 @@ options:
             - present
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
+
 
 requirements:
     - "python >= 2.7"
@@ -187,7 +192,7 @@ EXAMPLE_OUTPUT = '''
 }
 '''
 
-NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9_]$")
+NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_]{1,61}[a-z0-9_]$")
 
 
 def virtual_network_to_dict(vnet):
@@ -230,7 +235,6 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
             purge_address_prefixes=dict(type='bool', default=False, aliases=['purge']),
             purge_dns_servers=dict(type='bool', default=False),
             log_path=dict(type='str', default='azure_rm_virtualnetwork.log'),
-            tags=dict(type='dict')
         )
 
         mutually_exclusive = [
@@ -263,7 +267,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         resource_group = self.get_resource_group(self.resource_group)
@@ -315,10 +319,9 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                         # replace existing address prefixes with requested set
                         results['address_prefixes'] = self.address_prefixes_cidr
 
-                if self.tags:
-                    if results.get('tags') != self.tags:
-                        changed = True
-                        results['tags'] = self.tags
+                update_tags, results['tags'] = self.update_tags(results['tags'])
+                if update_tags:
+                    changed = True
 
                 if self.dns_servers:
                     existing_dns_set = set(vnet.dhcp_options.dns_servers)

@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import sys
+import copy
 
 from logging import Handler, NOTSET
 from os.path import expanduser
@@ -50,6 +51,11 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
     tenant='AZURE_TENANT',
     ad_user='AZURE_AD_USER',
     password='AZURE_PASSWORD'
+)
+
+AZURE_TAG_ARGS = dict(
+    tags=dict(type='dict'),
+    purge_tags=dict(type='bool', default=False),
 )
 
 AZURE_COMMON_REQUIRED_IF = [
@@ -99,12 +105,15 @@ class AzureRMModuleBase(object):
     def __init__(self, derived_arg_spec, bypass_checks=False, no_log=False,
                  check_invalid_arguments=True, mutually_exclusive=None, required_together=None,
                  required_one_of=None, add_file_common_args=False, supports_check_mode=False,
-                 required_if=None):
+                 required_if=None, supports_tags=True):
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
         merged_arg_spec = dict()
         merged_arg_spec.update(AZURE_COMMON_ARGS)
+        if supports_tags:
+            merged_arg_spec.update(AZURE_TAG_ARGS)
+
         if derived_arg_spec:
             merged_arg_spec.update(derived_arg_spec)
 
@@ -217,6 +226,72 @@ class AzureRMModuleBase(object):
         for key, value in tags.iteritems():
             if not isinstance(value, str):
                 self.fail("Tags values must be strings. Found {0}:{1}".format(str(key), str(value)))
+
+    def _tag_purge(self, tags):
+        '''
+        Remove metadata tags not found in user provided tags parameter. Returns tuple
+        with bool indicating something changed and dict of new tags to be assigned to
+        the object.
+
+        :param tags: object metadata tags
+        :return: bool, dict of tags
+        '''
+        if not self.module.params.get('tags'):
+            # purge all tags
+            return True, dict()
+        new_tags = copy.copy(tags)
+        changed = False
+        for key in tags:
+            if not self.module.params['tags'].get(key):
+                # key not found in user provided parameters
+                new_tags.pop(key)
+                changed = True
+        if changed:
+            self.log('CHANGED: purged tags')
+        return changed, new_tags
+
+    def _tag_update(self, tags):
+        '''
+        Update metadata tags with values in user provided tags parameter. Returns
+        tuple with bool indicating something changed and dict of new tags to be
+        assigned to the object.
+
+        :param tags: object metadata tags
+        :return: bool, dict of tags
+        '''
+        if isinstance(tags, dict):
+            new_tags = copy.copy(tags)
+        else:
+            new_tags = dict()
+        changed = False
+        if self.module.params.get('tags'):
+            for key, value in self.module.params['tags'].iteritems():
+                if not (new_tags.get(key) and new_tags[key] == value):
+                    changed = True
+                    new_tags[key] = value
+        if changed:
+            self.log('CHANGED: updated tags')
+        return changed, new_tags
+
+    def update_tags(self, tags):
+        '''
+        Call from the module to update metadata tags. Returns tuple
+        with bool indicating if there was a change and dict of new
+        tags to assign to the object.
+
+        :param tags: metadata tags from the object
+        :return: bool, dict
+        '''
+        changed = False
+        updated, new_tags = self._tag_update(tags)
+        if updated:
+            changed = True
+
+        if self.module.params['purge_tags']:
+            purged, new_tags = self._tag_purge(new_tags)
+            if purged:
+                changed = True
+        return changed, new_tags
 
     def exec_module(self):
         '''

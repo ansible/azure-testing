@@ -54,13 +54,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -85,21 +85,21 @@ options:
         default: null
     storage_account_name:
         description:
-            - name of the storage account.
+            - Name of the storage account to use.
         required: true
         default: null
         aliases:
             - account_name
     blob:
         description:
-            - name of a blob object within the container.
+            - Name of a blob object within the container.
         required: false
         default: null
         aliases:
             - blob_name
     container:
         description:
-            - name of a blob container within the storage account.
+            - Name of a blob container within the storage account.
         required: true
         default: null
         aliases:
@@ -136,12 +136,12 @@ options:
             - destination
     force:
         description:
-            - Overwrite existing file or blob when uploading or download. Force deletion of a container
-              containing blobs.
+            - Overwrite existing file or blob when uploading or downloading. Force deletion of a container
+              that contains blobs.
         default: false
     resource_group:
         description:
-            - name of resource group.
+            - Name of the resource group to use.
         required: true
         default: null
     src:
@@ -159,8 +159,8 @@ options:
             - Use state 'present' to create or update a container and upload or download a blob. If the container
               does not exist, it will be created. If it exists, it will be updated with configuration options. Provide
               a blob name and either src or dest to upload or download. Provide a src path to upload and a dest path
-              to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten.
-              Use the force option to overwrite.
+              to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten
+              unless the force is used.
         default: present
         choices:
             - absent
@@ -175,11 +175,15 @@ options:
         default: null
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata 
-              for the object. In other words, existing metadata will be replaced with provided values. If no values 
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -263,7 +267,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             resource_group=dict(required=True, type='str'),
             src=dict(type='str'),
             state=dict(type='str', default='present', choices=['absent', 'present']),
-            tags=dict(type='dict'),
             public_access=dict(type='str', choices=['container', 'blob']),
             content_type=dict(type='str'),
             content_encoding=dict(type='str'),
@@ -303,7 +306,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         if not NAME_PATTERN.match(self.container):
@@ -320,15 +323,15 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             self.blob_obj = self.get_blob()
 
         if self.state == 'present':
-            if self.container_obj is None:
+            if not self.container_obj:
                 # create the container
                 self.create_container()
-            elif self.blob is None:
+            elif not self.blob:
                 # update container attributes
-                if self.tags and self.container_obj.get('tags') != self.tags:
-                    # Update container tags
-                    self.update_container_tags()
-
+                update_tags, self.container_obj['tags'] = self.update_tags(self.container_obj.get('tags'))
+                if update_tags:
+                    self.update_container_tags(self.container_obj['tags'])
+                    
             if self.blob is not None:
                 # create, update or download blob
                 if self.src is not None and self.src_is_valid():
@@ -339,8 +342,9 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     if self.dest_is_valid():
                         self.download_blob()
 
-                if self.tags and self.blob_obj.get('tags') != self.tags:
-                    self.update_blob_tags()
+                update_tags, self.blob_obj['tags'] = self.update_tags(self.blob_obj.get('tags'))
+                if update_tags:
+                    self.update_blob_tags(self.blob_obj['tags'])
 
                 if self.blob_content_settings_differ():
                     self.update_blob_content_settings()
@@ -406,7 +410,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.log('Create container %s' % self.container)
 
         tags = None
-        if self.blob is None and self.tags is not None:
+        if not self.blob and  self.tags is not None:
             # when a blob is present, then tags are assigned at the blob level
             tags = self.tags
 
@@ -543,9 +547,9 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.results['actions'].append("updated container {0} tags.".format(self.container))
         self.results['container'] = self.container_obj
 
-    def update_blob_tags(self):
+    def update_blob_tags(self, tags):
         try:
-            self.blob_client.set_blob_metadata(self.container, self.blob, metadata=self.tags)
+            self.blob_client.set_blob_metadata(self.container, self.blob, metadata=tags)
         except AzureHttpError, exc:
             self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, exc))
         self.blob_obj = self.get_blob()

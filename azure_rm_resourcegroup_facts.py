@@ -36,13 +36,12 @@ except:
 
 DOCUMENTATION = '''
 ---
-module: azure_rm_virtualnetwork_facts
+module: azure_rm_resouregroup_facts
 
-short_description: Get virtual network facts.
+short_description: Get resource group facts.
 
 description:
-    - Get facts for a specific virtual network or all virtual networks within a resource group.
-
+    - Get facts for a specific resource group or all resource groups in your subscription.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -51,13 +50,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile
+      ad_user and password. It is also possible to add additional profiles to this file. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -82,12 +81,7 @@ options:
         default: null
     name:
         description:
-            - Only show results for a specific security group.
-        default: null
-    resource_group:
-        description:
-            - Name of a resource group.
-        required: true
+            - Only show results for a specific resource group.
         default: null
 
 requirements:
@@ -100,66 +94,55 @@ authors:
 '''
 
 EXAMPLES = '''
-    - name: Get facts for one virtual network
-      azure_rm_virtualnetwork_facts:
-        resource_group: Testing
-        name: secgroup001
+    - name: Get facts for one resource group
+      azure_rm_resourcegroup_facts:
+        name: Testing
 
-    - name: Get facts for all virtual networks
-      azure_rm_virtualnetwork_facts:
-        resource_group: Testing
+    - name: Get facts for all resource groups
+      azure_rm_securitygroup_facts:
 
 '''
 
 RETURNS = '''
 {
     "changed": false,
-    "check_mode": false,
     "results": [
         {
-            "etag": "W/\"532ba1be-ae71-40f2-9232-3b1d9cf5e37e\"",
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet2001",
-            "location": "eastus2",
-            "name": "vnet2001",
+            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing",
+            "location": "westus",
+            "name": "Testing",
             "properties": {
-                "addressSpace": {
-                    "addressPrefixes": [
-                        "10.10.0.0/16"
-                    ]
-                },
-                "provisioningState": "Succeeded",
-                "resourceGuid": "a7ba285f-f7e7-4e17-992a-de4d39f28612",
-                "subnets": []
+                "provisioningState": "Succeeded"
             },
-            "type": "Microsoft.Network/virtualNetworks"
+            "tags": {
+                "delete": "never",
+                "testing": "testing"
+            }
         }
     ]
 }
-
 '''
 
-AZURE_OBJECT_CLASS = 'VirtualNetwork'
+AZURE_OBJECT_CLASS = 'ResourceGroup'
 
 
-class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
+class AzureRMResourceGroupFacts(AzureRMModuleBase):
 
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
-            resource_group=dict(required=True, type='str'),
         )
 
-        super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
-                                                           **kwargs)
+        super(AzureRMResourceGroupFacts, self).__init__(self.module_arg_spec,
+                                                        supports_tags=False,
+                                                        **kwargs)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=[]
         )
 
         self.name = None
-        self.resource_group = None
 
     def exec_module_impl(self, **kwargs):
 
@@ -179,7 +162,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         item_dict = dict()
 
         try:
-            item = self.network_client.virtual_networks.get(self.resource_group, self.name)
+            item = self.rm_client.resource_groups.get(self.name)
         except CloudError:
             pass
 
@@ -189,11 +172,11 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         return item_dict
 
     def list_items(self):
-        self.log('List all for items')
+        self.log('List all items')
         try:
-            response = self.network_client.virtual_networks.list(self.resource_group)
+            response = self.rm_client.resource_groups.list()
         except AzureHttpError, exc:
-            self.fail("Failed to list all items - {0}".format(str(exc)))
+            self.fail("Failed to list all items - {1}".format(str(exc)))
 
         results = []
         for item in response:
@@ -207,10 +190,10 @@ def main():
         import ansible.module_utils.basic
 
         ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group='Testing'
+            name='Testing'
         ))
 
-    AzureRMNetworkInterfaceFacts().exec_module()
+    AzureRMResourceGroupFacts().exec_module()
 
 if __name__ == '__main__':
     main()

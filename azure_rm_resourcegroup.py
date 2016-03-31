@@ -81,7 +81,8 @@ options:
         default: null
     force:
         description:
-            - When state is present, force the deletion and re-creation of the resource group.
+            - When state is absent, force the deletion of a resource group that contains resources. When force
+              is true the resource group and all related resource will be removed.
         default: false
     location:
         description:
@@ -104,11 +105,16 @@ options:
             - present
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
+
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -120,7 +126,7 @@ authors:
 
 EXAMPLES = '''
     - name: Create a resource group
-      azure_rm_resource_group:
+      azure_rm_resourcegroup:
         name: Testing
         location: westus
         tags:
@@ -151,12 +157,12 @@ class AzureRMResourceGroup(AzureRMModuleBase):
             name=dict(type='str', required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
             location=dict(type='str'),
-            tags=dict(type='dict'),
             log_path=dict(type='str', default='azure_rm_resourcegroup.log'),
             force=dict(type='bool', default=False)
         )
         super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
                                                    supports_check_mode=True,
+                                                   supports_tags=True,
                                                    **kwargs)
 
         self.name = None
@@ -164,40 +170,45 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.location = None
         self.tags = None
         self.force = None
+        self.purge_tags = None
 
         self.results = dict(
             changed=False,
+            contains_resources=False,
             check_mode=self.check_mode,
             results=dict()
         )
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         results = dict()
         changed = False
         rg = None
+        contains_resources = False
 
+        self.log('args:')
+        self.log(json.dumps(self.module.params), pretty_print=True)
         try:
             self.log('Fetching resource group {0}'.format(self.name))
             rg = self.rm_client.resource_groups.get(self.name)
             self.check_provisioning_state(rg)
+            contains_resources = self.resources_exist()
 
             results = resource_group_to_dict(rg)
             if self.state == 'absent':
-                self.debug("CHANGED: resource group {0} exists but requested state is 'absent'".format(self.name))
+                self.log("CHANGED: resource group {0} exists but requested state is 'absent'".format(self.name))
                 changed = True
             elif self.state == 'present':
-                if self.force:
+                update_tags, results['tags'] = self.update_tags(results['tags'])
+                if update_tags:
                     changed = True
-                if results['tags'] != self.tags:
-                    changed = True
-                    results['tags'] = self.tags
-                if results['location'] != self.location:
+
+                if self.location and self.location != results['location']:
                     self.fail("Resource group '{0}' already exists in location '{1}' and cannot be "
-                              "moved.".format(self.name, self.location))
+                              "moved.".format(self.name, results['location']))
         except CloudError:
             self.log('Resource group {0} does not exist'.format(self.name))
             if self.state == 'present':
@@ -207,32 +218,36 @@ class AzureRMResourceGroup(AzureRMModuleBase):
 
         self.results['changed'] = changed
         self.results['results'] = results
+        self.results['contains_resources'] = contains_resources
 
         if self.check_mode:
             return self.results
 
         if changed:
-            if self.state == 'present' and self.force:
-                self.delete_resource_group()
-                rg = None
-
             if self.state == 'present':
                 if not rg:
+                    # Create resource group
                     self.log("Creating resource group {0}".format(self.name))
                     if not self.location:
                         self.fail("Parameter error: location is required when creating a resource "
                                   "group.".format(self.name))
+                    if self.name_exists():
+                        self.fail("Error: a resource group with the name {0} already exists in your subscription."
+                                  .format(self.name))
                     params = ResourceGroup(
                         location=self.location,
                         tags=self.tags
                     )
                 else:
+                    # Update resource group
                     params = ResourceGroup(
-                        location=rg['location'],
-                        tags=rg['tags']
+                        location=results['location'],
+                        tags=results['tags']
                     )
                 self.results['results'] = self.create_or_update_resource_group(params)
             elif self.state == 'absent':
+                if contains_resources and not self.force:
+                    self.fail("Error removing resource group {0}. Resources exist within the group.".format(self.name))
                 self.delete_resource_group()
 
         return self.results
@@ -255,6 +270,24 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         # If we got here, assume all is good
         self.results['results'] = 'Deleted'
         return True
+
+    def resources_exist(self):
+        found = False
+        try:
+            response = self.rm_client.resource_groups.list_resources(self.name)
+        except Exception, exc:
+            self.fail("Error checking for resource existence in {0} - {1}".format(self.name, str(exc)))
+        for item in response:
+            found = True
+            break
+        return found
+
+    def name_exists(self):
+        try:
+            exists = self.rm_client.resource_groups.check_existence(self.name)
+        except Exception, exc:
+            self.fail("Error checking for existence of name {0}".format(self.name))
+        return exists
 
 
 def main():

@@ -1,0 +1,12 @@
+- name: Test Azure resource manager modules 
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    resource_group: Testing 
+    playbook_debug: yes
+    run_test: subnet 
+  roles:
+    - { role: azure_rm_resourcegroup, when: "run_test in ['all', 'resourcegroup']" }
+    - { role: azure_rm_virtualnetwork, when: "run_test in ['all', 'virtualnetwork']" }
+    - { role: azure_rm_subnet, when: "run_test in ['all', 'subnet']" }

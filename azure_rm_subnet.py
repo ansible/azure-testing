@@ -51,13 +51,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -82,17 +82,17 @@ options:
         default: null
     resource_group:
         description:
-            - name of resource group.
+            - Name of resource group.
         required: true
         default: null
     name:
         description:
-            - name of the subnet.
+            - Name of the subnet.
         required: true
         default: null
     address_prefix_cidr:
         description:
-            - CIDR defining IPv4 address space of the subnet. Must be valid within the context of the
+            - CIDR defining the IPv4 address space of the subnet. Must be valid within the context of the
               virtual network.
         default: null
         required: true
