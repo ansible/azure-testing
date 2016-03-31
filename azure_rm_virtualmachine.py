@@ -49,7 +49,7 @@ short_description: Manage Azure virtual machines.
 
 description:
     - Create, update, stop and start virtual machines. Provide your own storage account and network interface or
-      allow the module to create these for you. If you do not provide network interface, the resource group must
+      allow the module to create these for you. When no network interface is provided, the resource group must
       contain a virtual network with at least one subnet.
     - Currently requires an image found in the Azure Marketplace. Use azure_rm_virtualmachineimage_facts module
       to discover publisher, offer, sku and version of a particular image.
@@ -67,7 +67,7 @@ description:
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -92,7 +92,7 @@ options:
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of the resource group containing the virtual machine.
         required: true
         default: null
     name:
@@ -104,8 +104,8 @@ options:
             - Assert the state of the virtual machine.
             - State 'present' will check that the machine exists with the requested configuration. If the configuration
               of the existing machine does not match, the machine will be updated. If the machine is updated, it will
-              be left in a powered on or running state. Otherwise, the final state of the machine will remian untouched.
-            - State 'started' will also check that the machine exists with the request configuration, updating it, if
+              be left in a powered on or running state. Otherwise, the final state of the machine will remain untouched.
+            - State 'started' will also check that the machine exists with the requested configuration, updating it, if
               needed and leaving the machine in a powered on state.
             - State 'stopped' will also check that the machine exists with the requested configuration, updating it, if
               needed and leaving the machine in a powered off state.
@@ -121,8 +121,8 @@ options:
         default: resource_group location
     short_hotname:
         description:
-            - Name assigned internally to the host. On a linux VM this is the name returned by `hostname` command. When
-              a VM is created, this will default to the name.
+            - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
+              When a VM is created, this will default to the name.
         default: null
     vm_size:
         description:
@@ -136,7 +136,7 @@ options:
     admin_password:
         description:
             - Password for the admin username. Not required if the os_type is Linux and SSH password authentication
-              is disabled by setting ssh_password is false.
+              is disabled by setting ssh_password to false.
         default: null
     ssh_password:
         description:
@@ -171,7 +171,7 @@ options:
     storage_blob_name:
         description:
             - Name fo the storage blob used to hold the VM's OS disk image. If no name is provided, defaults to
-              the VM name + '.vhds'
+              the VM name + '.vhd'
         default: null
 
     os_disk_caching:
@@ -217,6 +217,22 @@ options:
               when the VM is created, a default network interface will be created. In order for the module to create
               a network interface, at least one Virtual Network with one Subnet must exist.
         default: null
+    virtual_network_name:
+        description:
+            - When creating a virtual machine, if a network interface name is not provided, one will be created.
+              The new network interface will be assigned to the first virtual network found in the resource group.
+              Use this parameter to provide a specific virtual network instead.
+        default: null
+        aliases:
+            - virtual_network
+    subnet_name:
+        description:
+            - When creating a virtual machine, if a network interface name is not provided, one will be created.
+              The new network interface will be assigned to the first subnet found in the virtual network.
+              Use this parameter to provide a specific subnet instead.
+        default: null
+        aliases:
+            - virtual_network
     delete_network_interfaces:
         description:
             - When removing a VM using state 'absent', also remove any network interfaces associate with the VM.
@@ -231,11 +247,16 @@ options:
         default: false
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              are provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
+
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -471,8 +492,9 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
             delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhds']),
             delete_public_ips=dict(type='bool', default=False),
-            tags=dict(type='dict'),
             log_path=dict(type='str', default='azure_rm_virtualmachine.log'),
+            virtual_network_name=dict(type='str', aliases=['virtual_network']),
+            subnet_name=dict(type='str', aliases=['subnet'])
         )
 
         for key in VirtualMachineSizeTypes:
@@ -507,6 +529,8 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.public_ip_allocation_method = None
         self.rdp_port = None
         self.ssh_port = None
+        self.virtual_network_name = None
+        self.subnet_name = None
 
         self.results = dict(
             changed=False,
@@ -519,7 +543,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         changed = False
@@ -640,10 +664,9 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         changed = True
                         vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'] = requested_vhd_uri
 
-                if self.tags != vm_dict.get('tags'):
-                    self.log('CHANGED: virtual machine {0} - Tags'.format(self.name))
+                update_tags, vm_dict['tags'] = self.update_tags(vm_dict.get('tags', dict()))
+                if update_tags:
                     differences.append('Tags')
-                    vm_dict['tags'] = self.tags
                     changed = True
 
                 if self.admin_username and self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
@@ -659,18 +682,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     differences.append('Short Hostname')
                     changed = True
                     vm_dict['properties']['osProfile']['computerName'] = self.short_hostname
-
-                # We can't tell if the ssh_password value was changed by user. We may be looking at the default state.
-                # if self.ssh_password is not None:
-                #     if vm_dict['properties']['osProfile'].get('linuxConfigurtion'):
-                #         # linux host
-                #         if vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] != \
-                #            disable_ssh_password:
-                #             self.log('CHANGED: virtual machine {0} - ssh password disable'.format(self.name))
-                #             differences.append('Disable SSH Password')
-                #             changed = True
-                #             vm_dict['properties']['osProfile']['linuxConfigurtion']['disablePasswordAuthentication'] = \
-                #                 disable_ssh_password
 
                 self.results['differences'] = differences
 
@@ -719,7 +730,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                             self.fail("Parameter error: ssh_public_keys required when disabling SSH password.")
 
                     if not self.image:
-                        self.fail("Parameter error: specify an image when creating a virtual machine.")
+                        self.fail("Parameter error: an image is required when creating a virtual machine.")
 
                     # Get defaults
                     if not self.network_interface_names:
@@ -1158,43 +1169,57 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         self.log("NIC {0} does not exist.".format(network_interface_name))
 
-        # Find a virtual network
-        no_vnets_msg = "Error: unable to find virtual network in resource group {0}. A virtual network " \
-                       "with at least one subnet must exist in order to create a NIC for the virtual " \
-                       "machine.".format(self.resource_group)
+        if self.virtual_network_name:
+            try:
+                self.network_client.virtual_networks.list(self.resource_group, self.virtual_network_name)
+                virtual_network_name = self.virtual_network_name
+            except Exception, exc:
+                self.fail("Error: fetching virtual network {0} - {1}".format(self.virtual_network_name, str(exc)))
+        else:
+            # Find a virtual network
+            no_vnets_msg = "Error: unable to find virtual network in resource group {0}. A virtual network " \
+                           "with at least one subnet must exist in order to create a NIC for the virtual " \
+                           "machine.".format(self.resource_group)
 
-        virtual_network_name = None
-        try:
-            vnets = self.network_client.virtual_networks.list(self.resource_group)
-        except CloudError:
-            self.log('cloud error!')
-            self.fail(no_vnets_msg)
+            virtual_network_name = None
+            try:
+                vnets = self.network_client.virtual_networks.list(self.resource_group)
+            except CloudError:
+                self.log('cloud error!')
+                self.fail(no_vnets_msg)
 
-        for vnet in vnets:
-            virtual_network_name = vnet.name
-            self.log('vnet name: {0}'.format(vnet.name))
-            break
+            for vnet in vnets:
+                virtual_network_name = vnet.name
+                self.log('vnet name: {0}'.format(vnet.name))
+                break
 
-        if not virtual_network_name:
-            self.fail(no_vnets_msg)
+            if not virtual_network_name:
+                self.fail(no_vnets_msg)
 
-        no_subnets_msg = "Error: unable to find a subnet in virtual network {0}. A virtual network " \
-                         "with at least one subnet must exist in order to create a NIC for the virtual " \
-                         "machine.".format(virtual_network_name)
+        if self.subnet_name:
+            try:
+                subnet = self.network_client.subnets.get(self.resource_group, virtual_network_name)
+                subnet_id = subnet.id
+            except Exception, exc:
+                self.fail("Error: fetching subnet {0} - {1}".format(self.subnet_name, str(exc)))
+        else:
+            no_subnets_msg = "Error: unable to find a subnet in virtual network {0}. A virtual network " \
+                             "with at least one subnet must exist in order to create a NIC for the virtual " \
+                             "machine.".format(virtual_network_name)
 
-        subnet_id = None
-        try:
-            subnets = self.network_client.subnets.list(self.resource_group, virtual_network_name)
-        except CloudError:
-            self.fail(no_subnets_msg)
+            subnet_id = None
+            try:
+                subnets = self.network_client.subnets.list(self.resource_group, virtual_network_name)
+            except CloudError:
+                self.fail(no_subnets_msg)
 
-        for subnet in subnets:
-            subnet_id = subnet.id
-            self.log('subnet id: {0}'.format(subnet_id))
-            break
+            for subnet in subnets:
+                subnet_id = subnet.id
+                self.log('subnet id: {0}'.format(subnet_id))
+                break
 
-        if not subnet_id:
-            self.fail(no_subnets_msg)
+            if not subnet_id:
+                self.fail(no_subnets_msg)
 
         pip = self.create_default_pip()
         group = self.create_default_securitygroup()

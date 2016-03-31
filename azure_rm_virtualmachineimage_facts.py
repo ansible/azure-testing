@@ -38,10 +38,10 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_virtualnetwork_facts
 
-short_description: Get public IP facts.
+short_description: Get virtual machine image facts.
 
 description:
-    - Get facts for a specific public IP or all public IPs within a resource group.
+    - Get facts for.
 
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
