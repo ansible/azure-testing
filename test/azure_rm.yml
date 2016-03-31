@@ -5,8 +5,9 @@
   vars:
     resource_group: Testing 
     playbook_debug: yes
-    run_test: subnet 
+    run_test: storageblob 
   roles:
     - { role: azure_rm_resourcegroup, when: "run_test in ['all', 'resourcegroup']" }
     - { role: azure_rm_virtualnetwork, when: "run_test in ['all', 'virtualnetwork']" }
     - { role: azure_rm_subnet, when: "run_test in ['all', 'subnet']" }
+    - { role: azure_rm_storageblob, when: "run_test in ['all', 'storageblob']" }

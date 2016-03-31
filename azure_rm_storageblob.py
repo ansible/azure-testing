@@ -337,7 +337,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                 # create, update or download blob
                 if self.src and self.src_is_valid():
                     if self.blob_obj and not self.force:
-                        self.fail("Cannot upload to {0}. Blob with that name already exists. "
+                        self.log("Cannot upload to {0}. Blob with that name already exists. "
                             "Use the force option".format(self.blob))
                     else:
                         self.upload_blob()
@@ -358,7 +358,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     if self.force:
                         self.delete_container()
                     else:
-                        self.fail("Cannot delete container {0}. It contains blobs. Use the force option.".format(
+                        self.log("Cannot delete container {0}. It contains blobs. Use the force option.".format(
                             self.container))
                 else:
                     self.delete_container()
@@ -511,8 +511,8 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             self.log('Checking final path {0}'.format(self.dest))
             if os.path.isfile(self.dest) and not self.force:
                 # dest already exists and we're not forcing
-                self.fail("Dest {0} already exists. Cannot download. Use the force option.".format(self.dest))
-
+                self.log("Dest {0} already exists. Cannot download. Use the force option.".format(self.dest))
+                return False
         return True
 
     def delete_container(self):
