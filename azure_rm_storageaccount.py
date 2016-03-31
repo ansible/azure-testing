@@ -62,7 +62,7 @@ description:
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -87,27 +87,21 @@ options:
         default: null
     resource_group:
         description:
-            - name of resource group.
+            - Name of the resource group to use.
         required: true
         default: null
     name:
         description:
-            - name of the storage account.
+            - Name of the storage account to update or create.
         default: null
     state:
         description:
             - Assert the state of the storage account. Use 'present' to create or update a storage account and
               'absent' to delete an account.
-        required: false
         default: present
         choices:
             - absent
             - present
-    force:
-        description:
-            - Force the deletion of an account when it contains blobs. Force the deletion and recreation of an
-              account when changing the account type.
-        default: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
@@ -137,11 +131,16 @@ options:
         default: null
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
+
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -154,16 +153,17 @@ EXAMPLES = '''
     - name: remove account, if it exists
       azure_rm_storageaccount:
         resource_group: Testing
-        location: 'East US 2'
         name: clh0002
         state: absent
 
     - name: create an account
       azure_rm_storageaccount:
         resource_group: Testing
-        location: 'East US 2'
         name: clh0002
         type: Standard_RAGRS
+        tags:
+          - testing: testing
+          - delete: on-exit
 '''
 
 RETURNS = '''
@@ -209,11 +209,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.module_arg_spec = dict(
             account_type=dict(type='str', choices=[], aliases=['type']),
             custom_domain=dict(type='dict'),
-            force=dict(type='bool', default=False),
             location=dict(type='str'),
             name=dict(type='str', required=True),
             resource_group=dict(required=True, type='str'),
             state=dict(default='present', choices=['present', 'absent']),
+            force=dict(type='bool', default=False),
             tags=dict(type='dict'),
             log_path=dict(type='str', default='azure_rm_storageaccount.log')
         )
@@ -241,7 +241,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
 
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         resource_group = self.get_resource_group(self.resource_group)
@@ -264,7 +264,8 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         self.account_dict = self.get_account()
 
-        if self.account_dict and self.account_dict['provisioning_state'] != AZURE_SUCCESS_STATE :
+        if self.state == 'present' and self.account_dict and \
+           self.account_dict['provisioning_state'] != AZURE_SUCCESS_STATE :
             self.fail("Error: storage account {0} has not completed provisioning. State is {1}. Expecting state "
                       "to be {2}.".format(self.name, self.account_dict['provisioning_state'], AZURE_SUCCESS_STATE))
 
@@ -278,10 +279,10 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 self.results['results'] = self.create_account()
             else:
                 self.update_account()
-        elif self.state == 'absent':
-            if self.account_dict:
-                self.delete_account()
-                self.results['results'] = dict(Status='Deleted')
+        elif self.state == 'absent' and self.account_dict:
+            self.delete_account()
+            self.results['results'] = dict(Status='Deleted')
+
         return self.results
 
     def check_name_availability(self):
@@ -357,13 +358,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         if self.account_type:
             if self.account_type != self.account_dict['account_type']:
                 # change the account type
-
-                if self.force:
-                    self.log("Force option is true. Attempt to delete the account.")
-                    self.delete_account()
-                    self.create_account()
-                    return True
-
                 if self.account_dict['account_type'] in [AccountType.premium_lrs, AccountType.standard_zrs]:
                     self.fail("Storage accounts of type {0} and {1} cannot be changed.".format(
                         AccountType.premium_lrs, AccountType.standard_zrs))
@@ -381,10 +375,8 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                         self.storage_client.storage_accounts.update(self.resource_group,
                                                                     self.name,
                                                                     parameters)
-                    except AzureHttpError, e:
-                        self.fail("Failed to update account type: {0}".format(str(e)))
-                    except CloudError, e:
-                        self.fail("Failed to update account type: {0}".format(str(e)))
+                    except Exception, exc:
+                        self.fail("Failed to update account type: {0}".format(str(exc)))
 
         if self.custom_domain:
             if not self.account_dict['custom_domain'] or \
@@ -398,24 +390,19 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 parameters = StorageAccountUpdateParameters(custom_domain=new_domain)
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except AzureHttpError, e:
-                    self.fail("Failed to update custom domain: {0}".format(str(e)))
-                except CloudError, e:
-                    self.fail("Failed to update custom domain: {0}".format(str(e)))
+                except Exception, exc:
+                    self.fail("Failed to update custom domain: {0}".format(str(exc)))
 
         if self.tags:
-            if self.account_dict['tags'] != self.tags:
+            update_tags, self.account_dict['tags'] = self.update_tags(self.account_dict['tags'])
+            if update_tags:
                 self.results['changed'] = True
-                self.account_dict['tags'] = self.tags
-
-            if self.results['changed'] and not self.check_mode:
-                parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
-                try:
-                    self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except AzureHttpError, e:
-                    self.fail("Failed to update tags: {0}".format(str(e)))
-                except CloudError, e:
-                    self.fail("Failed to update tags: {0}".format(str(e)))
+                if not self.check_mode:
+                    parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
+                    try:
+                        self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
+                    except Exception, exc:
+                        self.fail("Failed to update tags: {0}".format(str(exc)))
 
     def create_account(self):
         self.log("Creating account {0}".format(self.name))
@@ -455,7 +442,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
     def delete_account(self):
         if self.account_dict['provisioning_state'] == ProvisioningState.succeeded.value and \
-           self.account_has_blob_containers() and not self.force:
+           self.account_has_blob_containers() and self.force:
             self.fail("Account contains blob containers. Is it in use? Use the force option to attempt deletion.")
 
         self.log('Delete storage account {0}'.format(self.name))
@@ -482,13 +469,11 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
         except AzureHttpError, e:
-            self.log("Error getting keys for account {0}".format(e))
             self.fail("check_for_container:Failed to get account keys: {0}".format(e))
 
         try:
             cloud_storage = CloudStorageAccount(self.name, keys['key1']).create_page_blob_service()
         except Exception, e:
-            self.log("Error creating blob service: {0}".format(e))
             self.fail("check_for_container:Error creating blob service: {0}".format(e))
 
         try:

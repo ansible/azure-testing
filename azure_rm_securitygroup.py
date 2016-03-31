@@ -44,12 +44,10 @@ module: azure_rm_securitygroup
 short_description: Manage Azure network security groups.
 
 description:
-    - A network security group contains Access Control List (ACL) rules that allow\deny network traffic to
-      subnets or individual network interfaces. An security group is created with a set of default security
-      rules and an empty set of security rules. Add rules to the empty set of security rules to allow or deny
-      traffic flow.
-    - Use this module to create and manage network security groups including adding security rules and
-      modifying default rules.
+    - Create, update or delete network security groups. A security group contains Access Control List (ACL) rules
+      that allow or deny network traffic to subnets or individual network interfaces. A security group is created
+      with a set of default security rules and an empty set of security rules. Shap traffic floy wby adding
+      rules to the empty set of security rules.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -58,13 +56,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         default: null
     subscription_id:
         description:
@@ -89,21 +87,21 @@ options:
               destination_address_prefix, access, priority and direction.
               See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
         default: null
-    location:
+    location
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
     name:
         description:
-            - name of the security group.
+            - Name of the security group to operate on.
         default: null
     purge_default_rules:
         description:
-            - Remove existing default security rules.
+            - Remove any existing rules not matching those defined in the default_rules parameter.
         default: false
     purge_rules:
         description:
-            - Remove existing security rules.
+            - Remove any existing rules not matching those defined in the rules parameters.
         default: false
     resource_group:
         description:
@@ -112,9 +110,9 @@ options:
         default: null
     rules:
         description:
-            - A set of rules where each rule is a dictionary with the following keys: name, description, protocol, 
-              source_port_range, destination_port_range, source_address_prefix, destination_address_prefix, access,
-              priority and direction.
+            - The set of rules you will custom to shap traffic flow to a subnet or NIC. Each rule is a dictionary
+              with the following keys: name, description, protocol, source_port_range, destination_port_range,
+              source_address_prefix, destination_address_prefix, access, priority and direction.
               See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
         required: true
         default: null
@@ -122,15 +120,22 @@ options:
         description:
             - Assert the state of the security group. Set to 'present' to create or update a security group. Set to
               'absent' to remove a security group.
-        required: true
         default: present
+        choices:
+            - absent
+            - present
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Treated as the explicit metadata
-              for the object. In other words, existing metadata will be replaced with provided values. If no values
-              provided, existing metadata will be removed.
+            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option.
         required: false
         default: null
+    purge_tags:
+        description:
+            - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
+              the object's metadata.
+        default: false
+
 requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
@@ -166,7 +171,6 @@ EXAMPLES = '''
             access: Allow
             priority: 101
             direction: Inbound
-      state: present
 
 # Update rules on existing security group
 - azure_rm_securitygroup:
@@ -191,7 +195,9 @@ EXAMPLES = '''
             access: Allow
             priority: 102
             direction: Inbound 
-      state: present
+      tags:
+          testing: testing
+          delete: on-exit
 
 # Delete security group
 - azure_rm_securitygroup:
@@ -201,7 +207,7 @@ EXAMPLES = '''
 
 '''
 
-NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+NAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 def validate_rule(rule, rule_type=None):
@@ -389,7 +395,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
     def exec_module_impl(self, **kwargs):
         
-        for key in self.module_arg_spec:
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         changed = False
@@ -419,15 +425,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, self.name)
-            self.check_provisioning_state(nsg)
+            results = create_network_security_group_dict(nsg)
+            self.log("Found security group:")
+            self.log(results, pretty_print=True)
+            self.check_provisioning_state(nsg, self.state)
             if self.state == 'present':
-                results = create_network_security_group_dict(nsg)
-                self.log("Found security group:")
-                self.log(results, pretty_print=True)
+                pass
             elif self.state == 'absent':
+                self.log("CHANGED: security group found but state is 'absent'")
                 changed = True
         except CloudError:
             if self.state == 'present':
+                self.log("CHANGED: security group not found and state is 'present'")
                 changed = True
 
         if self.state == 'present' and not changed:
@@ -477,10 +486,9 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                             new_default_rules.append(rule)
                 results['default_rules'] = new_default_rules
 
-            if self.tags:
-                if results['tags'] != self.tags:
-                    changed = True
-                    results['tags'] = self.tags
+            update_tags, results['tags'] = self.update_tags(results['tags'])
+            if update_tags:
+                changed = True
 
             self.results['changed'] = changed
             self.results['results'] = results

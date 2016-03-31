@@ -50,13 +50,13 @@ description:
       AZURE_PASSWORD in the environment.
     - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
       a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
+      ad_user and password. It is also possible to add additional profiles. Specify the profile
       by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
     profile:
         description:
-            - security profile found in ~/.azure/credentials file
+            - Security profile found in ~/.azure/credentials file
         required: false
         default: null
     subscription_id:
@@ -85,7 +85,7 @@ options:
         default: null
     resource_group:
         description:
-            - name of resource group.
+            - Name of resource group from which to gather facts.
         required: true
         default: null
 
@@ -138,7 +138,7 @@ RETURNS = '''
 }
 '''
 
-NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
+AZURE_OBJECT_CLASS = 'StorageAccount'
 
 
 class AzureRMStorageAccountFacts(AzureRMModuleBase):
@@ -183,21 +183,20 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             pass
 
         if account is not None:
-            account_dict = self.serialize_obj(account, 'StorageAccount')
+            account_dict = self.serialize_obj(account, AZURE_OBJECT_CLASS)
 
         return account_dict
 
     def list_accounts(self):
-        self.log('List storage accounts for resource group {0}'.format(self.resource_group))
+        self.log('List items')
         try:
             response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
-        except AzureHttpError as e:
-            self.log('Error listing storage accounts for resource group %s' % resource_group)
-            self.fail("Failed to list storage accounts for resource group: {0}".format(str(e)))
+        except Exception, exc:
+            self.fail("Error listing items - {0}".format(str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, 'StorageAccount'))
+            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 
@@ -207,14 +206,7 @@ def main():
         import ansible.module_utils.basic
 
         ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            name='mdavis12341',
             resource_group="rm_demo",
-            state='absent',
-            location='West US',
-            account_type="Premium_LRS",
-
-            log_mode='stderr',
-            #filter_logger=False,
         ))
 
     AzureRMStorageAccountFacts().exec_module()
