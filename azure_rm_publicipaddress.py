@@ -281,7 +281,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
                 else:
                     self.log("Update Public IP {0}".format(self.name))
                     pip = PublicIPAddress(
-                        location=result['location'],
+                        location=results['location'],
                         public_ip_allocation_method=results['public_ip_allocation_method'],
                         tags=results['tags']
                     )

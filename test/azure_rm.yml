@@ -5,7 +5,7 @@
   vars:
     resource_group: Testing 
     playbook_debug: yes
-    run_test: securitygroup
+    run_test: publicipaddress
   roles:
     - { role: azure_rm_resourcegroup, when: "run_test in ['all', 'resourcegroup']" }
     - { role: azure_rm_virtualnetwork, when: "run_test in ['all', 'virtualnetwork']" }
@@ -13,3 +13,4 @@
     - { role: azure_rm_storageblob, when: "run_test in ['all', 'storageblob']" }
     - { role: azure_rm_storageaccount, when: "run_test in ['all', 'storageaccount']" }
     - { role: azure_rm_securitygroup, when: "run_test in ['all', 'securitygroup']" }
+    - { role: azure_rm_publicipaddress, when: "run_test in ['all', 'publicipaddress']" }
