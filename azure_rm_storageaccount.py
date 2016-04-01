@@ -303,7 +303,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         try:
             account_obj = self.storage_client.storage_accounts.get_properties(self.resource_group, self.name)
-        except CloudError, exc:
+        except CloudError:
             pass
 
         if account_obj:

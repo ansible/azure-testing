@@ -141,6 +141,9 @@
       name: testvm001
   register: output
 
+- debug: var=output
+  when: playbook_debug
+
 - assert:
       that: output.results | length == 0
 
@@ -149,6 +152,9 @@
       resource_group: "{{ resource_group }}"
       name: testvm001
   register: output
+
+- debug: var=output
+  when: playbook_debug
 
 - assert:
       that: output.results | length == 0

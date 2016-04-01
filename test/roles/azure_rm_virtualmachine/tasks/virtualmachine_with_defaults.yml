@@ -102,7 +102,7 @@
   when: playbook_debug
 
 - assert:
-      that: not output.results.changed
+      that: not output.changed
 
 - name: Add host
   add_host:

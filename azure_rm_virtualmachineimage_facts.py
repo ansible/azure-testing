@@ -190,7 +190,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
             self.location = resource_group.location
 
         if self.location and self.publisher and self.offer and self.sku and self.version:
-            self.results['results'] = [self.get_item()]
+            self.results['results'] = self.get_item()
         elif self.location and self.publisher and self.offer and self.sku:
             self.results['results'] = self.list_images()
         elif self.location and self.publisher:
@@ -202,7 +202,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
 
     def get_item(self):
         item = None
-        item_dict = dict()
+        result = []
 
         try:
             item = self.compute_client.virtual_machine_images.get(self.location,
@@ -214,9 +214,9 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
             pass
 
         if item:
-            item_dict = self.serialize_obj(item, 'VirtualMachineImage')
+            result = [self.serialize_obj(item, 'VirtualMachineImage')]
 
-        return item_dict
+        return result
 
     def list_images(self):
         response = None

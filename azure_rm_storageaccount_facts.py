@@ -166,7 +166,7 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name is not None:
-            self.results['results'] = [self.get_account()]
+            self.results['results'] = self.get_account()
         else:
             self.results['results'] = self.list_accounts()
 
@@ -175,7 +175,7 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
     def get_account(self):
         self.log('Get properties for account {0}'.format(self.name))
         account = None
-        account_dict = dict()
+        result = []
 
         try:
             account = self.storage_client.storage_accounts.get_properties(self.resource_group, self.name)
@@ -183,9 +183,9 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             pass
 
         if account is not None:
-            account_dict = self.serialize_obj(account, AZURE_OBJECT_CLASS)
+            result = [self.serialize_obj(account, AZURE_OBJECT_CLASS)]
 
-        return account_dict
+        return result
 
     def list_accounts(self):
         self.log('List items')

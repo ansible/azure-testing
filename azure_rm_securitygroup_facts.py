@@ -270,7 +270,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name is not None:
-            self.results['results'] = [self.get_item()]
+            self.results['results'] = self.get_item()
         else:
             self.results['results'] = self.list_items()
 
@@ -279,7 +279,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
     def get_item(self):
         self.log('Get properties for {0}'.format(self.name))
         item = None
-        item_dict = dict()
+        result = []
 
         try:
             item = self.network_client.network_security_groups.get(self.resource_group, self.name)
@@ -287,9 +287,9 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
             pass
 
         if item:
-            item_dict = self.serialize_obj(item, AZURE_OBJECT_CLASS)
+            result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
-        return item_dict
+        return result
 
     def list_items(self):
         self.log('List all items')
