@@ -36,7 +36,7 @@ except:
 
 DOCUMENTATION = '''
 ---
-module: azure_rm_virtualnetwork_facts
+module: azure_rm_virtualmachineimage_facts
 
 short_description: Get virtual machine image facts.
 
@@ -86,8 +86,29 @@ options:
         default: null
     resource_group:
         description:
-            - Name of a resource group.
+            - Name of a resource group. List publishers available to a particular resource group.
         required: true
+        default: null
+
+    location:
+        description:
+            - Azure location value. Defaults to the location of the resource group.
+        default: null
+    publisher:
+        description:
+            - Name of an image publisher. List image offerings associated with a particular publisher.
+        default: null
+    offer:
+        description:
+            - Name of an image offering. Combine with sku to see a list of available image versions.
+        default:
+    sku:
+        description:
+            - Image offering SKU. Combine with offer to see a list of available versions.
+        default: null
+    version:
+        description:
+            - Specific version number of an image.
         default: null
 
 requirements:
@@ -100,39 +121,34 @@ authors:
 '''
 
 EXAMPLES = '''
-    - name: Get facts for one public IP
-      azure_rm_virtualnetwork_facts:
+    - name: Get facts for a specific image
+      azure_rm_virtualmachineimage_facts:
         resource_group: Testing
-        name: secgroup001
+        publisher: OpenLogic
+        offer: CentOS
+        sku: '7.1'
+        version: '7.1.20160308'
 
-    - name: Get facts for all public IPs
-      azure_rm_virtualnetwork_facts:
+    - name: List available versions
+      azure_rm_virtualmachineimage_facts:
+        resource_group: Testing
+        publisher: OpenLogic
+        offer: CentOS
+        sku: '7.1'
+
+    - name: List available offers
+      azure_rm_virtualmachineimage_facts:
+        resource_group: Testing
+        publisher: OpenLogic
+
+    - name: List available publishers
+      azure_rm_virtualmachineimage_facts:
         resource_group: Testing
 
 '''
 
 RETURNS = '''
-{
-    "output": {
-        "changed": false,
-        "check_mode": false,
-        "results": [
-            {
-                "etag": "W/\"a31a6d7d-cb18-40a5-b16d-9f4a36c1b18a\"",
-                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
-                "location": "eastus2",
-                "name": "pip2001",
-                "properties": {
-                    "idleTimeoutInMinutes": 4,
-                    "provisioningState": "Succeeded",
-                    "publicIPAllocationMethod": "Dynamic",
-                    "resourceGuid": "29de82f4-a7da-440e-bd3d-9cabb79af95a"
-                },
-                "type": "Microsoft.Network/publicIPAddresses"
-            }
-        ]
-    }
-}
+
 '''
 
 
@@ -141,6 +157,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
+            resource_group=dict(type='str'),
             location=dict(type='str'),
             publisher=dict(type='str'),
             offer=dict(type='str'),
@@ -149,11 +166,13 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
         )
 
         super(AzureRMVirtualMachineImageFacts, self).__init__(self.module_arg_spec, **kwargs)
+
         self.results = dict(
             changed=False,
             results=[]
         )
 
+        self.resource_group=None
         self.location = None
         self.publisher = None
         self.offer = None
@@ -165,10 +184,19 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
+        resource_group = self.get_resource_group(self.resource_group)
+        if not self.location:
+            # Set default location
+            self.location = resource_group.location
+
         if self.location and self.publisher and self.offer and self.sku and self.version:
             self.results['results'] = [self.get_item()]
         elif self.location and self.publisher and self.offer and self.sku:
-            self.results['results'] = self.list_items()
+            self.results['results'] = self.list_images()
+        elif self.location and self.publisher:
+            self.results['results'] = self.list_offers()
+        elif self.location:
+            self.results['results'] = self.list_publishers()
 
         return self.results
 
@@ -190,7 +218,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
 
         return item_dict
 
-    def list_items(self):
+    def list_images(self):
         response = None
         results = []
         try:
@@ -201,7 +229,38 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
         except CloudError:
             pass
         except Exception, exc:
-            self.fail("Failed to list all items: {0}".format(str(exc)))
+            self.fail("Failed to list images: {0}".format(str(exc)))
+
+        if response:
+            for item in response:
+                results.append(self.serialize_obj(item, 'VirtualMachineImageResource'))
+        return results
+
+    def list_offers(self):
+        response = None
+        results = []
+        try:
+            response = self.compute_client.virtual_machine_images.list_offers(self.location,
+                                                                              self.publisher)
+        except CloudError:
+            pass
+        except Exception, exc:
+            self.fail("Failed to list offers: {0}".format(str(exc)))
+
+        if response:
+            for item in response:
+                results.append(self.serialize_obj(item, 'VirtualMachineImageResource'))
+        return results
+
+    def list_publishers(self):
+        response = None
+        results = []
+        try:
+            response = self.compute_client.virtual_machine_images.list_publishers(self.location)
+        except CloudError:
+            pass
+        except Exception, exc:
+            self.fail("Failed to list publishers: {0}".format(str(exc)))
 
         if response:
             for item in response:
@@ -215,7 +274,7 @@ def main():
         import ansible.module_utils.basic
 
         ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            location='eastus',
+            resource_group='Testing',
             publisher='OpenLogic',
             offer='CentOS',
             sku='7.1'

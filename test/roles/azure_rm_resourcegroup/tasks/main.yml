@@ -1,7 +1,7 @@
 - name: Create resource group
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
-    location: westus
+    location: "{{ location }}"
     tags:
       testing: testing
       delete: never
@@ -16,12 +16,12 @@
       that:
           - output.results.tags.testing == 'testing'
           - output.results.tags.delete == 'never'
-          - output.results.location == 'westus'
+          - output.results.location == '"{{ location }}"'
 
 - name: Should be idempotent
   azure_rm_resourcegroup:
     name: Testing
-    location: westus
+    location: "{{ location }}"
     tags:
       testing: testing
       delete: never
@@ -114,7 +114,7 @@
 - name: Create a second resource group
   azure_rm_resourcegroup:
       name: Testing2
-      location: westus
+      location: "{{ location }}"
   register: output
 
 - debug: var=output

@@ -1,7 +1,7 @@
 - name: Create resource group
   azure_rm_resourcegroup:
       name: "{{ resource_group }}"
-      location: westus
+      location: "{{ location }}"
 
 - name: Remove public ip
   azure_rm_publicipaddress:

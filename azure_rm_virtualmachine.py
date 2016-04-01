@@ -143,6 +143,8 @@ options:
             - When the os_type is Linux setting ssh_password to false will disable SSH password authentication and
               require use of SSH keys.
         default: true
+        aliases:
+            - ssh_password_enabled
     ssh_public_keys:
         description:
             - For os_type Linux provide a list of SSH keys. Each item in the list should be a dictionary where the
@@ -171,9 +173,10 @@ options:
     storage_blob_name:
         description:
             - Name fo the storage blob used to hold the VM's OS disk image. If no name is provided, defaults to
-              the VM name + '.vhd'
+              the VM name + '.vhd'. NOTE: If you provide a name, it must end with '.vhd'
         default: null
-
+        aliases:
+            - storage_blob
     os_disk_caching:
         description:
             - Type of OS disk caching.
@@ -181,6 +184,8 @@ options:
             - ReadOnly
             - ReadWrite
         default: ReadOnly
+        aliases:
+            - disk_caching
     os_type:
         description:
             - Base type of operating system.
@@ -199,6 +204,8 @@ options:
             - Static
         default:
             - Static
+        aliases:
+            - public_ip_allocation
     ssh_port:
         description:
             - If a network interface is created when creating the VM, a security group will be created as well. For
@@ -237,10 +244,14 @@ options:
         description:
             - When removing a VM using state 'absent', also remove any network interfaces associate with the VM.
         default: false
+        aliases:
+            - delete_nics
     delete_virtual_storage:
         description:
             - When removing a VM using state 'absent', also remove any storage blobs associate with the VM.
         default: false
+        aliases:
+            - delete_vhd
     delete_public_ips:
         description:
             - When removing a VM using state 'absent', also remove any public IP addresses associate with the VM.
@@ -453,7 +464,7 @@ RETURNS = '''
 AZURE_OBJECT_CLASS = 'VirtualMachine'
 
 
-def extract_names_from_blob_uri(self, blob_uri):
+def extract_names_from_blob_uri(blob_uri):
     # HACK: ditch this once python SDK supports get by URI
     m = re.match('^https://(?P<accountname>[^\.]+)\.blob\.core\.windows\.net/(?P<containername>[^/]+)/(?P<blobname>.+)$', blob_uri)
     if not m:
@@ -490,7 +501,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             rdp_port=dict(type='int', default=3389),
             network_interface_names=dict(type='list', aliases=['network_interfaces']),
             delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
-            delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhds']),
+            delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhd']),
             delete_public_ips=dict(type='bool', default=False),
             log_path=dict(type='str', default='azure_rm_virtualmachine.log'),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
@@ -595,7 +606,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     self.storage_blob_name = self.name + '.vhd'
 
             if self.storage_account_name:
-                self.get_storage_account()
+                self.get_storage_account(self.storage_account_name)
 
                 requested_vhd_uri = 'https://{0}.blob.core.windows.net/{1}/{2}'.format(self.storage_account_name,
                                                                                        self.storage_container_name,
@@ -657,25 +668,27 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     changed = True
                     vm_dict['properties']['storageProfile']['osDisk']['caching'] = self.os_disk_caching
 
-                if self.storage_account_name:
-                    if requested_vhd_uri != vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri']:
-                        self.log('CHANGED: virtual machine {0} - OS disk VHD uri'.format(self.name))
-                        differences.append('OS Disk VHD uri')
-                        changed = True
-                        vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'] = requested_vhd_uri
+                # Not allowed to change vhd.uri
+                # if self.storage_account_name:
+                #     if requested_vhd_uri != vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri']:
+                #         self.log('CHANGED: virtual machine {0} - OS disk VHD uri'.format(self.name))
+                #         differences.append('OS Disk VHD uri')
+                #         changed = True
+                #         vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'] = requested_vhd_uri
 
                 update_tags, vm_dict['tags'] = self.update_tags(vm_dict.get('tags', dict()))
                 if update_tags:
                     differences.append('Tags')
                     changed = True
 
-                if self.admin_username and self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
-                    self.log('CHANGED: virtual machine {0} - admin username'.format(self.name))
-                    differences.append('Admin Username')
-                    vm_dict['properties']['osProfile']['adminUsername'] = self.admin_username
-                    changed = True
-                    if self.admin_password:
-                        vm_dict['properties']['osProfile']['adminPassword'] = self.admin_password
+                # Not allowed to change admin username
+                # if self.admin_username and self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
+                #     self.log('CHANGED: virtual machine {0} - admin username'.format(self.name))
+                #     differences.append('Admin Username')
+                #     vm_dict['properties']['osProfile']['adminUsername'] = self.admin_username
+                #     changed = True
+                #     if self.admin_password:
+                #         vm_dict['properties']['osProfile']['adminPassword'] = self.admin_password
 
                 if self.short_hostname and self.short_hostname != vm_dict['properties']['osProfile']['computerName']:
                     self.log('CHANGED: virtual machine {0} - short hostname'.format(self.name))
@@ -735,10 +748,14 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     # Get defaults
                     if not self.network_interface_names:
                         default_nic = self.create_default_nic()
+                        self.log("network interface:")
+                        self.log(self.serialize_obj(default_nic, 'NetworkInterface'), pretty_print=True)
                         network_interfaces = [default_nic.id]
 
                     if not self.storage_account_name:
                         storage_account = self.create_default_storage_account()
+                        self.log("storage account:")
+                        self.log(self.serialize_obj(storage_account, 'StorageAccount'), pretty_print=True)
                         requested_vhd_uri = 'https://{0}.blob.core.windows.net/{1}/{2}'.format(
                             storage_account.name,
                             self.storage_container_name,
@@ -879,9 +896,8 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
             elif self.state == 'absent':
                 # delete the VM
-                self.results['actions'].append('Removed VM {0}'.format(self.name))
                 self.log("Delete virtual machine {0}".format(self.name))
-                self.delete_vm()
+                self.delete_vm(vm)
 
         return self.results
 
@@ -934,7 +950,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     config['properties']['publicIPAddress']['properties'] = pip_dict['properties']
 
         self.log(result, pretty_print=True)
-        if not result['power_state']:
+        if self.state != 'absent' and not result['power_state']:
             self.fail("Failed to determine PowerState of virtual machine {0}".format(self.name))
         return result
 
@@ -958,7 +974,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.get_poller_result(poller)
         return True
 
-    def delete_vm(self):
+    def delete_vm(self, vm):
         vhd_uris = []
         nic_names = []
         pip_names = []
@@ -966,15 +982,15 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         if self.delete_virtual_storage:
             # store the attached vhd info so we can nuke it after the VM is gone
             self.log('Storing VHD URI for deletion')
-            vhd_uris.append(vm.storage_profile.os_disk.virtual_hard_disk.uri)
+            vhd_uris.append(vm.storage_profile.os_disk.vhd.uri)
             self.log("VHD URIs to delete: {0}".format(', '.join(vhd_uris)))
             self.results['deleted_vhd_uris'] = vhd_uris
 
         if self.delete_network_interfaces:
             # store the attached nic info so we can nuke them after the VM is gone
             self.log('Storing NIC names for deletion.')
-            for interface_id in vm.network_profile.network_interfaces:
-                id_dict = azure_id_to_dict(interface_id)
+            for interface in vm.network_profile.network_interfaces:
+                id_dict = azure_id_to_dict(interface.id)
                 nic_names.append(id_dict['networkInterfaces'])
             self.log('NIC names to delete {0}'.format(', '.join(nic_names)))
             self.results['deleted_network_interfaces'] = nic_names
@@ -992,15 +1008,18 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.log("Deleting virtual machine {0}".format(self.name))
         self.results['actions'].append("Deleted virtual machine {0}".format(self.name))
         try:
-            self.compute_client.virtual_machines.delete(self.resource_group, self.name)
+            poller = self.compute_client.virtual_machines.delete(self.resource_group, self.name)
         except Exception, exc:
             self.fail("Error deleting virtual machine {0} - {1}".format(self.name, str(exc)))
+
+        # wait for the poller to finish
+        self.get_poller_result(poller)
 
         # TODO: parallelize nic, vhd, and public ip deletions with begin_deleting
         # TODO: best-effort to keep deleting other linked resources if we encounter an error
         if self.delete_virtual_storage:
             self.log('Deleting virtual storage')
-            self.delete_virtual_storage(vhd_uris)
+            self.delete_vm_storage(vhd_uris)
 
         if self.delete_network_interfaces:
             self.log('Deleting network interfaces')
@@ -1041,7 +1060,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         # Delete returns nada. If we get here, assume that all is well.
         return True
 
-    def delete_virtual_storage(self, vhd_uris):
+    def delete_vm_storage(self, vhd_uris):
         for uri in vhd_uris:
             self.log("Extracting info from blob uri '{0}'".format(uri))
             blob_parts = extract_names_from_blob_uri(uri)
@@ -1081,10 +1100,10 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                                                       self.image['sku'],
                                                                       self.image['version']))
 
-    def get_storage_account(self):
+    def get_storage_account(self, name):
         try:
             account = self.storage_client.storage_accounts.get_properties(self.resource_group,
-                                                                          self.storage_account_name)
+                                                                          name)
             return account
         except Exception, exc:
             self.fail("Error fetching storage account {0} - {1}".format(self.storage_account_name, str(exc)))
@@ -1116,12 +1135,12 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
     def create_default_storage_account(self):
         '''
-        Create a default storage account <vm name>sa1. If <vm name>sa1 exists, use it.
+        Create a default storage account <vm name>01. If <vm name>01 exists, use it.
         Otherwise, create one.
 
         :return: storage account object
         '''
-        storage_account_name = self.name + 'sa1'
+        storage_account_name = self.name + '01'
         account = None
 
         try:
@@ -1135,14 +1154,16 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             return account
 
         parameters = StorageAccountCreateParameters(account_type='Standard_LRS', location=self.location)
-        self.log("Creating storage account {0}".format(storage_account_name))
+        self.log("Creating storage account {0} in location {1}".format(storage_account_name, self.location))
         self.results['actions'].append("Created storage account {0}".format(storage_account_name))
         try:
             poller = self.storage_client.storage_accounts.create(self.resource_group, storage_account_name, parameters)
         except Exception, exc:
             self.fail("Failed to create storage account: {0} - {1}".format(storage_account_name, str(exc)))
 
-        return self.get_poller_result(poller)
+        self.get_poller_result(poller)
+        # poller is not returning a storage account object.
+        return self.get_storage_account(storage_account_name)
 
     def create_default_nic(self):
         '''

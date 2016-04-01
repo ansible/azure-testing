@@ -1,7 +1,7 @@
 - name: Create resource group
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
-    location: westus
+    location: "{{ location }}"
     tags:
         testing: 'subnet'
         delete: 'on-exit'

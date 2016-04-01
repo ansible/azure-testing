@@ -151,11 +151,11 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
     def get_item(self):
         self.log('Get properties for {0}'.format(self.name))
         item_dict = dict()
+        item = None
 
         try:
             item = self.network_client.network_interfaces.get(self.resource_group, self.name)
-        except Exception, exc:
-            self.fail("failed with exception {0}".format(str(exc)))
+        except:
             pass
 
         if item:

@@ -2,8 +2,21 @@
 - name: Create resource group
   azure_rm_resourcegroup:
       name: Testing
-      location: eastus
-      # force: yes
+      location: "{{ location }}"
+
+- name: Delete virtual machine
+  azure_rm_virtualmachine:
+      resource_group: "{{ resource_group }}"
+      name: testvm002
+      state: absent
+      delete_network_interfaces: yes
+      delete_virtual_storage: yes
+      delete_public_ips: yes
+  register: output
+  when: remove_vm
+
+- debug: var=output
+  when: playbook_debug
 
 - name: Create storage account
   azure_rm_storageaccount:
@@ -12,7 +25,6 @@
       account_type: Standard_LRS
       debug: "{{ playbook_debug }}"
       log_mode: file
-      force: yes
 
 - name: Create virtual network
   azure_rm_virtualnetwork:
@@ -54,16 +66,13 @@
       vm_size: Standard_D1
       storage_account: testaccount001
       storage_container: testvm001
-      storage_blob: testvm001.vsd
-      admin_username: chouseknecht
+      storage_blob: testvm001.vhd
+      admin_username: adminuser
       admin_password: Password123!
       short_hostname: testvm
       os_type: Linux
       network_interfaces: testvm001
-      image_offer: CentOS
-      image_publisher: OpenLogic
-      image_sku: 7.1
-      image_version: latest
+      image: "{{ image }}"
       debug: "{{ playbook_debug }}"
       log_mode: file
   register: output
@@ -78,16 +87,13 @@
       vm_size: Standard_D4
       storage_account: testaccount001
       storage_container: testvm001
-      storage_blob: testvm001.vsd
-      admin_username: chouseknecht
+      storage_blob: testvm001.vhd
+      admin_username: adminuser
       admin_password: Password123!
       short_hostname: testvm
       os_type: Linux
       network_interfaces: testvm001
-      image_offer: CentOS
-      image_publisher: OpenLogic
-      image_sku: 7.1
-      image_version: latest
+      image: "{{ image }}"
       debug: "{{ playbook_debug }}"
       log_mode: file
   register: output
@@ -95,3 +101,54 @@
 - debug: var=output
   when: playbook_debug
 
+- name: Should be idempotent
+  azure_rm_virtualmachine:
+      resource_group: "{{ resource_group }}"
+      name: testvm002
+      vm_size: Standard_D4
+      storage_account: testaccount001
+      storage_container: testvm001
+      storage_blob: testvm001.vhd
+      admin_username: adminuser
+      admin_password: Password123!
+      short_hostname: testvm
+      os_type: Linux
+      network_interfaces: testvm001
+      image: "{{ image }}"
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- assert:
+      that: not output.changed
+
+- name: Delete VM
+  azure_rm_virtualmachine:
+      resource_group: "{{ resource_group }}"
+      name: testvm002
+      state: absent
+      delete_network_interfaces: yes
+      delete_virtual_storage: yes
+      delete_public_ips: yes
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- name: NIC should be gone
+  azure_rm_networkinterface_facts:
+      resource_group: "{{ resource_group }}"
+      name: testvm001
+  register: output
+
+- assert:
+      that: output.results | length == 0
+
+- name: PIP should be gone
+  azure_rm_publicipaddress_facts:
+      resource_group: "{{ resource_group }}"
+      name: testvm001
+  register: output
+
+- assert:
+      that: output.results | length == 0

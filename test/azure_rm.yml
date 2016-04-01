@@ -2,16 +2,32 @@
   hosts: localhost
   connection: local
   gather_facts: no
-  vars:
-    resource_group: Testing 
-    playbook_debug: yes
-    run_test: networkinterface
   roles:
-#    - { role: azure_rm_resourcegroup, when: "run_test in ['all', 'resourcegroup']" }
-#    - { role: azure_rm_virtualnetwork, when: "run_test in ['all', 'virtualnetwork']" }
-#    - { role: azure_rm_subnet, when: "run_test in ['all', 'subnet']" }
-#    - { role: azure_rm_storageblob, when: "run_test in ['all', 'storageblob']" }
-#    - { role: azure_rm_storageaccount, when: "run_test in ['all', 'storageaccount']" }
-#    - { role: azure_rm_securitygroup, when: "run_test in ['all', 'securitygroup']" }
-#    - { role: azure_rm_publicipaddress, when: "run_test in ['all', 'publicipaddress']" }
+    - { role: azure_rm_resourcegroup, when: "run_test in ['all', 'resourcegroup']" }
+    - { role: azure_rm_virtualnetwork, when: "run_test in ['all', 'virtualnetwork']" }
+    - { role: azure_rm_subnet, when: "run_test in ['all', 'subnet']" }
+    - { role: azure_rm_storageblob, when: "run_test in ['all', 'storageblob']" }
+    - { role: azure_rm_storageaccount, when: "run_test in ['all', 'storageaccount']" }
+    - { role: azure_rm_securitygroup, when: "run_test in ['all', 'securitygroup']" }
+    - { role: azure_rm_publicipaddress, when: "run_test in ['all', 'publicipaddress']" }
     - { role: azure_rm_networkinterface, when: "run_test in ['all', 'networkinterface']" }
+    - { role: azure_rm_virtualmachine, when: "run_test in ['all', 'virtualmachine']" }
+    - { role: azure_rm_virtualmachineimage_facts, when: "run_test in ['all', 'virtualmachineimage_facts']" }
+
+- name: Test just created
+  hosts: just_created
+  tasks:
+    - command: echo "Hello world!"
+      when: "run_test in  ['all', 'virtualmachine']"
+    - name: Remove VMs
+      azure_rm_virtualmachine:
+          resource_group: "{{ resource_group }}"
+          name: "{{ inventory_hostnae }}"
+          state: absent
+          delete_network_interfaces: yes
+          delete_virtual_storage: yes
+          delete_public_ips: yes
+      register: output
+    
+    - debug: var=output
+      when: playbook_debug

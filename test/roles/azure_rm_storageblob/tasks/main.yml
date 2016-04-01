@@ -1,7 +1,7 @@
 - name: Create resource group
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
-    location: westus
+    location: "{{ location }}"
       
 - name: Create storage account
   azure_rm_storageaccount:
@@ -153,7 +153,7 @@
 - name: Delete storage account
   azure_rm_storageaccount:
     resource_group: "{{ resource_group }}" 
-    location: westus
+    location: "{{ location }}"
     name: testgroup03blobs
     state: absent 
     debug: "{{ playbook_debug }}"
