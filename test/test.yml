@@ -1,0 +1,5 @@
+- name: Test inventory 
+  hosts: galaxy-production
+  tasks:
+    - command: echo "hello world!"
+    

@@ -20,7 +20,7 @@
 #
 
 '''
-Azure external inventory script
+Azure External Inventory Script
 ===============================
 Generates dynamic inventory by making API requests to Azure using the Azure
 Python SDK. For instruction on installing the Azure Python SDK see
@@ -28,7 +28,7 @@ http://azure-sdk-for-python.readthedocs.org/
 
 Authentication
 --------------
-The ordeder of precedence is command line arguments, environment variables,
+The order of precedence is command line arguments, environment variables,
 and finally the [default] profile found in ~/.azure/credentials.
 
 If using a credentials file, it should be an ini formatted file with one or
@@ -41,7 +41,7 @@ For command line arguments and environment variables specify a profile found
 in your ~/.azure/credentials file, or a service principal or Active Directory
 user.
 
-Commnad line arguments:
+Command line arguments:
  - profile 
  - client_id
  - secret
@@ -58,12 +58,6 @@ Environment variables:
  - AZURE_TENANT
  - AZURE_AD_USER
  - AZURE_PASSWORD
-
-inventory_hostname
-------------------
-The VM inventory_hostname will be the fqdn, when set on the public_ip_address
-object. Otherwise, the public ip address is used. If no public ip address,
-then the private ip address is used.
 
 Run for Specific Host
 -----------------------
@@ -93,6 +87,7 @@ required. For a specific host, this script returns the following variables:
     "operating_system_type": "Linux"
   },
   "plan": null,
+  "powerstate": "running",
   "private_ip": "172.26.3.6",
   "private_ip_alloc_method": "Static",
   "provisioning_state": "Succeeded",
@@ -119,25 +114,29 @@ When run in --list mode, instances are grouped by the following categories:
 
 Control groups using azure.ini or set environment variables:
 
-AZURE_GROUP_BY_RESOURCE_GROUP
-AZURE_GROUP_BY_LOCATION
-AZURE_GROUP_BY_SECURITY_GROUP
-AZURE_GROUP_BY_TAG
+AZURE_GROUP_BY_RESOURCE_GROUP=yes
+AZURE_GROUP_BY_LOCATION=yes
+AZURE_GROUP_BY_SECURITY_GROUP=yes
+AZURE_GROUP_BY_TAG=yes
 
 Control resource groups by assigning a comma separated list to:
 
-AZURE_RESOURCE_GROUPS
+AZURE_RESOURCE_GROUPS=resource_group_a,resource_group_b
 
-If not list is provided, all resource groups will be included.
+If no list is provided, all resource groups will be included.
 
+Powerstate:
+-----------
+The powerstate attribute indicates whether or not a host is running. If the value is 'running', the machine is
+up. If the value is anything other than 'running', the machine is down, and will be unreachable.
 
 Examples:
 ---------
-  Execute /bin/uname on all instances in the us-central1-a zone
+  Execute /bin/uname on all instances in the galaxy-qa resource group
   $ ansible -i azure_rm_inventory.py galaxy-qa -m shell -a "/bin/uname -a"
 
   Use the inventory script to print instance specific information
-  $ contrib/inventory/azure_rm_inventory.py --host my_instance_host_name
+  $ contrib/inventory/azure_rm_inventory.py --host my_instance_host_name --resource-groups=my_resource_group
 
 Insecure Platform Warning
 -------------------------
@@ -147,8 +146,11 @@ requests security packages:
     pip install requests[security]
 
 
-Author: Chris Houseknecht chouseknecht@ansible.com
-Company: RedHat | Ansible        
+Author: Matt Davis, <mdavis@redhat.com>
+        Chris Houseknecht, <house@redhat.com>
+
+Company: Red Hat | Ansible
+
 Version: 1.0.0
 '''
 
@@ -160,10 +162,10 @@ from os.path import expanduser
 import sys
 
 HAS_AZURE = True
-HAS_REQUESTS = True
 
 try:
     from msrestazure.azure_exceptions import CloudError
+    from azure.mgmt.compute import __version__ as azure_compute_version
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
@@ -193,6 +195,8 @@ AZURE_CONFIG_SETTINGS = dict(
     group_by_security_group='AZURE_GROUP_BY_SECURITY_GROUP',
     group_by_tag='AZURE_GROUP_BY_TAG'
 )
+
+AZURE_MIN_VERSION = "2016-03-30"
 
 
 class AzureRM(object):
@@ -465,12 +469,31 @@ class AzureInventory(object):
                 virtual_machine_size=machine.hardware_profile.vm_size.value,
                 computer_name=machine.os_profile.computer_name,
                 provisioning_state=machine.provisioning_state,
+                powerstate=None
             )
 
             host_vars['os_disk'] = dict(
                 name=machine.storage_profile.os_disk.name,
                 operating_system_type=machine.storage_profile.os_disk.os_type.value
             )
+
+            if machine.instance_view:
+                host_vars['powerstate'] = next((s.code.replace('PowerState/', '')
+                                               for s in machine.instance_view.statuses
+                                               if s.code.startswith('PowerState')), None)
+            else:
+                # Machine instance coming from a list view do not include 'instanceview'. We need an instanceview
+                # in order to resolve the power state.
+                try:
+                    vm = self._compute_client.virtual_machines.get(resource_group,
+                                                                   machine.name,
+                                                                   expand='instanceview')
+                    host_vars['powerstate'] = next((s.code.replace('PowerState/', '')
+                                                   for s in vm.instance_view.statuses
+                                                   if s.code.startswith('PowerState')),
+                                                   None)
+                except Exception, exc:
+                    sys.exit("Error: failed to get instance view for host {0} - {1}".format(machine.name, str(exc)))
 
             if machine.storage_profile.image_reference:
                 host_vars['image'] = dict(
@@ -645,8 +668,9 @@ def main():
     if not HAS_AZURE:
         sys.exit("The Azure python sdk is not installed (try 'pip install azure')")
 
-    if not HAS_REQUESTS:
-        sys.exit("The requests python module is not installed (try 'pip install requests')")
+    if azure_compute_version < AZURE_MIN_VERSION:
+        sys.exit("Expecting azure.mgmt.compute.__version__ to be >= {0}. Found version {1} "
+                 "Do you have Azure >= 2.0.0rc2 installed?".format(AZURE_MIN_VERSION, azure_compute_version))
 
     AzureInventory()
 
