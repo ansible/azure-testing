@@ -41,6 +41,7 @@ pip-delete-this-directory.txt
 
 # Module logs
 *.log
+*.retry
 
 # Unit test / coverage reports
 htmlcov/

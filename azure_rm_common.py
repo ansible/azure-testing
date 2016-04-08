@@ -538,15 +538,15 @@ class AzureRMModuleBase(object):
         if os_type == 'Linux':
             # add an inbound SSH rule
             parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow SSH Access',
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow SSH Access',
                              source_port_range='*', destination_port_range=ssh_port, priority=100, name='SSH')
             ]
             parameters.location = location
         else:
             # for windows add an inbound RDP rule
             parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow RDP Access',
-                             soruce_port_range='*', destination_port_range=rdp_port, priority=100, name='RDP')
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP Access',
+                             source_port_range='*', destination_port_range=rdp_port, priority=100, name='RDP')
             ]
             parameters.location = location
 

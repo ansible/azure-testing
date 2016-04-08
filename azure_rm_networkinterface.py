@@ -498,7 +498,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
                     if not pip and self.public_ip:
                         # create a default public_ip
-                        pip = self.create_default_public_ip(self.resource_group, self.location, self.name,
+                        pip = self.create_default_pip(self.resource_group, self.location, self.name,
                                                             self.public_ip_allocation_method)
 
                     nic = NetworkInterface(
