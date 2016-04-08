@@ -728,7 +728,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             return self.results
 
         if changed:
-            if self.state in ('present','started','stopped'):
+            if self.state in ('present', 'started', 'stopped'):
                 if not vm:
                     # Create the VM
                     self.log("Create virtual machine {0}".format(self.name))
@@ -1242,8 +1242,12 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             if not subnet_id:
                 self.fail(no_subnets_msg)
 
-        pip = self.create_default_pip()
-        group = self.create_default_securitygroup()
+        self.results['actions'].append('Creating default public IP {0}'.format(self.name + '01'))
+        pip = self.create_default_pip(self.resource_group, self.location, self.name, self.public_ip_allocation_method)
+
+        self.results['actions'].append('Created default security group {0}'.format(self.name + '01'))
+        group = self.create_default_securitygroup(self.resource_group, self.location, self.name, self.os_type,
+                                                  self.ssh_port, self.rdp_port)
 
         parameters = NetworkInterface(
             location=self.location,
@@ -1274,90 +1278,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                                                              parameters)
         except Exception, exc:
             self.fail("Error creating network interface {0} - {1}".format(network_interface_name, str(exc)))
-        return self.get_poller_result(poller)
-
-    def create_default_pip(self):
-        '''
-        Create a default public IP address <vm_name>01 to associate with the default NIC.
-        If a PIP address matching <vm name>01 exists, use it. Otherwise, create one.
-
-        :return: PIP object
-        '''
-        public_ip_name = self.name + '01'
-        pip = None
-
-        self.log("Create public IP {0}".format(public_ip_name))
-        self.log("Check to see if public IP {0} exists".format(public_ip_name))
-        try:
-            pip = self.network_client.public_ip_addresses.get(self.resource_group, public_ip_name)
-        except CloudError:
-            pass
-
-        if pip:
-            self.log("Public ip {0} found.".format(public_ip_name))
-            self.check_provisioning_state(pip)
-            return pip
-
-        params = PublicIPAddress(
-            location=self.location,
-            public_ip_allocation_method=self.public_ip_allocation_method,
-        )
-        self.log('Creating default public IP {0}'.format(public_ip_name))
-        self.results['actions'].append('Creating default public IP {0}'.format(public_ip_name))
-        try:
-            poller = self.network_client.public_ip_addresses.create_or_update(self.resource_group, public_ip_name, params)
-        except Exception, exc:
-            self.fail("Error creating {0} - {1}".format(public_ip_name, str(exc)))
-
-        return self.get_poller_result(poller)
-
-    def create_default_securitygroup(self):
-        '''
-        Create a default security group <vm_name>01 to associate with the default NIC.
-        If a security group matching <vm name>01 exists, use it. Otherwise, create one.
-
-        :return: security_group object
-        '''
-        security_group_name = self.name + '01'
-        group = None
-
-        self.log("Create security group {0}".format(security_group_name))
-        self.log("Check to see if security group {0} exists".format(security_group_name))
-        try:
-            group = self.network_client.network_security_groups.get(self.resource_group, security_group_name)
-        except CloudError:
-            pass
-
-        if group:
-            self.log("Security group {0} found.".format(security_group_name))
-            self.check_provisioning_state(group)
-            return group
-
-        parameters = NetworkSecurityGroup()
-        if self.os_type == 'Linux':
-            # add an inbound SSH rule
-            parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow SSH Access',
-                             source_port_range='*', destination_port_range=self.ssh_port, priority=100, name='SSH')
-            ]
-            parameters.location = self.location
-        else:
-            # for windows add an inbound RDP rule
-            parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow RDP Access',
-                             soruce_port_range='*', destination_port_range=self.rdp_port, priority=100, name='RDP')
-            ]
-            parameters.location = self.location
-
-        self.log('Creating default security group {0}'.format(security_group_name))
-        self.results['actions'].append('Created default security group {0}'.format(security_group_name))
-        try:
-            poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
-                                                                                  security_group_name,
-                                                                                  parameters)
-        except Exception, exc:
-            self.fail("Error creating default security rule {0} - {1}".format(security_group_name, str(exc)))
-
         return self.get_poller_result(poller)
 
 

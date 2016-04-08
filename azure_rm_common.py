@@ -76,6 +76,8 @@ try:
     from msrest.serialization import Serializer
     from msrestazure.azure_exceptions import CloudError
     from azure.mgmt.compute import __version__ as azure_compute_version
+    from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
+        NetworkInterfaceIPConfiguration, Subnet
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
     from azure.mgmt.network.network_management_client import NetworkManagementClient,\
                                                              NetworkManagementClientConfiguration
@@ -465,6 +467,98 @@ class AzureRMModuleBase(object):
         except Exception, exc:
             self.fail("Error creating blob service client for storage account {0} - {1}".format(storage_account_name,
                                                                                                 str(exc)))
+
+    def create_default_pip(self, resource_group, location, name, allocation_method='Dynamic'):
+        '''
+        Create a default public IP address <name>01 to associate with a network interface.
+        If a PIP address matching <vm name>01 exists, return it. Otherwise, create one.
+
+        :param resource_group: name of an existing resource group
+        :param location: a valid azure location
+        :param name: base name to assign the public IP address
+        :param allocation_method: one of 'Static' or 'Dynamic'
+        :return: PIP object
+        '''
+        public_ip_name = name + '01'
+        pip = None
+
+        self.log("Starting create_default_pip {0}".format(public_ip_name))
+        self.log("Check to see if public IP {0} exists".format(public_ip_name))
+        try:
+            pip = self.network_client.public_ip_addresses.get(resource_group, public_ip_name)
+        except CloudError:
+            pass
+
+        if pip:
+            self.log("Public ip {0} found.".format(public_ip_name))
+            self.check_provisioning_state(pip)
+            return pip
+
+        params = PublicIPAddress(
+            location=location,
+            public_ip_allocation_method=allocation_method,
+        )
+        self.log('Creating default public IP {0}'.format(public_ip_name))
+        try:
+            poller = self.network_client.public_ip_addresses.create_or_update(resource_group, public_ip_name, params)
+        except Exception, exc:
+            self.fail("Error creating {0} - {1}".format(public_ip_name, str(exc)))
+
+        return self.get_poller_result(poller)
+
+    def create_default_securitygroup(self, resource_group, location, name, os_type, ssh_port='22', rdp_port='3389'):
+        '''
+        Create a default security group <name>01 to associate with a network interface. If a security group matching
+        <name>01 exists, return it. Otherwise, create one.
+
+        :param resource_group: Resource group name
+        :param location: azure location name
+        :param name: base name to use for the security group
+        :param os_type: one of 'Windows' or 'Linux'. Determins any default rules added to the security group.
+        :param ssh_port: for os_type 'Linux' port used in rule allowing SSH access.
+        :param rdp_port: for os_type 'Windows' port used in rule allowing RDP access.
+        :return: security_group object
+        '''
+        security_group_name = name + '01'
+        group = None
+
+        self.log("Create security group {0}".format(security_group_name))
+        self.log("Check to see if security group {0} exists".format(security_group_name))
+        try:
+            group = self.network_client.network_security_groups.get(resource_group, security_group_name)
+        except CloudError:
+            pass
+
+        if group:
+            self.log("Security group {0} found.".format(security_group_name))
+            self.check_provisioning_state(group)
+            return group
+
+        parameters = NetworkSecurityGroup()
+        if os_type == 'Linux':
+            # add an inbound SSH rule
+            parameters.security_rules=[
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow SSH Access',
+                             source_port_range='*', destination_port_range=ssh_port, priority=100, name='SSH')
+            ]
+            parameters.location = location
+        else:
+            # for windows add an inbound RDP rule
+            parameters.security_rules=[
+                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', desription='Allow RDP Access',
+                             soruce_port_range='*', destination_port_range=rdp_port, priority=100, name='RDP')
+            ]
+            parameters.location = location
+
+        self.log('Creating default security group {0}'.format(security_group_name))
+        try:
+            poller = self.network_client.network_security_groups.create_or_update(resource_group,
+                                                                                  security_group_name,
+                                                                                  parameters)
+        except Exception, exc:
+            self.fail("Error creating default security rule {0} - {1}".format(security_group_name, str(exc)))
+
+        return self.get_poller_result(poller)
 
     @property
     def storage_client(self):

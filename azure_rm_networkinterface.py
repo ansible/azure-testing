@@ -43,10 +43,10 @@ module: azure_rm_networkinterface
 short_description: Manage Azure network interfaces.
 
 description:
-    - Create, update and delete a network interface. When creating a network interface provide the name of an
-      existing virtual network, the name of an existing subnet within the virtual network and the name
-      of an existing security group. Optionally specify a private IPv4 address, private IP allocation method,
-      and the name of an existing public IP address.
+    - Create, update or delete a network interface. When creating a network interface you must provide the name of an
+      existing virtual network, the name of an existing subnet within the virtual network. A default security group
+      and public IP address will be created automatically, or you can provide the name of an existing security group
+      and public IP address. See the examples below for more details.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -105,6 +105,28 @@ options:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
+    virtual_network_name:
+        description:
+            - Name of an existing virtual network with which the network interface will be associated. Required
+              when creating a network interface.
+        aliases:
+            - virtual_network
+    subnet_name:
+        description:
+            - Name of an existing subnet within the specified virtual network. Required when creating a network
+              interface
+        aliases:
+            - subnet
+    os_type:
+        description:
+            - Determines any rules to be added to a default security group. When creating a network interface, if no
+              security group name is provided, a default security group will be created. If the os_type is 'Windows',
+              a rule will be added allowing RDP access. If the os_type is 'Linux', a rule allowing SSH access will be
+              added.
+        choices:
+            - Windows
+            - Linux
+        default: Linux
     private_ip_address:
         description:
             - Valid IPv4 address that falls within the specified subnet.
@@ -118,37 +140,42 @@ options:
         choices:
             - Dynamic
             - Static
+    public_ip:
+        description:
+            - When creating a network interface, if no public IP address name is provided a default public IP
+              address will be created. Use to turn this behaviour off.
+        default: true
     public_ip_address_name:
         description:
             - Name of an existing public IP address object to associate with the security group.
         default: null
         aliases:
-            - public_ip
             - public_ip_address
+    public_ip_allocation_method:
+        description::
+            - If a public_ip_address_name is not provided, a default public IP address will be created. The allocation
+              method determines whether or not the public IP address assigned to the network interface is permanent.
+        choices:
+            - Dynamic
+            - Static
+        default: Dynamic
     security_group_name:
         description:
-            - Name of an existing security group with which to associate the network interface. Required when
-              creating a network interface.
+            - Name of an existing security group with which to associate the network interface. If not provide, a
+              default security group will be created.
         default: null
-        required: true
         aliases:
             - security_group
-    virtual_network_name:
+    ssh_port:
         description:
-            - Name of an existing virtual network with which the network interface will be associated. Required
-              when creating a network interface.
-        default: null
-        required true
-        aliases:
-            - virtual_network
-    subnet_name:
-        description:
-            - Name of an existing subnet within the specified virtual network. Required when the network interface
-              is created.
-        required: true
-        default: null
-        aliases:
-            - subnet
+            - When creating a default security group for os_type 'Linux' a rule will be added allowing SSH access. Use
+              to set the SSH port for this rule.
+        default: 22
+    rdp_port:
+        description
+            - When creating a default security group for os_type 'Linux' a rule will be added allowing SSH access. Use
+              to set the SSH port for this rule.
+        default: 3389
     tags:
         description:
             - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -160,8 +187,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
-
-requirements:
+    requirements:
     - "python >= 2.7"
     - "azure >= 2.0.0"
 
@@ -171,7 +197,31 @@ authors:
 '''
 
 EXAMPLES = '''
-    - name: Create nic
+    - name: Create a network interface with minimal parameters
+        azure_rm_networkinterface:
+            name: nic001
+            resource_group: Testing
+            virtual_network_name: vnet001
+            subnet_name: subnet001
+
+     - name: Create a network interface with private IP address only (no Public IP)
+        azure_rm_networkinterface:
+            name: nic001
+            resource_group: Testing
+            virtual_network_name: vnet001
+            subnet_name: subnet001
+            public_ip: no
+
+    - name: Create a network interface for use in a Windows host (opens RDP port) with custom RDP port
+        azure_rm_networkinterface:
+            name: nic002
+            resource_group: Testing
+            virtual_network_name: vnet001
+            subnet_name: subnet001
+            os_type: Windows
+            rdp_port: 3399
+
+    - name: Create a network interface using existing security group and public IP
         azure_rm_networkinterface:
             name: nic003
             resource_group: Testing
@@ -287,10 +337,15 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             state=dict(default='present', choices=['present', 'absent']),
             private_ip_address=dict(type='str'),
             private_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
-            public_ip_address_name=dict(type='str', aliases=['public_ip', 'public_ip_address']),
+            public_ip_address_name=dict(type='str', aliases=['public_ip_address']),
+            public_ip=dict(type='bool', default=True),
             subnet_name=dict(type='str', aliases=['subnet']),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
-            log_path=dict(type='str', default='azure_rm_networkinterface.log')
+            os_type=dict(type='str', choices=['Windows', 'Linux'], default='Linux'),
+            ssh_port=dict(type='int', default=22),
+            rdp_port=dict(type='int', default=3389),
+            public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
+            log_path=dict(type='str', default='azure_rm_networkinterface.log'),
         )
 
         super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
@@ -308,6 +363,11 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.tags = None
         self.virtual_network_name = None
         self.security_group_name = None
+        self.os_type = None
+        self.rdp_port = None
+        self.ssh_port = None
+        self.public_ip_allocation_method = None
+        self.public_ip = None
 
         self.results = dict(
             changed=False,
@@ -325,7 +385,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         nic = None
         subnet = None
         nsg = None
-        public_ip = None
+        pip = None
 
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
@@ -347,7 +407,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                 subnet = self.get_subnet(self.virtual_network_name, self.subnet_name)
 
             if self.public_ip_address_name:
-                public_ip = self.get_public_ip_address(self.public_ip_address_name)
+                pip = self.get_public_ip_address(self.public_ip_address_name)
 
             if self.security_group_name:
                 nsg = self.get_security_group(self.security_group_name)
@@ -374,11 +434,11 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                         results['ip_configuration']['private_ip_address'] = self.private_ip_address
 
                 if self.public_ip_address_name:
-                    if results['ip_configuration']['public_ip_address'].get('id') != public_ip.id:
+                    if results['ip_configuration']['public_ip_address'].get('id') != pip.id:
                         self.log("CHANGED: network interface {0} public ip".format(self.name))
                         changed = True
-                        results['ip_configuration']['public_ip_address']['id'] = public_ip.id
-                        results['ip_configuration']['public_ip_address']['name'] = public_ip.name
+                        results['ip_configuration']['public_ip_address']['id'] = pip.id
+                        results['ip_configuration']['public_ip_address']['name'] = pip.name
 
                 if self.security_group_name:
                     if results['network_security_group'].get('id') != nsg.id:
@@ -426,12 +486,20 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                     self.log("Creating network interface {0}.".format(self.name))
 
                     # check required parameters
-                    if not self.security_group_name:
-                        self.fail("parameter error: security_group_name required when creating a network interface.")
                     if not self.subnet_name:
                         self.fail("parameter error: subnet_name required when creating a network interface.")
                     if not self.virtual_network_name:
                         self.fail("parameter error: virtual_network_name required when creating a network interface.")
+
+                    if not self.security_group_name:
+                        # create default security group
+                        nsg = self.create_default_securitygroup(self.resource_group, self.location, self.name,
+                                                                self.os_type, self.ssh_port, self.rdp_port)
+
+                    if not pip and self.public_ip:
+                        # create a default public_ip
+                        pip = self.create_default_public_ip(self.resource_group, self.location, self.name,
+                                                            self.public_ip_allocation_method)
 
                     nic = NetworkInterface(
                         location=self.location,
@@ -451,12 +519,13 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                                                                       resource_guid=nsg.resource_guid)
                     if self.private_ip_address:
                         nic.ip_configurations[0].private_ip_address = self.private_ip_address
-                    if self.public_ip_address_name:
+
+                    if pip:
                         nic.ip_configurations[0].public_ip_address = PublicIPAddress(
-                            id=public_ip.id,
-                            name=public_ip.name,
-                            location=public_ip.location,
-                            resource_guid=public_ip.resource_guid)
+                            id=pip.id,
+                            name=pip.name,
+                            location=pip.location,
+                            resource_guid=pip.resource_guid)
                 else:
                     self.log("Updating network interface {0}.".format(self.name))
                     nic = NetworkInterface(
@@ -479,13 +548,13 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                         nic.ip_configurations[0].private_ip_address = results['ip_configuration']['private_ip_address']
 
                     if results['ip_configuration']['public_ip_address'].get('id'):
-                        public_ip = \
+                        pip = \
                             self.get_public_ip_address(results['ip_configuration']['public_ip_address']['name'])
                         nic.ip_configurations[0].public_ip_address = PublicIPAddress(
-                            id=public_ip.id,
-                            name=public_ip.name,
-                            location=public_ip.location,
-                            resource_guid=public_ip.resource_guid)
+                            id=pip.id,
+                            name=pip.name,
+                            location=pip.location,
+                            resource_guid=pip.resource_guid)
 
                     if results['network_security_group'].get('id'):
                         nsg = self.get_security_group(results['network_security_group']['name'])
