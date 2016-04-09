@@ -56,7 +56,7 @@
       name: testvm001
       virtual_network: testvm001
       subnet: testvm001
-      public_ip: testvm001
+      public_ip_name: testvm001
       security_group: testvm001
 
 - name: Create virtual machine

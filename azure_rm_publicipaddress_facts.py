@@ -20,9 +20,6 @@
 #
 
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 

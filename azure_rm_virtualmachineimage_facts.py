@@ -20,9 +20,6 @@
 #
 
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -41,8 +38,7 @@ module: azure_rm_virtualmachineimage_facts
 short_description: Get virtual machine image facts.
 
 description:
-    - Get facts for.
-
+    - Get facts for virtual machine images.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -84,16 +80,12 @@ options:
         description:
             - Only show results for a specific security group.
         default: null
-    resource_group:
-        description:
-            - Name of a resource group. List publishers available to a particular resource group.
-        required: true
-        default: null
-
     location:
         description:
-            - Azure location value. Defaults to the location of the resource group.
+            - Azure location value (ie. westus, eastus, eastus2, northcentralus, etc.). Supplying only a
+              location value will yield a list of available publishers for the location.
         default: null
+        required: true
     publisher:
         description:
             - Name of an image publisher. List image offerings associated with a particular publisher.
@@ -123,7 +115,7 @@ authors:
 EXAMPLES = '''
     - name: Get facts for a specific image
       azure_rm_virtualmachineimage_facts:
-        resource_group: Testing
+        location: eastus
         publisher: OpenLogic
         offer: CentOS
         sku: '7.1'
@@ -131,19 +123,19 @@ EXAMPLES = '''
 
     - name: List available versions
       azure_rm_virtualmachineimage_facts:
-        resource_group: Testing
+        location: eastus
         publisher: OpenLogic
         offer: CentOS
         sku: '7.1'
 
     - name: List available offers
       azure_rm_virtualmachineimage_facts:
-        resource_group: Testing
+        location: eastus
         publisher: OpenLogic
 
     - name: List available publishers
       azure_rm_virtualmachineimage_facts:
-        resource_group: Testing
+        location: eastus
 
 '''
 
@@ -157,8 +149,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
     def __init__(self, **kwargs):
 
         self.module_arg_spec = dict(
-            resource_group=dict(type='str'),
-            location=dict(type='str'),
+            location=dict(type='str', required=True),
             publisher=dict(type='str'),
             offer=dict(type='str'),
             sku=dict(type='str'),
@@ -172,7 +163,6 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
             results=[]
         )
 
-        self.resource_group=None
         self.location = None
         self.publisher = None
         self.offer = None
@@ -183,11 +173,6 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
-
-        resource_group = self.get_resource_group(self.resource_group)
-        if not self.location:
-            # Set default location
-            self.location = resource_group.location
 
         if self.location and self.publisher and self.offer and self.sku and self.version:
             self.results['results'] = self.get_item()

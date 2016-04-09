@@ -20,9 +20,6 @@
 #
 
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -41,7 +38,7 @@ module: azure_rm_resouregroup_facts
 short_description: Get resource group facts.
 
 description:
-    - Get facts for a specific resource group or all resource groups in your subscription.
+    - Get facts for a specific resource group or all resource groups.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment

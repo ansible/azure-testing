@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -43,8 +40,8 @@ module: azure_rm_publicipaddress
 short_description: Manage Azure Public IP Addresses.
 
 description:
-    - Create, update and delete Public IPs. Allows setting and updating the address allocation method and domain
-      name label. Use the azure_rm_networkinterface module to associate a Public IP with a network interface.
+    - Create, update and delete a Public IP address. Allows setting and updating the address allocation method and
+      domain name label. Use the azure_rm_networkinterface module to associate a Public IP with a network interface.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -87,6 +84,21 @@ options:
             - Name of resource group with which the Public IP is associated.
         required: true
         default: null
+    allocation_method:
+        description:
+            - Control whether the assigned Public IP remains permanently assigned to the object ('Static'). If not
+              set to 'Static', the IP address my changed anytime an associated virtual machine is power cycled.
+        choices:
+            - Dynamic
+            - Static
+        default: Dynamic
+    domain_name_label:
+        description:
+            - The customizable portion of the FQDN assigned to public IP address. This is an explicit setting. If
+              no value is provided, any existing value will be removed on an existing public IP.
+        default: null
+        aliases:
+            - domain_name_label
     name:
         description:
             - Name of the Public IP.
@@ -115,21 +127,6 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
-    allocation_method:
-        description:
-            - Control whether the assigned Public IP remains permanently assigned to the object ('Static'). If not
-              set to 'Static', the IP address my changed anytime an associated virtual machine is power cycled.
-        choices:
-            - Dynamic
-            - Static
-        default: Dynamic
-    domain_name_label:
-        description:
-            - The customizable portion of the FQDN assigned to public IP address. This is an explicit setting. If
-              no value is provided, any existing value will be removed on an existing public IP.
-        default: null
-        aliases:
-            - domain_name_label
 
 requirements:
     - "python >= 2.7"

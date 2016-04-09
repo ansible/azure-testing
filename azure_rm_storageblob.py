@@ -23,9 +23,6 @@ import datetime
 import hashlib
 import os
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -45,7 +42,8 @@ module: azure_rm_storageblob
 short_description: Manage blob containers and blob objects.
 
 description:
-    - Create, update and delete blob containers and blob objects, as well as uupload and download blobs.
+    - Create, update and delete blob containers and blob objects. Use to upload a file and store it as a blob object,
+      or download a blob object to a file.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -136,7 +134,7 @@ options:
             - destination
     force:
         description:
-            - Overwrite existing file or blob when uploading or downloading. Force deletion of a container
+            - Overwrite existing blob or file when uploading or downloading. Force deletion of a container
               that contains blobs.
         default: false
     resource_group:
@@ -152,7 +150,7 @@ options:
             - source
     state:
         description:
-            - Assert the state of a container or blob. State can be absent, present.
+            - Assert the state of a container or blob.
             - Use state 'absent' with a container value only to delete a container. Include a blob value to remove
               a specific blob. A container will not be deleted, if it contains blobs. Use the force option to override,
               deleting the container and all associated blobs.
@@ -160,7 +158,7 @@ options:
               does not exist, it will be created. If it exists, it will be updated with configuration options. Provide
               a blob name and either src or dest to upload or download. Provide a src path to upload and a dest path
               to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten
-              unless the force is used.
+              unless the force parameter is true.
         default: present
         choices:
             - absent

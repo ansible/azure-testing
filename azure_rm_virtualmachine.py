@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -48,11 +45,11 @@ module: azure_rm_virtualmachine
 short_description: Manage Azure virtual machines.
 
 description:
-    - Create, update, stop and start virtual machines. Provide your own storage account and network interface or
-      allow the module to create these for you. When no network interface is provided, the resource group must
-      contain a virtual network with at least one subnet.
+    - Create, update, stop and start a virtual machine. Provide an existing storage account and network interface or
+      allow the module to create these for you. If you choose not to provide a network interface, the resource group
+      must contain a virtual network with at least one subnet.
     - Currently requires an image found in the Azure Marketplace. Use azure_rm_virtualmachineimage_facts module
-      to discover publisher, offer, sku and version of a particular image.
+      to discover the publisher, offer, sku and version of a particular image.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -119,10 +116,10 @@ options:
         description:
             - Valid Azure location. Defaults to location of the resource group.
         default: resource_group location
-    short_hotname:
+    short_hostname:
         description:
             - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
-              When a VM is created, this will default to the name.
+              When creating a virtual machine, short_hostname defaults to the host name.
         default: null
     vm_size:
         description:
@@ -140,7 +137,7 @@ options:
         default: null
     ssh_password:
         description:
-            - When the os_type is Linux setting ssh_password to false will disable SSH password authentication and
+            - When the os_type is Linux, setting ssh_password to false will disable SSH password authentication and
               require use of SSH keys.
         default: true
         aliases:
@@ -209,13 +206,13 @@ options:
     ssh_port:
         description:
             - If a network interface is created when creating the VM, a security group will be created as well. For
-              Linux hosts a rule will be added to the security group allowing inbound TCP connection to the default
+              Linux hosts a rule will be added to the security group allowing inbound TCP connections to the default
               SSH port. Use ssh_port to override the port specified in the security rule.
         default: 22
     rdp_port:
         description:
             - If a network interface is created when creating the VM, a security group will be created as well. For
-              Windows hosts a rule will be added to the security group allowing inbound TCP connection to the default
+              Windows hosts a rule will be added to the security group allowing inbound TCP connections to the default
               RDP port. Use rdp_port to override the port specified in the security rule.
         default: 3389
     network_interface_names:
@@ -248,7 +245,7 @@ options:
             - delete_nics
     delete_virtual_storage:
         description:
-            - When removing a VM using state 'absent', also remove any storage blobs associate with the VM.
+            - When removing a VM using state 'absent', also remove any storage blobs associated with the VM.
         default: false
         aliases:
             - delete_vhd
@@ -466,7 +463,8 @@ AZURE_OBJECT_CLASS = 'VirtualMachine'
 
 def extract_names_from_blob_uri(blob_uri):
     # HACK: ditch this once python SDK supports get by URI
-    m = re.match('^https://(?P<accountname>[^\.]+)\.blob\.core\.windows\.net/(?P<containername>[^/]+)/(?P<blobname>.+)$', blob_uri)
+    m = re.match('^https://(?P<accountname>[^\.]+)\.blob\.core\.windows\.net/'
+                 '(?P<containername>[^/]+)/(?P<blobname>.+)$', blob_uri)
     if not m:
         raise Exception("unable to parse blob uri '%s'" % blob_uri)
     extracted_names = m.groupdict()

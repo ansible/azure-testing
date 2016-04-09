@@ -20,9 +20,6 @@
 #
 
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -44,9 +41,9 @@ module: azure_rm_securitygroup
 short_description: Manage Azure network security groups.
 
 description:
-    - Create, update or delete network security groups. A security group contains Access Control List (ACL) rules
+    - Create, update or delete a network security group. A security group contains Access Control List (ACL) rules
       that allow or deny network traffic to subnets or individual network interfaces. A security group is created
-      with a set of default security rules and an empty set of security rules. Shap traffic floy wby adding
+      with a set of default security rules and an empty set of security rules. Shape traffic flow by adding
       rules to the empty set of security rules.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.

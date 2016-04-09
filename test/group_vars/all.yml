@@ -1,6 +1,6 @@
 ---
 resource_group: Testing
 playbook_debug: yes
-run_test: networkinterface 
+run_test: virtualmachine 
 location: westus
 remove_vm: yes 

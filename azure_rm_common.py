@@ -29,7 +29,6 @@ import copy
 
 from logging import Handler, NOTSET
 from os.path import expanduser
-from enum import Enum
 
 AZURE_COMMON_ARGS = dict(
     profile=dict(type='str'),
@@ -71,6 +70,12 @@ AZURE_FAILED_STATE = "Failed"
 AZURE_MIN_VERSION = "2016-03-30"
 
 HAS_AZURE = True
+HAS_ENUM = True
+
+try:
+    from enum import Enum
+except ImportError:
+    HAS_ENUM = False
 
 try:
     from msrest.serialization import Serializer
@@ -136,6 +141,9 @@ class AzureRMModuleBase(object):
 
         if not HAS_AZURE:
             self.fail("The Azure Python SDK is not installed (try 'pip install azure')")
+
+        if not HAS_ENUM:
+            self.fail("The enum module is not installed (try 'pip install enum')")
 
         if azure_compute_version < AZURE_MIN_VERSION:
             self.fail("Expecting azure.mgmt.compute.__version__ to be >= {0}. Found version {1} "

@@ -20,9 +20,6 @@
 #
 
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -47,7 +44,7 @@ module: azure_rm_storageaccount
 short_description: Manage Azure storage accounts.
 
 description:
-    - Create, update and delete storage accounts within a given resource group.
+    - Create, update or delete a storage account.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -109,7 +106,7 @@ options:
     account_type:
         description:
             - Type of storage account. Required when creating a storage account. Note that StandardZRS and PremiumLRS
-              accounts cannot br changed to other account types, and other account types cannot be changed to
+              accounts cannot be changed to other account types, and other account types cannot be changed to
               StandardZRS or PremiumLRS.
         required: false
         default: null
@@ -123,9 +120,9 @@ options:
             - type
     custom_domain:
         description:
-            - User domain assigned to the storage account. Must be a dictionary with 'name' and 'use_sub_domain' keys where 'name' 
-              is the CNAME source. Only one custom domain is supported per storage account at this time. To clear the existing custom 
-              domain, use an empty string for the custom domain name property.
+            - User domain assigned to the storage account. Must be a dictionary with 'name' and 'use_sub_domain'
+              keys where 'name' is the CNAME source. Only one custom domain is supported per storage account at this
+              time. To clear the existing custom domain, use an empty string for the custom domain name property.
             - Can be added to an existing storage account. Will be ignored during storage account creation.
         required: false
         default: null

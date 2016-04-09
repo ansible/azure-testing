@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -143,7 +140,7 @@ options:
     public_ip:
         description:
             - When creating a network interface, if no public IP address name is provided a default public IP
-              address will be created. Use to turn this behaviour off.
+              address will be created. Set to false, if you do not want a public IP address automatically created.
         default: true
     public_ip_address_name:
         description:
@@ -151,6 +148,7 @@ options:
         default: null
         aliases:
             - public_ip_address
+            - public_ip_name
     public_ip_allocation_method:
         description::
             - If a public_ip_address_name is not provided, a default public IP address will be created. The allocation
@@ -337,7 +335,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             state=dict(default='present', choices=['present', 'absent']),
             private_ip_address=dict(type='str'),
             private_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
-            public_ip_address_name=dict(type='str', aliases=['public_ip_address']),
+            public_ip_address_name=dict(type='str', aliases=['public_ip_address', 'public_ip_name']),
             public_ip=dict(type='bool', default=True),
             subnet_name=dict(type='str', aliases=['subnet']),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),

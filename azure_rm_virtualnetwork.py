@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -40,9 +37,8 @@ module: azure_rm_virtualnetwork
 short_description: Manage Azure virtual networks.
 
 description:
-    - Create, update and delete virtual networks within a given resource group. Allows setting and updating the
-      available IPv4 address ranges and setting custom DNS servers. Use the azure_rm_subnet module to associate
-      subnets with a virtual network.
+    - Create, update or delete a virtual networks. Allows setting and updating the available IPv4 address ranges
+      and setting custom DNS servers. Use the azure_rm_subnet module to associate subnets with a virtual network.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -113,7 +109,8 @@ options:
         default: false
     purge_dns_servers:
         description:
-            - Use with state present to remove existing DNS servers, reverting to default Azure servers.
+            - Use with state present to remove existing DNS servers, reverting to default Azure servers. Mutually
+              exclusive with dns_servers.
         default: false
     state:
         description:

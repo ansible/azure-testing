@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -40,8 +37,7 @@ module: azure_rm_resourcegroup
 short_description: Manage Azure resource groups.
 
 description:
-    - Create, update and delete resource groups. Allows setting and updating resource group tags. Use the other
-      Azure modules to associate resource with a resource group.
+    - Create, update and delete a resource group.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
       in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
     - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
@@ -137,6 +133,24 @@ EXAMPLES = '''
       azure_rm_resourcegroup:
         name: Testing
         state: absent
+'''
+
+RETURNS = '''
+{
+    "changed": true,
+    "check_mode": false,
+    "contains_resources": true,
+    "results": {
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing",
+        "location": "westus",
+        "name": "Testing",
+        "provisioning_state": "Succeeded",
+        "tags": {
+            "delete": "on-exit",
+            "testing": "no"
+        }
+    }
+}
 '''
 
 

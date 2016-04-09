@@ -16,7 +16,7 @@
       that:
           - output.results.tags.testing == 'testing'
           - output.results.tags.delete == 'never'
-          - output.results.location == '"{{ location }}"'
+          - output.results.location == '{{ location }}'
 
 - name: Should be idempotent
   azure_rm_resourcegroup:

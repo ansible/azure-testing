@@ -19,9 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# normally we'd put this at the bottom to preserve line numbers, but we can't use a forward-defined base class
-# without playing games with __metaclass__ or runtime base type hackery.
-# TODO: figure out a better way...
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 
@@ -40,7 +37,7 @@ module: azure_rm_subnet
 short_description: Manage Azure subnets.
 
 description:
-    - Create, update and delete subnets within a given virtual network. Allows setting and updating the address
+    - Create, update or delete a subnet within a given virtual network. Allows setting and updating the address
       prefix CIDR, which must be valid within the context of the virtual network. Use the azure_rm_networkinterface
       module to associate interfaces with the subnet and assign specific IP addresses.
     - For authentication with Azure you can pass parameters, set environment variables or use a profile stored

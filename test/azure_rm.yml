@@ -17,19 +17,20 @@
 - name: SSH to just created hosts
   hosts: just_created
   tasks:
-    - block:
-        - command: echo "Hello world!"
+    - command: echo "Hello world!"
+      when: "run_test in  ['all', 'virtualmachine']"
 
-        - name: Remove VMs
-          azure_rm_virtualmachine:
-              resource_group: "{{ resource_group }}"
-              name: "{{ inventory_hostnae }}"
-              state: absent
-              delete_network_interfaces: yes
-              delete_virtual_storage: yes
-              delete_public_ips: yes
-          register: output
-
-        - debug: var=output
-
+- name: Remove just created hosts
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - azure_rm_virtualmachine:
+        resource_group: "{{ resource_group }}"
+        name: "{{ item }}"
+        state: absent
+        delete_network_interfaces: yes
+        delete_virtual_storage: yes
+        delete_public_ips: yes
+      with_items: "{{ groups.just_created }}"
       when: "run_test in  ['all', 'virtualmachine']"
