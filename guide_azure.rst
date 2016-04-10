@@ -102,8 +102,8 @@ Or, pass the following parameters for Active Directory username/password:
 * subscription_id
 
 
-Creating a Virtual Machines
-===========================
+Creating Virtual Machines
+-------------------------
 
 There are two ways to create a virtual machine, both involving the azure_rm_virtualmachine module. We can either create
 a storage account, network interface, security group and public IP address and pass the names of these objects to the
@@ -211,7 +211,7 @@ virtual network already with an existing subnet, you can run the following to cr
 
 
 Dynamic Inventory Script
-========================
+------------------------
 
 If you're not familiar with Ansible's dynamic inventory scripts, check out `Intro to Dynamic Inventory <http://docs.ansible.com/ansible/intro_dynamic_inventory.html>`_.
 
@@ -271,6 +271,9 @@ For a given host, the inventory script provides the following host variables:
       "virtual_machine_size": "Standard_DS4"
     }
 
+Host Groups
+...........
+
 By default hosts are grouped by:
 
 * azure (all hosts)
@@ -303,6 +306,9 @@ An azure.ini file will contain the following:
     group_by_security_group=yes
     group_by_tag=yes
 
+Examples
+........
+
 Here are some examples using the inventory script:
 
 .. code-block:: bash
@@ -315,7 +321,7 @@ Here are some examples using the inventory script:
     # Use the inventory script with ansible-playbook
     $ ansible-playbook -i ./ansible/contrib/inventory/azure_rm_inventory.py test_playbook.yml
 
-Here is a simple playbook we can use to try out the Azure inventory script:
+Here is a simple playbook to exercise the Azure inventory script:
 
 .. code-block:: yaml
     - name: Test the inventory script
@@ -325,7 +331,7 @@ Here is a simple playbook we can use to try out the Azure inventory script:
       tasks:
         - debug: msg="{{ inventory_hostname }} has powerstate {{ powerstate }}"
 
-Execute the script with something like:
+You can execute the playbook with something like:
 
 .. code-block:: bash
     $ ansible-playbook -i ./ansible/contrib/azure_rm_inventory.py test_azure_inventory.yml
