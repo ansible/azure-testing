@@ -29,6 +29,7 @@ import copy
 
 from logging import Handler, NOTSET
 from os.path import expanduser
+from ansible.module_utils.basic import *
 
 AZURE_COMMON_ARGS = dict(
     profile=dict(type='str'),
@@ -568,12 +569,22 @@ class AzureRMModuleBase(object):
 
         return self.get_poller_result(poller)
 
+    def _register(self, key):
+        try:
+            # We have to perform the one-time registration here. Otherwise, we receive an error the first
+            # time we attempt to use the requested client.
+            resource_client = self.rm_client
+            resource_client.providers.register(key)
+        except Exception, exc:
+            self.fail("One-time registration of {0} failed - {1}".format(key, str(exc)))
+
     @property
     def storage_client(self):
         self.log('Creating storage client...')
         if not self._storage_client:
             self._storage_client = StorageManagementClient(
                 StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+            self._register('Microsoft.Storage')
         return self._storage_client
 
     @property
@@ -582,6 +593,7 @@ class AzureRMModuleBase(object):
         if not self._network_client:
             self._network_client = NetworkManagementClient(
                 NetworkManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+            self._register('Microsoft.Network')
         return self._network_client
 
     @property
@@ -598,6 +610,7 @@ class AzureRMModuleBase(object):
         if not self._compute_client:
             self._compute_client = ComputeManagementClient(
                 ComputeManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+            self._register('Microsoft.Compute')
         return self._compute_client
 
 

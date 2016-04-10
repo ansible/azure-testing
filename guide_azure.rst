@@ -12,6 +12,7 @@ installed on the host running Ansible. You will need to have >= v2.0.0RC2 instal
 SDK is via pip:
 
 .. code-block:: bash
+
     $ pip install azure==2.0.0rc2
 
 
@@ -23,7 +24,7 @@ Using the Azure modules requires authenticating with the Azure API. You can choo
 * Active Directory Username/Password
 * Service Principal Credentials
 
-Follow the directions for the strategy you wish to use, then proceed to Providing Credentials to the Azure modules for
+Follow the directions for the strategy you wish to use, then proceed to `Providing Credentials to Azure Modules`_ for
 instructions on how to actually use the modules and authenticate with the Azure API.
 
 
@@ -49,17 +50,21 @@ To create an Active Directory username/password:
 * Connect to the Azure Classic Portal with your admin account
 * Create a user in your default AAD. You must NOT activate Multi-Factor Authentication
 * Go to Settings - Administrators
-* Click on Add and enter the email of the new user. Check the checkbox of the subscription you want to test with this user.
+* Click on Add and enter the email of the new user.
+* Check the checkbox of the subscription you want to test with this user.
 * Login to Azure Portal with this new user to change the temporary password to a new one. You will not be able to use the
   temporary password for OAuth login.
 
-Providing Credentials to the Azure Modules
-..........................................
+Providing Credentials to Azure Modules
+......................................
 
 The modules offer several ways to provide your credentials. For a CI/CD tool such as Ansible Tower or Jenkins, you will
 most likely want to use environment variables. For local development you may wish to store your credentials in a file
 within your home directory. And of course, you can always pass credentials as parameters to a task within a playbook. The
 order of precedence is parameters, then environment variables, and finally a file found in your home directory.
+
+Using Environment Variables
+```````````````````````````
 
 To pass service principal credentials via the environment, define the following variables:
 
@@ -74,10 +79,14 @@ To pass Active Directory username/password via the environment, define the follo
 * AZURE_PASSWORD
 * AZURE_SUBSCRIPTION_ID
 
+Storing in a File
+`````````````````
+
 When working in a development environment, it may be desirable to store credentials in a file. The modules will look
 for credentials in $HOME/.azure/credentials. This file is an ini style file. It will look as follows:
 
 .. code-block:: ini
+
     [default]
     subscription_id=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     client_id=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -87,6 +96,9 @@ for credentials in $HOME/.azure/credentials. This file is an ini style file. It 
 It is possible to store multiple sets of credentials within the credentials file by creating multiple sections. Each
 section is considered a profile. The modules look for the [default] profile automatically. Define AZURE_PROFILE in the
 environment or pass a profile parameter to specify a specific profile.
+
+Passing as Parameters
+`````````````````````
 
 If you wish to pass credentials as parameters to a task, use the following parameters for service principal:
 
@@ -109,8 +121,8 @@ There are two ways to create a virtual machine, both involving the azure_rm_virt
 a storage account, network interface, security group and public IP address and pass the names of these objects to the
 module as parameters, or we can let the module do the work for us and accept the defaults it chooses.
 
-Creating All the Pieces
-.......................
+Creating Individual Components
+..............................
 
 An Azure module is available to help you create a storage account, virtual network, subnet, network interface,
 security group and public IP. Here is a full example of creating each of these and passing the names to the
@@ -184,7 +196,7 @@ azure_rm_virtualmachine module at the end:
           sku: '7.1'
           version: latest
 
-Each of the above modules offers a variety of parameter options, with not all of them being used in the above example.
+Each of the Azure modules offers a variety of parameter options. Not all options are demonstrated in the above example.
 See each individual module for further details and examples.
 
 
@@ -192,10 +204,11 @@ Creating a Virtual Machine with Default Options
 ...............................................
 
 If you simply want to create a virtual machine without specifying all the details, you can do that as well. The only
-caveat is that you will need a virtual network with one subnet already in your Resource Group. Assuming you have a
+caveat is that you will need a virtual network with one subnet already in your resource group. Assuming you have a
 virtual network already with an existing subnet, you can run the following to create a VM:
 
 .. code-block:: yaml
+
     azure_rm_virtualmachine:
       resource_group: Testing
       name: testvm10
@@ -213,25 +226,26 @@ virtual network already with an existing subnet, you can run the following to cr
 Dynamic Inventory Script
 ------------------------
 
-If you're not familiar with Ansible's dynamic inventory scripts, check out `Intro to Dynamic Inventory <http://docs.ansible.com/ansible/intro_dynamic_inventory.html>`_.
+If you are not familiar with Ansible's dynamic inventory scripts, check out `Intro to Dynamic Inventory <http://docs.ansible.com/ansible/intro_dynamic_inventory.html>`_.
 
 The azure inventory script is called azure_rm_inventory.py. It authenticates with the Azure API exactly the same as the
-Azure modules, which means you will either define the same environment variables described above,
-create a $HOME/.azure/credentials file (also described above), or pass command line parameters. To see available command
+Azure modules, which means you will either define the same environment variables described above in `Using Environment Variables`_,
+create a $HOME/.azure/credentials file (also described above in `Storing in a File`_), or pass command line parameters. To see available command
 line options execute the following:
 
 .. code-block:: bash
 
-    $ ./ansible/contrib/azure_rm_inventory.py --help
+    $ ./ansible/contrib/inventory/azure_rm_inventory.py --help
 
 As with all dynamic inventory scripts, the script can be executed directly, passed as a parameter to the ansible command,
 or passed directly to ansible-playbook using the -i option. No matter how it is executed the script produces JSON representing
 all of the hosts found in your Azure subscription. You can narrow this down to just hosts found in a specific set of
-Azure Resource Groups, or even down to a specific host.
+Azure resource groups, or even down to a specific host.
 
 For a given host, the inventory script provides the following host variables:
 
 .. code-block:: JSON
+
     {
       "ansible_host": "XXX.XXX.XXX.XXX",
       "computer_name": "computer_name2",
@@ -285,19 +299,21 @@ By default hosts are grouped by:
 You can control host groupings by either defining environment variables or creating an azure.ini file in your current
 working directory.
 
-Control grouping using the following variable defined in the environment:
+Control grouping using the following variables defined in the environment:
 
 * AZURE_GROUP_BY_RESOURCE_GROUP=yes
 * AZURE_GROUP_BY_LOCATION=yes
 * AZURE_GROUP_BY_SECURITY_GROUP=yes
 * AZURE_GROUP_BY_TAG=yes
 
-An azure.ini file will contain the following:
+A sample azure.ini file is included along with the inventory script in contrib/inventory. An azure.ini file will
+contain the following:
 
 .. code-block:: ini
+
     [azure]
-    # Control which resource groups are included. By default all resources groups are included.
-    # Set resource_groups to a comma separated list of resource groups names.
+    # Control which resource groups are included. By default all resource groups are included.
+    # Set resource_groups to a comma separated list of resource group names.
     #resource_groups=
 
     # Control grouping with the following boolean flags. Valid values: yes, no, true, false, True, False, 0, 1.
@@ -312,6 +328,7 @@ Examples
 Here are some examples using the inventory script:
 
 .. code-block:: bash
+
     # Execute /bin/uname on all instances in the Testing resource group
     $ ansible -i azure_rm_inventory.py Testing -m shell -a "/bin/uname -a"
 
@@ -324,6 +341,7 @@ Here are some examples using the inventory script:
 Here is a simple playbook to exercise the Azure inventory script:
 
 .. code-block:: yaml
+
     - name: Test the inventory script
       hosts: azure
       connection: local
@@ -334,4 +352,5 @@ Here is a simple playbook to exercise the Azure inventory script:
 You can execute the playbook with something like:
 
 .. code-block:: bash
-    $ ansible-playbook -i ./ansible/contrib/azure_rm_inventory.py test_azure_inventory.yml
+
+    $ ansible-playbook -i ./ansible/contrib/inventory/azure_rm_inventory.py test_azure_inventory.yml
