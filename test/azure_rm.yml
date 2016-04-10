@@ -12,7 +12,7 @@
     - { role: azure_rm_publicipaddress, when: "run_test in ['all', 'publicipaddress']" }
     - { role: azure_rm_networkinterface, when: "run_test in ['all', 'networkinterface']" }
     - { role: azure_rm_virtualmachine, when: "run_test in ['all', 'virtualmachine']" }
-    - { role: azure_rm_virtualmachineimage_facts, when: "run_test in ['all', 'virtualmachineimage_facts']" }
+    - { role: azure_rm_virtualmachineimage_facts, location: eastus, when: "run_test in ['all', 'virtualmachineimage_facts']" }
 
 - name: SSH to just created hosts
   hosts: just_created
@@ -33,4 +33,4 @@
         delete_virtual_storage: yes
         delete_public_ips: yes
       with_items: "{{ groups.just_created }}"
-      when: "run_test in  ['all', 'virtualmachine']"
+      when: "run_test in  ['all', 'virtualmachine'] and remove_vm"

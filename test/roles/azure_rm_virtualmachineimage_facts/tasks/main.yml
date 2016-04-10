@@ -4,13 +4,13 @@
     publisher: OpenLogic
     offer: CentOS
     sku: '7.1'
-    version: '7.1.20160308'
+    version: '7.1.20150731'
   register: output
 
 - debug: var=output
   when: playbook_debug
 
-- assert: 
+- assert:
       that: output.results | length == 1
 
 - name: List available versions
@@ -24,7 +24,7 @@
 - debug: var=output
   when: playbook_debug
 
-- assert: 
+- assert:
       that: output.results | length > 0
 
 - name: List available offers
@@ -36,7 +36,7 @@
 - debug: var=output
   when: playbook_debug
 
-- assert: 
+- assert:
       that: output.results | length > 0
 
 
@@ -48,5 +48,5 @@
 - debug: var=output
   when: playbook_debug
 
-- assert: 
+- assert:
       that: output.results | length > 0
