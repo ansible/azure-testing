@@ -324,7 +324,7 @@ class AzureRMModuleBase(object):
             return self.rm_client.resource_groups.get(resource_group)
         except CloudError:
             self.fail("Parameter error: resource group {0} not found".format(resource_group))
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error retrieving resource group {0} - {1}".format(resource_group, str(exc)))
 
     def _get_profile(self, profile="default"):
@@ -333,7 +333,7 @@ class AzureRMModuleBase(object):
         try:
             config = ConfigParser.ConfigParser()
             config.read(path)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Failed to access {0}. Check that the file exists and you have read "
                       "access. {1}".format(path, str(exc)))
         credentials = dict()
@@ -420,7 +420,7 @@ class AzureRMModuleBase(object):
                 self.log("Waiting for {0} sec".format(delay))
                 poller.wait(timeout=delay)
             return poller.result()
-        except Exception, exc:
+        except Exception as exc:
             self.log(str(exc))
             self.fail("Error: {0}".format(str(exc)))
 
@@ -467,13 +467,13 @@ class AzureRMModuleBase(object):
             account_keys = self.storage_client.storage_accounts.list_keys(resource_group_name, storage_account_name)
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error getting keys for account {0} - {1}".format(storage_account_name, str(exc)))
 
         try:
             self.log('Create blob service')
             return CloudStorageAccount(storage_account_name, keys['key1']).create_block_blob_service()
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating blob service client for storage account {0} - {1}".format(storage_account_name,
                                                                                                 str(exc)))
 
@@ -510,7 +510,7 @@ class AzureRMModuleBase(object):
         self.log('Creating default public IP {0}'.format(public_ip_name))
         try:
             poller = self.network_client.public_ip_addresses.create_or_update(resource_group, public_ip_name, params)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating {0} - {1}".format(public_ip_name, str(exc)))
 
         return self.get_poller_result(poller)
@@ -564,7 +564,7 @@ class AzureRMModuleBase(object):
             poller = self.network_client.network_security_groups.create_or_update(resource_group,
                                                                                   security_group_name,
                                                                                   parameters)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating default security rule {0} - {1}".format(security_group_name, str(exc)))
 
         return self.get_poller_result(poller)
@@ -575,7 +575,7 @@ class AzureRMModuleBase(object):
             # time we attempt to use the requested client.
             resource_client = self.rm_client
             resource_client.providers.register(key)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("One-time registration of {0} failed - {1}".format(key, str(exc)))
 
     @property

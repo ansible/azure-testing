@@ -286,7 +286,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.log('Checking name availability for {0}'.format(self.name))
         try:
             response = self.storage_client.storage_accounts.check_name_availability(self.name)
-        except AzureHttpError, e:
+        except AzureHttpError as e:
             self.log('Error attempting to validate name.')
             self.fail("Error checking name availability: {0}".format(str(e)))
         if not response.name_available:
@@ -372,7 +372,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                         self.storage_client.storage_accounts.update(self.resource_group,
                                                                     self.name,
                                                                     parameters)
-                    except Exception, exc:
+                    except Exception as exc:
                         self.fail("Failed to update account type: {0}".format(str(exc)))
 
         if self.custom_domain:
@@ -387,7 +387,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 parameters = StorageAccountUpdateParameters(custom_domain=new_domain)
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Failed to update custom domain: {0}".format(str(exc)))
 
         update_tags, self.account_dict['tags'] = self.update_tags(self.account_dict['tags'])
@@ -397,7 +397,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Failed to update tags: {0}".format(str(exc)))
 
     def create_account(self):
@@ -428,7 +428,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.log(str(parameters))
         try:
             poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
-        except AzureHttpError, e:
+        except AzureHttpError as e:
             self.log('Error creating storage account.')
             self.fail("Failed to create account: {0}".format(str(e)))
 
@@ -448,7 +448,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 status = self.storage_client.storage_accounts.delete(self.resource_group, self.name)
                 self.log("delete status: ")
                 self.log(str(status))
-            except AzureHttpError, e:
+            except AzureHttpError as e:
                 self.fail("Failed to delete the account: {0}".format(str(e)))
         return True
 
@@ -464,12 +464,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
-        except AzureHttpError, e:
+        except AzureHttpError as e:
             self.fail("check_for_container:Failed to get account keys: {0}".format(e))
 
         try:
             cloud_storage = CloudStorageAccount(self.name, keys['key1']).create_page_blob_service()
-        except Exception, e:
+        except Exception as e:
             self.fail("check_for_container:Error creating blob service: {0}".format(e))
 
         try:

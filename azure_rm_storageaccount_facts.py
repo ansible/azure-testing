@@ -188,7 +188,7 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
         self.log('List items')
         try:
             response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error listing items - {0}".format(str(exc)))
 
         results = []

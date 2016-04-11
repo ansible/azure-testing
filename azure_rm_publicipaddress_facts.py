@@ -185,7 +185,7 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.network_client.public_ip_addresses.list(self.resource_group)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []

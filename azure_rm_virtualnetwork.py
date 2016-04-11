@@ -390,7 +390,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
     def create_or_update_vnet(self, vnet):
         try:
             poller = self.network_client.virtual_networks.create_or_update(self.resource_group, self.name, vnet)
-        except Exception, exc:
+        except Exception as  exc:
             self.fail("Error creating or updating virtual network {0} - {1}".format(self.name, str(exc)))
 
         new_vnet = self.get_poller_result(poller)
@@ -400,7 +400,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
     def delete_virtual_network(self):
         try:
             poller = self.network_client.virtual_networks.delete(self.resource_group, self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error deleting virtual network {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # The poller does not actually return anything. If we got this far, the we'll assume

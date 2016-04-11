@@ -172,7 +172,7 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.rm_client.resource_groups.list()
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Failed to list all items - {1}".format(str(exc)))
 
         results = []

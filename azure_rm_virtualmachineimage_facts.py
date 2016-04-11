@@ -213,7 +213,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
                                                                        self.sku,)
         except CloudError:
             pass
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Failed to list images: {0}".format(str(exc)))
 
         if response:
@@ -229,7 +229,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
                                                                               self.publisher)
         except CloudError:
             pass
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Failed to list offers: {0}".format(str(exc)))
 
         if response:
@@ -244,7 +244,7 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
             response = self.compute_client.virtual_machine_images.list_publishers(self.location)
         except CloudError:
             pass
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Failed to list publishers: {0}".format(str(exc)))
 
         if response:
