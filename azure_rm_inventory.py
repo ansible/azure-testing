@@ -235,7 +235,7 @@ class AzureRM(object):
 
     def log(self, msg):
         if self.debug:
-            print msg + u'\n'
+            print (msg + u'\n')
 
     def fail(self, msg):
         raise Exception(msg)
@@ -384,7 +384,7 @@ class AzureInventory(object):
             sys.exit("Error: cannot retrieve host without a resource group.")
 
         self.get_inventory()
-        print(self._json_format_dict(pretty=self._args.pretty))
+        print (self._json_format_dict(pretty=self._args.pretty))
         sys.exit(0)
 
     def _parse_cli_args(self):
