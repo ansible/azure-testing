@@ -246,7 +246,7 @@ class AzureRM(object):
         try:
             config = ConfigParser.ConfigParser()
             config.read(path)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Failed to access {0}. Check that the file exists and you have read "
                       "access. {1}".format(path, str(exc)))
         credentials = dict()
@@ -315,7 +315,7 @@ class AzureRM(object):
             # time we attempt to use the requested client.
             resource_client = self.rm_client
             resource_client.providers.register(key)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("One-time registration of {0} failed - {1}".format(key, str(exc)))
 
     @property
@@ -353,7 +353,7 @@ class AzureInventory(object):
 
         try:
             rm = AzureRM(self._args)
-        except Exception, e:
+        except Exception as e:
             sys.exit("{0}".format(str(e)))
 
         self._compute_client = rm.compute_client
@@ -426,9 +426,9 @@ class AzureInventory(object):
                                                                                 expand='instanceview')
                     self._get_security_groups(resource_group)
                     self._load_machines([virtual_machine], resource_group)
-            except AzureMissingResourceHttpError, e:
+            except AzureMissingResourceHttpError as e:
                 sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError, e:
+            except CloudError as e:
                 sys.exit("{0}".format(str(e)))
 
         elif len(self.resource_groups) > 0:
@@ -437,9 +437,9 @@ class AzureInventory(object):
                     virtual_machines = self._compute_client.virtual_machines.list(resource_group)
                     self._get_security_groups(resource_group)
                     self._load_machines(virtual_machines, resource_group)
-            except AzureMissingResourceHttpError, e:
+            except AzureMissingResourceHttpError as e:
                 sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError, e:
+            except CloudError as e:
                 sys.exit("{0}".format(str(e)))
         else:
             # get all VMs in all resource groups
@@ -449,9 +449,9 @@ class AzureInventory(object):
                     virtual_machines = self._compute_client.virtual_machines.list(resource_group.name)
                     self._get_security_groups(resource_group.name)
                     self._load_machines(virtual_machines, resource_group.name)
-            except AzureHttpError, e:
+            except AzureHttpError as e:
                 sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError, e:
+            except CloudError as e:
                 sys.exit("{0}".format(str(e)))
 
     def _load_machines(self, machines, resource_group):
@@ -503,7 +503,7 @@ class AzureInventory(object):
                                                    for s in vm.instance_view.statuses
                                                    if s.code.startswith('PowerState')),
                                                    None)
-                except Exception, exc:
+                except Exception as exc:
                     sys.exit("Error: failed to get instance view for host {0} - {1}".format(machine.name, str(exc)))
 
             if machine.storage_profile.image_reference:
