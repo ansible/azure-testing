@@ -292,7 +292,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.network_client.network_security_groups.list(self.resource_group)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []

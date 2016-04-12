@@ -255,7 +255,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             poller = self.network_client.subnets.delete(self.resource_group,
                                                         self.virtual_network_name,
                                                         self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error deleting subnet {0} - {1}".format(self.name, str(exc)))
 
         return self.get_poller_result(poller)

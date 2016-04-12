@@ -576,7 +576,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
     def create_or_update_nic(self, nic):
         try:
             poller = self.network_client.network_interfaces.create_or_update(self.resource_group, self.name, nic)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error creating or updating network interface {0} - {1}".format(self.name, str(exc)))
         new_nic = self.get_poller_result(poller)
         self.log("new_nic:")
@@ -593,7 +593,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
     def delete_nic(self):
         try:
             poller = self.network_client.network_interfaces.delete(self.resource_group, self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error deleting network interface {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # Delete doesn't return anything. If we get this far, assume success
@@ -605,7 +605,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         try:
             public_ip = self.network_client.public_ip_addresses.get(self.resource_group, name)
             return public_ip
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error: fetching public ip address {0} - {1}".format(self.name, str(exc)))
 
     def get_subnet(self, vnet_name, subnet_name):
@@ -613,7 +613,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         try:
             subnet = self.network_client.subnets.get(self.resource_group, vnet_name, subnet_name)
             return subnet
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error: fetching subnet {0} in virtual network {1} - {2}".format(subnet_name,
                                                                                       vnet_name,
                                                                                       str(exc)))
@@ -623,7 +623,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, name)
             return nsg
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error: fetching network security group {0} - {1}.".format(name, str(exc)))
 
 

@@ -400,7 +400,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
     def delete_virtual_network(self):
         try:
             poller = self.network_client.virtual_networks.delete(self.resource_group, self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error deleting virtual network {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # The poller does not actually return anything. If we got this far, the we'll assume

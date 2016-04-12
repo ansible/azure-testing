@@ -268,14 +268,14 @@ class AzureRMResourceGroup(AzureRMModuleBase):
     def create_or_update_resource_group(self, params):
         try:
             result = self.rm_client.resource_groups.create_or_update(self.name, params)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error creating or updating resource group {0} - {1}".format(self.name, str(exc)))
         return resource_group_to_dict(result)
 
     def delete_resource_group(self):
         try:
             poller = self.rm_client.resource_groups.delete(self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error delete resource group {0} - {1}".format(self.name, str(exc)))
 
         self.get_poller_result(poller)
@@ -288,7 +288,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         found = False
         try:
             response = self.rm_client.resource_groups.list_resources(self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error checking for resource existence in {0} - {1}".format(self.name, str(exc)))
         for item in response:
             found = True
@@ -298,7 +298,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
     def name_exists(self):
         try:
             exists = self.rm_client.resource_groups.check_existence(self.name)
-        except Exception as exc:
+        except Exception, exc:
             self.fail("Error checking for existence of name {0} - {1}".format(self.name, str(exc)))
         return exists
 
