@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,21 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError, AzureHttpError
-    from azure.mgmt.network.models import NetworkSecurityGroup, SecurityRule, Subnet, NetworkInterface
-    from azure.mgmt.network.models.network_management_client_enums import (SecurityRuleAccess,
-                                                                           SecurityRuleDirection,
-                                                                           SecurityRuleProtocol)
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_securitygroup
@@ -45,53 +30,21 @@ description:
       that allow or deny network traffic to subnets or individual network interfaces. A security group is created
       with a set of default security rules and an empty set of security rules. Shape traffic flow by adding
       rules to the empty set of security rules.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile
-      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        default: null
     default_rules:
         description:
-            - List of default security rules where each rule is a dictionary with the following keys: name,
+            - "List of default security rules where each rule is a dictionary with the following keys: name,
               description, protocol, source_port_range, destination_port_range, source_address_prefix,
               destination_address_prefix, access, priority and direction.
-              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
-        default: null
-    location
+              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details."
+    location:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
     name:
         description:
             - Name of the security group to operate on.
-        default: null
     purge_default_rules:
         description:
             - Remove any existing rules not matching those defined in the default_rules parameter.
@@ -104,15 +57,13 @@ options:
         description:
             - Name of the resource group the security group belongs to.
         required: true
-        default: null
     rules:
         description:
-            - The set of rules you will custom to shap traffic flow to a subnet or NIC. Each rule is a dictionary
+            - "The set of rules you will custom to shap traffic flow to a subnet or NIC. Each rule is a dictionary
               with the following keys: name, description, protocol, source_port_range, destination_port_range,
               source_address_prefix, destination_address_prefix, access, priority and direction.
-              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details.
+              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details."
         required: true
-        default: null
     state:
         description:
             - Assert the state of the security group. Set to 'present' to create or update a security group. Set to
@@ -123,23 +74,22 @@ options:
             - present
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
-              will be updated with any provided values. To remove tags use the purge_tags option.
+            - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
-        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
 
 EXAMPLES = '''
@@ -201,8 +151,22 @@ EXAMPLES = '''
       resource_group: mygroup
       name: mysecgroup 
       state: absent
-
 '''
+
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+    from azure.mgmt.network.models import NetworkSecurityGroup, SecurityRule, Subnet, NetworkInterface
+    from azure.mgmt.network.models.network_management_client_enums import (SecurityRuleAccess,
+                                                                           SecurityRuleDirection,
+                                                                           SecurityRuleProtocol)
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 NAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 

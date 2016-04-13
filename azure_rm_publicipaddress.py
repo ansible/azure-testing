@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,20 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.network.models import PublicIPAddress, PublicIPAddressDnsSettings
-    from azure.mgmt.network.models.network_management_client_enums import IPAllocationMethod
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_publicipaddress
@@ -42,51 +28,15 @@ short_description: Manage Azure Public IP Addresses.
 description:
     - Create, update and delete a Public IP address. Allows setting and updating the address allocation method and
       domain name label. Use the azure_rm_networkinterface module to associate a Public IP with a network interface.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile
-      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     resource_group:
         description:
             - Name of resource group with which the Public IP is associated.
         required: true
-        default: null
     allocation_method:
         description:
-            - Control whether the assigned Public IP remains permanently assigned to the object ('Static'). If not
+            - Control whether the assigned Public IP remains permanently assigned to the object. If not
               set to 'Static', the IP address my changed anytime an associated virtual machine is power cycled.
         choices:
             - Dynamic
@@ -96,14 +46,12 @@ options:
         description:
             - The customizable portion of the FQDN assigned to public IP address. This is an explicit setting. If
               no value is provided, any existing value will be removed on an existing public IP.
-        default: null
         aliases:
             - domain_name_label
     name:
         description:
             - Name of the Public IP.
         required: true
-        default: null
     state:
         description:
             - Assert the state of the Public IP. Use 'present' to create or update a and
@@ -118,8 +66,8 @@ options:
         default: resource_group location
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
-              will be updated with any provided values. To remove tags use the purge_tags option.
+            - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
         default: null
     purge_tags:
@@ -128,13 +76,12 @@ options:
               the object's metadata.
         default: false
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 1.0.2"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Matt Davis <mdavis@ansible.com>"
-    - "Chris Houseknecht @chouseknecht"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
 '''
 
 EXAMPLES = '''
@@ -152,7 +99,7 @@ EXAMPLES = '''
         state: absent
 '''
 
-RETURNS = '''
+EXAMPLE_OUTPUT = '''
 {
     "changed": false,
     "check_mode": false,
@@ -171,6 +118,17 @@ RETURNS = '''
 }
 '''
 
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.network.models import PublicIPAddress, PublicIPAddressDnsSettings
+    from azure.mgmt.network.models.network_management_client_enums import IPAllocationMethod
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,61}[a-z0-9]$")
 

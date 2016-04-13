@@ -1,7 +1,7 @@
-#!/usr/bin/python
+##!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,18 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError, AzureHttpError
-except:
-    # This is handled in azure_rm_common
-    pass
-
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_storageaccount_facts
@@ -39,60 +27,23 @@ short_description: Get storage account facts.
 
 description:
     - Get facts for one storage account or all storage accounts within a resource group.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile
-      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     name:
         description:
             - Only show results for a specific account.
-        default: null
     resource_group:
         description:
             - Name of resource group from which to gather facts.
         required: true
-        default: null
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
 
 EXAMPLES = '''
@@ -107,7 +58,7 @@ EXAMPLES = '''
 
 '''
 
-RETURNS = '''
+EXAMPLE_OUTPUT = '''
 {
     "changed": false,
     "check_mode": false,
@@ -136,6 +87,17 @@ RETURNS = '''
 '''
 
 AZURE_OBJECT_CLASS = 'StorageAccount'
+
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+except:
+    # This is handled in azure_rm_common
+    pass
 
 
 class AzureRMStorageAccountFacts(AzureRMModuleBase):

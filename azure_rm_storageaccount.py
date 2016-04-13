@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -20,23 +20,6 @@
 #
 
 
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.storage.cloudstorageaccount import CloudStorageAccount
-    from azure.common import AzureMissingResourceHttpError, AzureHttpError
-    from azure.mgmt.storage.models import AccountType,\
-                                          AccountStatus, \
-                                          ProvisioningState, \
-                                          StorageAccountUpdateParameters,\
-                                          CustomDomain, StorageAccountCreateParameters, KeyName
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_storageaccount
@@ -45,52 +28,15 @@ short_description: Manage Azure storage accounts.
 
 description:
     - Create, update or delete a storage account.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile by passing profile or
-      setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     resource_group:
         description:
             - Name of the resource group to use.
         required: true
-        default: null
     name:
         description:
             - Name of the storage account to update or create.
-        default: null
     state:
         description:
             - Assert the state of the storage account. Use 'present' to create or update a storage account and
@@ -105,11 +51,9 @@ options:
         default: resource_group location
     account_type:
         description:
-            - Type of storage account. Required when creating a storage account. Note that StandardZRS and PremiumLRS
+            - "Type of storage account. Required when creating a storage account. NOTE: StandardZRS and PremiumLRS
               accounts cannot be changed to other account types, and other account types cannot be changed to
-              StandardZRS or PremiumLRS.
-        required: false
-        default: null
+              StandardZRS or PremiumLRS."
         choices:
             - Premium_LRS
             - Standard_GRS
@@ -124,28 +68,25 @@ options:
               keys where 'name' is the CNAME source. Only one custom domain is supported per storage account at this
               time. To clear the existing custom domain, use an empty string for the custom domain name property.
             - Can be added to an existing storage account. Will be ignored during storage account creation.
-        required: false
-        default: null
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
-              will be updated with any provided values. To remove tags use the purge_tags option.
-        required: false
-        default: null
+            - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option."
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
+
 EXAMPLES = '''
     - name: remove account, if it exists
       azure_rm_storageaccount:
@@ -163,7 +104,7 @@ EXAMPLES = '''
           - delete: on-exit
 '''
 
-RETURNS = '''
+EXAMPLE_OUTPUT = '''
 {
     "changed": true,
     "check_mode": false,
@@ -195,6 +136,24 @@ RETURNS = '''
 }
 
 '''
+
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.storage.cloudstorageaccount import CloudStorageAccount
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+    from azure.mgmt.storage.models import AccountType,\
+                                          AccountStatus, \
+                                          ProvisioningState, \
+                                          StorageAccountUpdateParameters,\
+                                          CustomDomain, StorageAccountCreateParameters, KeyName
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
+
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
 

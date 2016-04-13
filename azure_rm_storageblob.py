@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,22 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import datetime
-import hashlib
-import os
-
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-
-try:
-    from azure.storage.blob.models import ContentSettings
-    from azure.storage.cloudstorageaccount import CloudStorageAccount
-    from azure.common import AzureMissingResourceHttpError, AzureHttpError
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_storageblob
@@ -44,92 +28,47 @@ short_description: Manage blob containers and blob objects.
 description:
     - Create, update and delete blob containers and blob objects. Use to upload a file and store it as a blob object,
       or download a blob object to a file.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile
-      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     storage_account_name:
         description:
             - Name of the storage account to use.
         required: true
-        default: null
         aliases:
             - account_name
     blob:
         description:
             - Name of a blob object within the container.
         required: false
-        default: null
         aliases:
             - blob_name
     container:
         description:
             - Name of a blob container within the storage account.
         required: true
-        default: null
         aliases:
             - container_name
-    content_type
+    content_type:
         description:
             - Set the blob content-type header. For example, 'image/png'.
-        default: null
     cache_control:
         description:
             - Set the blob cache-control header.
-        default: null
     content_disposition:
         description:
             - Set the blob content-disposition header.
-        default: null
     content_encoding:
         description:
             - Set the blob encoding header.
-        default: null
     content_language:
         description:
             - Set the blob content-language header.
-        default: null
     content_md5:
         description:
             - Set the blob md5 hash value.
-        default: null
     dest:
         description:
             - Destination file path. Use with state 'present' to download a blob.
-        default: null
         aliases:
             - destination
     force:
@@ -141,11 +80,9 @@ options:
         description:
             - Name of the resource group to use.
         required: true
-        default: null
     src:
         description:
             - Source file path. Use with state 'present' to upload a blob.
-        default: null
         aliases:
             - source
     state:
@@ -170,25 +107,24 @@ options:
         choices:
             - container
             - blob
-        default: null
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
-              will be updated with any provided values. To remove tags use the purge_tags option.
+            - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
-        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+extends_documentation_fragment:
+    - azure
+
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
 
 EXAMPLES = '''
@@ -218,7 +154,7 @@ EXAMPLES = '''
     dest: ~/tmp/images/graylog.png
 '''
 
-RETURN = '''
+EXAMPLE_OUTPUT = '''
 {
     "actions": [
         "updated blob foo:graylog.png content settings."
@@ -247,6 +183,23 @@ RETURN = '''
     }
 }
 '''
+
+
+import datetime
+import hashlib
+import os
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+
+try:
+    from azure.storage.blob.models import ContentSettings
+    from azure.storage.cloudstorageaccount import CloudStorageAccount
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
 
 
 NAME_PATTERN = re.compile(r"^(?!-)(?!.*--)[a-z0-9\-]+$")

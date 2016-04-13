@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <chouseknecht@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -19,25 +19,6 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError
-    from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile, \
-        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile, LinuxConfiguration, \
-        SshConfiguration, SshPublicKey
-    from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
-        NetworkInterfaceIPConfiguration, Subnet
-    from azure.mgmt.storage.models import AccountType, AccountStatus, StorageAccountCreateParameters
-    from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
-        VirtualMachineSizeTypes
-except ImportError:
-    # This is handled in azure_rm_common
-    pass
-
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_virtualmachine
@@ -50,52 +31,15 @@ description:
       must contain a virtual network with at least one subnet.
     - Currently requires an image found in the Azure Marketplace. Use azure_rm_virtualmachineimage_facts module
       to discover the publisher, offer, sku and version of a particular image.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add additional profiles. Specify the profile by passing profile or
-      setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - Security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     resource_group:
         description:
             - Name of the resource group containing the virtual machine.
         required: true
-        default: null
     name:
         description:
             - Name of the virtual machine.
-        default: null
     state:
         description:
             - Assert the state of the virtual machine.
@@ -115,12 +59,10 @@ options:
     location:
         description:
             - Valid Azure location. Defaults to location of the resource group.
-        default: resource_group location
     short_hostname:
         description:
             - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
               When creating a virtual machine, short_hostname defaults to the host name.
-        default: null
     vm_size:
         description:
             - A valid Azure VM size value. For example, 'Standard_D4'. The list of choices varies depending on the
@@ -129,12 +71,10 @@ options:
     admin_username:
         description:
             - Admin username used to access the host after it is created. Required when creating a VM.
-        default: null
     admin_password:
         description:
             - Password for the admin username. Not required if the os_type is Linux and SSH password authentication
               is disabled by setting ssh_password to false.
-        default: null
     ssh_password:
         description:
             - When the os_type is Linux, setting ssh_password to false will disable SSH password authentication and
@@ -144,23 +84,20 @@ options:
             - ssh_password_enabled
     ssh_public_keys:
         description:
-            - For os_type Linux provide a list of SSH keys. Each item in the list should be a dictionary where the
+            - "For os_type Linux provide a list of SSH keys. Each item in the list should be a dictionary where the
               dictionary contains two keys: path and key_data. Set the path to the default location of the
               authorized_keys files. On an Enterprise Linux host, for example, the path will be
-              /home/<admin username>/.ssh/authorized_keys. Set key_data to the actual value of the public key.
-        default: null
+              /home/<admin username>/.ssh/authorized_keys. Set key_data to the actual value of the public key."
     image:
         description:
-            - A dictionary describing the Marketplace image to be used to build the VM. Will contain keys: publisher,
+            - "A dictionary describing the Marketplace image used to build the VM. Will contain keys: publisher,
               offer, sku and version. NOTE: set image.version to 'latest' to get the most recent version of a given
-              image.
-        default: null
+              image."
         required: true
     storage_account_name:
         description:
             - Name of an existing storage account that supports creation of VHD blobs. If not specified for a new VM,
               a new storage account named <vm name>01 will be created using storage type 'Standard_LRS'.
-        default: null
     storage_container_name:
         description:
             - Name of the container to use within the storage account to store VHD blobs. If no name is specified a
@@ -170,8 +107,7 @@ options:
     storage_blob_name:
         description:
             - Name fo the storage blob used to hold the VM's OS disk image. If no name is provided, defaults to
-              the VM name + '.vhd'. NOTE: If you provide a name, it must end with '.vhd'
-        default: null
+              the VM name + '.vhd'. If you provide a name, it must end with '.vhd'
         aliases:
             - storage_blob
     os_disk_caching:
@@ -220,13 +156,11 @@ options:
             - List of existing network interface names to add to the VM. If a network interface name is not provided
               when the VM is created, a default network interface will be created. In order for the module to create
               a network interface, at least one Virtual Network with one Subnet must exist.
-        default: null
     virtual_network_name:
         description:
             - When creating a virtual machine, if a network interface name is not provided, one will be created.
               The new network interface will be assigned to the first virtual network found in the resource group.
               Use this parameter to provide a specific virtual network instead.
-        default: null
         aliases:
             - virtual_network
     subnet_name:
@@ -234,7 +168,6 @@ options:
             - When creating a virtual machine, if a network interface name is not provided, one will be created.
               The new network interface will be assigned to the first subnet found in the virtual network.
               Use this parameter to provide a specific subnet instead.
-        default: null
         aliases:
             - virtual_network
     delete_network_interfaces:
@@ -255,23 +188,22 @@ options:
         default: false
     tags:
         description:
-            - Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
-              will be updated with any provided values. To remove tags use the purge_tags option.
+            - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
+              will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
-        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
 EXAMPLES = '''
 
@@ -318,7 +250,7 @@ EXAMPLES = '''
 
 '''
 
-RETURNS = '''
+EXAMPLE_OUTPUT = '''
 {
     "actions": [
         "Powered on virtual machine testvm10"
@@ -457,6 +389,26 @@ RETURNS = '''
     }
 }
 '''
+
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError
+    from azure.mgmt.compute.models import NetworkInterfaceReference, VirtualMachine, HardwareProfile, \
+        StorageProfile, OSProfile, OSDisk, VirtualHardDisk, ImageReference, NetworkProfile, LinuxConfiguration, \
+        SshConfiguration, SshPublicKey
+    from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
+        NetworkInterfaceIPConfiguration, Subnet
+    from azure.mgmt.storage.models import AccountType, AccountStatus, StorageAccountCreateParameters
+    from azure.mgmt.compute.models.compute_management_client_enums import CachingTypes, DiskCreateOptionTypes, \
+        VirtualMachineSizeTypes
+except ImportError:
+    # This is handled in azure_rm_common
+    pass
+
 
 AZURE_OBJECT_CLASS = 'VirtualMachine'
 

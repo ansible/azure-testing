@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# (c) 2016 Matt Davis, <mdavis@redhat.com>
-#          Chris Houseknecht, <house@redhat.com>
+# Copyright (c) 2016 Matt Davis, <mdavis@ansible.com>
+#                    Chris Houseknecht, <house@redhat.com>
 #
 # This file is part of Ansible
 #
@@ -20,17 +20,6 @@
 #
 
 
-from ansible.module_utils.basic import *
-from ansible.module_utils.azure_rm_common import *
-
-try:
-    from msrestazure.azure_exceptions import CloudError
-    from azure.common import AzureMissingResourceHttpError, AzureHttpError
-except:
-    # This is handled in azure_rm_common
-    pass
-
-
 DOCUMENTATION = '''
 ---
 module: azure_rm_virtualmachineimage_facts
@@ -39,77 +28,36 @@ short_description: Get virtual machine image facts.
 
 description:
     - Get facts for virtual machine images.
-    - For authentication with Azure you can pass parameters, set environment variables or use a profile stored
-      in ~/.azure/credentials. Authentication is possible using a service principal or Active Directory user.
-    - To authenticate via service principal pass subscription_id, client_id, secret and tenant or set set environment
-      variables AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET and AZURE_TENANT.
-    - To Authentication via Active Directory user pass ad_user and password, or set AZURE_AD_USER and
-      AZURE_PASSWORD in the environment.
-    - Alternatively, credentials can be stored in ~/.azure/credentials. This is an ini file containing
-      a [default] section and the following keys: subscription_id, client_id, secret and tenant or
-      ad_user and password. It is also possible to add addition profiles to this file. Specify the profile
-      by passing profile or setting AZURE_PROFILE in the environment.
 
 options:
-    profile:
-        description:
-            - security profile found in ~/.azure/credentials file
-        required: false
-        default: null
-    subscription_id:
-        description:
-            - Azure subscription Id that owns the resource group and storage accounts.
-        required: false
-        default: null
-    client_id:
-        description:
-            - Azure client_id used for authentication.
-        required: false
-        default: null
-    secret:
-        description:
-            - Azure client_secrent used for authentication.
-        required: false
-        default: null
-    tenant:
-        description:
-            - Azure tenant_id used for authentication.
-        required: false
-        default: null
     name:
         description:
             - Only show results for a specific security group.
-        default: null
     location:
         description:
             - Azure location value (ie. westus, eastus, eastus2, northcentralus, etc.). Supplying only a
               location value will yield a list of available publishers for the location.
-        default: null
         required: true
     publisher:
         description:
             - Name of an image publisher. List image offerings associated with a particular publisher.
-        default: null
     offer:
         description:
             - Name of an image offering. Combine with sku to see a list of available image versions.
-        default:
     sku:
         description:
             - Image offering SKU. Combine with offer to see a list of available versions.
-        default: null
     version:
         description:
             - Specific version number of an image.
-        default: null
 
-requirements:
-    - "python >= 2.7"
-    - "azure >= 2.0.0"
+extends_documentation_fragment:
+    - azure
 
-authors:
-    - "Chris Houseknecht house@redhat.com"
-    - "Matt Davis mdavis@redhat.com"
+author:
+    - "Chris Houseknecht (@chouseknecht)"
+    - "Matt Davis (@nitzmahone)"
+
 '''
 
 EXAMPLES = '''
@@ -139,9 +87,16 @@ EXAMPLES = '''
 
 '''
 
-RETURNS = '''
 
-'''
+from ansible.module_utils.basic import *
+from ansible.module_utils.azure_rm_common import *
+
+try:
+    from msrestazure.azure_exceptions import CloudError
+    from azure.common import AzureMissingResourceHttpError, AzureHttpError
+except:
+    # This is handled in azure_rm_common
+    pass
 
 
 class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
