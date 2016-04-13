@@ -98,7 +98,9 @@ required. For a specific host, this script returns the following variables:
   "resource_group": "galaxy-production",
   "security_group": "object-name",
   "security_group_id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Network/networkSecurityGroups/object-name",
-  "tags": null,
+  "tags": {
+      "db": "database"
+  },
   "type": "Microsoft.Compute/virtualMachines",
   "virtual_machine_size": "Standard_DS4"
 }
@@ -111,19 +113,33 @@ When run in --list mode, instances are grouped by the following categories:
  - resource_group
  - security_group
  - tag key
+ - tag key_value
 
-Control groups using azure.ini or set environment variables:
+Control groups using azure_rm_inventory.ini or set environment variables:
 
 AZURE_GROUP_BY_RESOURCE_GROUP=yes
 AZURE_GROUP_BY_LOCATION=yes
 AZURE_GROUP_BY_SECURITY_GROUP=yes
 AZURE_GROUP_BY_TAG=yes
 
-Control resource groups by assigning a comma separated list to:
+Select hosts within specific resource groups by assigning a comma separated list to:
 
 AZURE_RESOURCE_GROUPS=resource_group_a,resource_group_b
 
-If no list is provided, all resource groups will be included.
+Select hosts for specific tag key by assigning a comma separated list of tag keys to:
+
+AZURE_TAGS=key1,key2,key3
+
+Or, select hosts for specific tag key:value pairs by assigning a comma separated list key:value pairs to:
+
+AZURE_TAGS=key1:value1,key2:value2
+
+azure_rm_inventory.ini
+----------------------
+As mentioned above you can control execution using environment variables or an .ini file. A sample
+azure_rm_inventory.ini is included. The name of the .ini file is the basename of the inventory script (in this case
+'azure_rm_inventory') with a .ini extension. This provides you with the flexibility of copying and customizing this
+script and having matching .ini files. Go forth and customize your Azure inventory!
 
 Powerstate:
 -----------
@@ -136,7 +152,11 @@ Examples:
   $ ansible -i azure_rm_inventory.py galaxy-qa -m shell -a "/bin/uname -a"
 
   Use the inventory script to print instance specific information
-  $ contrib/inventory/azure_rm_inventory.py --host my_instance_host_name --resource-groups=my_resource_group
+  $ contrib/inventory/azure_rm_inventory.py --host my_instance_host_name --pretty
+
+  Use with a playbook
+  $ ansible-playbook -i contrib/inventory/azure_rm_inventory.py my_playbook.yml --limit galaxy-qa
+
 
 Insecure Platform Warning
 -------------------------
@@ -159,10 +179,13 @@ import argparse
 import ConfigParser
 import json 
 import os
-from os.path import expanduser
+import re
 import sys
 
+from os.path import expanduser
+
 HAS_AZURE = True
+HAS_AZURE_EXC = None
 
 try:
     from msrestazure.azure_exceptions import CloudError
@@ -175,7 +198,8 @@ try:
                                                                          ResourceManagementClientConfiguration
     from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
                                                              ComputeManagementClientConfiguration
-except ImportError:
+except ImportError, exc:
+    HAS_AZURE_EXC = exc
     HAS_AZURE = False
 
 
@@ -191,6 +215,7 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
 
 AZURE_CONFIG_SETTINGS = dict(
     resource_groups='AZURE_RESOURCE_GROUPS',
+    tags='AZURE_TAGS',
     group_by_resource_group='AZURE_GROUP_BY_RESOURCE_GROUP',
     group_by_location='AZURE_GROUP_BY_LOCATION',
     group_by_security_group='AZURE_GROUP_BY_SECURITY_GROUP',
@@ -198,6 +223,16 @@ AZURE_CONFIG_SETTINGS = dict(
 )
 
 AZURE_MIN_VERSION = "2016-03-30"
+
+
+def azure_id_to_dict(id):
+    pieces = re.sub(r'^\/', '', id).split('/')
+    result = {}
+    index = 0
+    while index < len(pieces) - 1:
+        result[pieces[index]] = pieces[index + 1]
+        index += 1
+    return result
 
 
 class AzureRM(object):
@@ -363,10 +398,13 @@ class AzureInventory(object):
         self._security_groups = None
 
         self.resource_groups = []
+        self.tags = None
+        self.replace_dash_in_groups = False
         self.group_by_resource_group = True
         self.group_by_location = True
         self.group_by_security_group = True
         self.group_by_tag = True
+        self.include_powerstate = True
 
         self._inventory = dict(
             _meta=dict(
@@ -378,11 +416,13 @@ class AzureInventory(object):
         self._get_settings()
 
         if self._args.resource_groups:
-            values = self._args.resource_groups.split(',')
-            self.resource_groups = values
+            self.resource_groups = self._args.resource_groups.split(',')
 
-        if self._args.host and len(self.resource_groups) == 0:
-            sys.exit("Error: cannot retrieve host without a resource group.")
+        if self._args.tags:
+            self.tags = self._args.tags.split(',')
+
+        if self._args.no_powerstate:
+            self.include_powerstate = False
 
         self.get_inventory()
         print (self._json_format_dict(pretty=self._args.pretty))
@@ -415,48 +455,53 @@ class AzureInventory(object):
         parser.add_argument('--password', action='store',
                             help='password')
         parser.add_argument('--resource-groups', action='store',
-                            help='Return inventory for a given Azure resource group')
+                            help='Return inventory for comma separated list of resource group names')
+        parser.add_argument('--tags', action='store',
+                            help='Return inventory for comma separated list of tag key:value pairs')
+        parser.add_argument('--no-powerstate', action='store_true', default=False,
+                            help='Do not include the power state of each virtual host')
         return parser.parse_args()
 
     def get_inventory(self):
-        if self._args.host:
-            try:
-                for resource_group in self.resource_groups:
-                    virtual_machine = self._compute_client.virtual_machines.get(resource_group,
-                                                                                self._args.host,
-                                                                                expand='instanceview')
-                    self._get_security_groups(resource_group)
-                    self._load_machines([virtual_machine], resource_group)
-            except AzureMissingResourceHttpError as e:
-                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError as e:
-                sys.exit("{0}".format(str(e)))
-
-        elif len(self.resource_groups) > 0:
-            try:
-                for resource_group in self.resource_groups:
+        if len(self.resource_groups) > 0:
+            # get VMs for requested resource groups
+            for resource_group in self.resource_groups:
+                try:
                     virtual_machines = self._compute_client.virtual_machines.list(resource_group)
-                    self._get_security_groups(resource_group)
-                    self._load_machines(virtual_machines, resource_group)
-            except AzureMissingResourceHttpError as e:
-                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError as e:
-                sys.exit("{0}".format(str(e)))
+                except Exception as exc:
+                    sys.exit("Error: fetching virtual machines for resource group {0} - {1}".format(resource_group,
+                                                                                                   str(exc)))
+                if self._args.host or self.tags:
+                    selected_machines = self._selected_machines(virtual_machines)
+                    self._load_machines(selected_machines)
+                else:
+                    self._load_machines(virtual_machines)
         else:
-            # get all VMs in all resource groups
+            # get all VMs within the subscription
             try:
-                resource_groups = self._resource_client.resource_groups.list(None)
-                for resource_group in resource_groups:
-                    virtual_machines = self._compute_client.virtual_machines.list(resource_group.name)
-                    self._get_security_groups(resource_group.name)
-                    self._load_machines(virtual_machines, resource_group.name)
-            except AzureHttpError as e:
-                sys.exit("{0}".format(json.loads(e.message)['error']['message']))
-            except CloudError as e:
-                sys.exit("{0}".format(str(e)))
+                virtual_machines = self._compute_client.virtual_machines.list_all()
+            except Exception as exc:
+                sys.exit("Error: fetching virtual machines - {0}".format(str(exc)))
 
-    def _load_machines(self, machines, resource_group):
+            if self._args.host or self.tags > 0:
+                selected_machines = self._selected_machines(virtual_machines)
+                self._load_machines(selected_machines)
+            else:
+                self._load_machines(virtual_machines)
+
+    def _load_machines(self, machines):
         for machine in machines:
+
+            id_dict = azure_id_to_dict(machine.id)
+
+            #TODO - The API is returning an ID value containing resource group name in ALL CAPS. If/when it gets
+            #       fixed, we should remove the .lower(). Opened Issue
+            #       #574: https://github.com/Azure/azure-sdk-for-python/issues/574
+            resource_group = id_dict['resourceGroups'].lower()
+
+            if self.group_by_security_group:
+                self._get_security_groups(resource_group)
+
             host_vars = dict(
                 ansible_host=None,
                 private_ip=None,
@@ -473,15 +518,12 @@ class AzureInventory(object):
                 tags=machine.tags,
                 network_interface_id=None,
                 network_interface=None,
-                network_security_group=None,
-                network_security_group_id=None,
                 resource_group=resource_group,
                 mac_address=None,
                 plan=(machine.plan.name if machine.plan else None),
                 virtual_machine_size=machine.hardware_profile.vm_size.value,
                 computer_name=machine.os_profile.computer_name,
                 provisioning_state=machine.provisioning_state,
-                powerstate=None
             )
 
             host_vars['os_disk'] = dict(
@@ -489,23 +531,8 @@ class AzureInventory(object):
                 operating_system_type=machine.storage_profile.os_disk.os_type.value
             )
 
-            if machine.instance_view:
-                host_vars['powerstate'] = next((s.code.replace('PowerState/', '')
-                                               for s in machine.instance_view.statuses
-                                               if s.code.startswith('PowerState')), None)
-            else:
-                # Machine instance coming from a list view do not include 'instanceview'. We need an instanceview
-                # in order to resolve the power state.
-                try:
-                    vm = self._compute_client.virtual_machines.get(resource_group,
-                                                                   machine.name,
-                                                                   expand='instanceview')
-                    host_vars['powerstate'] = next((s.code.replace('PowerState/', '')
-                                                   for s in vm.instance_view.statuses
-                                                   if s.code.startswith('PowerState')),
-                                                   None)
-                except Exception as exc:
-                    sys.exit("Error: failed to get instance view for host {0} - {1}".format(machine.name, str(exc)))
+            if self.include_powerstate:
+                host_vars['powerstate'] = self._get_powerstate(resource_group, machine.name)
 
             if machine.storage_profile.image_reference:
                 host_vars['image'] = dict(
@@ -535,9 +562,12 @@ class AzureInventory(object):
                     interface_reference['resourceGroups'],
                     interface_reference['networkInterfaces'])
                 if network_interface.primary:
-                    if self._security_groups.get(network_interface.id, None):
-                        host_vars['security_group'] = self._security_groups[network_interface.id]['name']
-                        host_vars['security_group_id'] = self._security_groups[network_interface.id]['id']
+                    if self.group_by_security_group and \
+                       self._security_groups[resource_group].get(network_interface.id, None):
+                        host_vars['security_group'] = \
+                            self._security_groups[resource_group][network_interface.id]['name']
+                        host_vars['security_group_id'] = \
+                            self._security_groups[resource_group][network_interface.id]['id']
                     host_vars['network_interface'] = network_interface.name
                     host_vars['network_interface_id'] = network_interface.id
                     host_vars['mac_address'] = network_interface.mac_address
@@ -557,49 +587,79 @@ class AzureInventory(object):
                             if public_ip_address.dns_settings:
                                 host_vars['fqdn'] = public_ip_address.dns_settings.fqdn
 
-            if self._args.host:
-                self._inventory = host_vars
-            else:
-                self._add_host(host_vars, resource_group)
+            self._add_host(host_vars)
+
+    def _selected_machines(self, virtual_machines):
+        selected_machines = []
+        for machine in virtual_machines:
+            if self._args.host and self._args.host == machine.name:
+                selected_machines.append(machine)
+            if self.tags and self._tags_match(machine.tags, self.tags):
+                selected_machines.append(machine)
+        return selected_machines
 
     def _get_security_groups(self, resource_group):
-        self._security_groups = dict()
-        for group in self._network_client.network_security_groups.list(resource_group):
-            if group.network_interfaces:
-                for interface in group.network_interfaces:
-                    self._security_groups[interface.id] = dict(
-                        name=group.name,
-                        id=group.id
-                    )
+        ''' For a given resource_group build a mapping of network_interface.id to security_group name '''
+        if not self._security_groups:
+            self._security_groups = dict()
+        if not self._security_groups.get(resource_group):
+            self._security_groups[resource_group] = dict()
+            for group in self._network_client.network_security_groups.list(resource_group):
+                if group.network_interfaces:
+                    for interface in group.network_interfaces:
+                        self._security_groups[resource_group][interface.id] = dict(
+                            name=group.name,
+                            id=group.id
+                        )
 
-    def _add_host(self, vars, resource_group):
+    def _get_powerstate(self, resource_group, name):
+        try:
+            vm = self._compute_client.virtual_machines.get(resource_group,
+                                                           name,
+                                                           expand='instanceview')
+        except Exception as exc:
+            sys.exit("Error: fetching instanceview for host {0} - {1}".format(name, str(exc)))
+
+        return next((s.code.replace('PowerState/', '')
+                    for s in vm.instance_view.statuses if s.code.startswith('PowerState')), None)
+
+    def _add_host(self, vars):
+
+        host_name = self._to_safe(vars['name'])
+        resource_group = self._to_safe(vars['resource_group'])
+        security_group = None
+        if vars.get('security_group'):
+            security_group = self._to_safe(vars['security_group'])
+
         if self.group_by_resource_group and self._inventory.get(resource_group) is None:
             self._inventory[resource_group] = []
 
         if self.group_by_location and self._inventory.get(vars['location']) is None:
             self._inventory[vars['location']] = []
 
-        if self.group_by_security_group and vars.get('security_group') and \
-           self._inventory.get(vars['security_group']) is None:
-            self._inventory[vars['security_group']] = []
-
-        host_name = vars['name']
+        if self.group_by_security_group and security_group and not self._inventory.get(security_group):
+            self._inventory[security_group] = []
 
         if self.group_by_location:
             self._inventory[vars['location']].append(host_name)
         if self.group_by_resource_group:
             self._inventory[resource_group].append(host_name)
-        if self.group_by_security_group and vars.get('security_group'):
-            self._inventory[vars['security_group']].append(host_name)
+        if self.group_by_security_group and security_group:
+            self._inventory[security_group].append(host_name)
 
         self._inventory['_meta']['hostvars'][host_name] = vars
         self._inventory['azure'].append(host_name)
 
         if self.group_by_tag and vars.get('tags', None) is not None:
-            for key in vars['tags']:
-                if not self._inventory.get(key):
-                    self._inventory[key] = []
-                self._inventory[key].append(host_name)
+            for key, value in vars['tags'].iteritems():
+                safe_key = self._to_safe(key)
+                safe_value = safe_key + '_' + self._to_safe(value)
+                if not self._inventory.get(safe_key):
+                    self._inventory[safe_key] = []
+                if not self._inventory.get(safe_value):
+                    self._inventory[safe_value] = []
+                self._inventory[safe_key].append(host_name)
+                self._inventory[safe_value].append(host_name)
 
     def _json_format_dict(self, pretty=False):
         # convert inventory to json
@@ -609,25 +669,25 @@ class AzureInventory(object):
             return json.dumps(self._inventory)
 
     def _get_settings(self):
-        # Load settings from azure.ini, if it exists. Otherwise,
+        # Load settings from the .ini, if it exists. Otherwise,
         # look for environment values.
         file_settings = self._load_settings()
         if file_settings:
             for key in AZURE_CONFIG_SETTINGS:
-                if key == 'resource_groups' and file_settings.get(key, None) is not None:
+                if key in ('resource_groups', 'tags') and file_settings.get(key, None) is not None:
                     values = file_settings.get(key).split(',')
                     if len(values) > 0:
-                        self.resource_groups = values
+                        setattr(self, key, values)
                 elif file_settings.get(key, None) is not None:
                     val = self._to_boolean(file_settings[key])
                     setattr(self, key, val)
         else:
             env_settings = self._get_env_settings()
             for key in AZURE_CONFIG_SETTINGS:
-                if key == 'resource_groups' and env_settings.get(key, None) is not None:
+                if key in('resource_groups', 'tags') and env_settings.get(key, None) is not None:
                     values = env_settings.get(key).split(',')
                     if len(values) > 0:
-                        self.resource_groups = values
+                        setattr(self, key, values)
                 elif env_settings.get(key, None) is not None:
                     val = self._to_boolean(env_settings[key])
                     setattr(self, key, val)
@@ -656,7 +716,8 @@ class AzureInventory(object):
         return env_settings
 
     def _load_settings(self):
-        path = "./azure.ini"
+        basename = os.path.splitext(os.path.basename(__file__))[0]
+        path = basename + '.ini'
         config = None
         settings = None
         try:
@@ -675,10 +736,43 @@ class AzureInventory(object):
 
         return settings
 
+    def _tags_match(self, tag_obj, tag_args):
+        '''
+        Return True if the tags object from a VM contains the requested tag values.
+
+        :param tag_obj:  Dictionary of string:string pairs
+        :param tag_args: List of strings in the form key=value
+        :return: boolean
+        '''
+
+        if not tag_obj:
+            return False
+
+        matches = 0
+        for arg in tag_args:
+            arg_key = arg
+            arg_value = None
+            if re.search(r':', arg):
+                arg_key, arg_value = arg.split(':')
+            if arg_value and tag_obj.get(arg_key, None) == arg_value:
+                matches += 1
+            elif not arg_value and tag_obj.get(arg_key, None) is not None:
+                matches += 1
+        if matches == len(tag_args):
+            return True
+        return False
+
+    def _to_safe(self, word):
+        ''' Converts 'bad' characters in a string to underscores so they can be used as Ansible groups '''
+        regex = "[^A-Za-z0-9\_"
+        if not self.replace_dash_in_groups:
+            regex += "\-"
+        return re.sub(regex + "]", "_", word)
+
 
 def main():
     if not HAS_AZURE:
-        sys.exit("The Azure python sdk is not installed (try 'pip install azure')")
+        sys.exit("The Azure python sdk is not installed (try 'pip install azure') - {0}".format(HAS_AZURE_EXC))
 
     if azure_compute_version < AZURE_MIN_VERSION:
         sys.exit("Expecting azure.mgmt.compute.__version__ to be >= {0}. Found version {1} "

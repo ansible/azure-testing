@@ -295,9 +295,16 @@ By default hosts are grouped by:
 * resource group name
 * security group name
 * tag key
+* tag key_value
 
-You can control host groupings by either defining environment variables or creating an azure.ini file in your current
-working directory.
+You can control host groupings by either defining environment variables or creating an azure_rm_inventory.ini file in
+your current working directory.
+
+NOTE: An .ini file will take precedence over environment variables.
+
+NOTE: The name of the .ini file is the basename of the inventory script (i.e. 'azure_rm_inventory') with a '.ini'
+extension. This allows you to copy, rename and customize the inventory script and have matching .ini files all in
+the same directory.
 
 Control grouping using the following variables defined in the environment:
 
@@ -306,21 +313,24 @@ Control grouping using the following variables defined in the environment:
 * AZURE_GROUP_BY_SECURITY_GROUP=yes
 * AZURE_GROUP_BY_TAG=yes
 
-A sample azure.ini file is included along with the inventory script in contrib/inventory. An azure.ini file will
-contain the following:
+A sample azure_rm_inventory.ini file is included along with the inventory script in contrib/inventory. An azure.ini
+file will contain the following:
 
 .. code-block:: ini
-
     [azure]
-    # Control which resource groups are included. By default all resource groups are included.
-    # Set resource_groups to a comma separated list of resource group names.
+    # Control which resource groups are included. By default all resources groups are included.
+    # Set resource_groups to a comma separated list of resource groups names.
     #resource_groups=
+
+    # Control which tags are included. Set tags to a comma separated list of keys or key:value pairs
+    #tags=
 
     # Control grouping with the following boolean flags. Valid values: yes, no, true, false, True, False, 0, 1.
     group_by_resource_group=yes
     group_by_location=yes
-    group_by_security_group=yes
+    group_by_security_group=no
     group_by_tag=yes
+
 
 Examples
 ........
