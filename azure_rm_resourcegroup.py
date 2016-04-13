@@ -31,8 +31,8 @@ description:
 options:
     force:
         description:
-            - When state is absent, force the deletion of a resource group that contains resources. When force
-              is true the resource group and all related resource will be removed.
+            - Remove a resource group and all associated resources. Use with state 'absent' to delete a resource
+              group that contains resources.
         default: false
     location:
         description:
@@ -45,7 +45,8 @@ options:
     state:
         description:
             - Assert the state of the resource group. Use 'present' to create or update and
-              'absent' to delete.
+              'absent' to delete. When 'absent' a resource group containing resources will not be removed unless the
+              force option is used.
         default: present
         choices:
             - absent
@@ -162,8 +163,6 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         rg = None
         contains_resources = False
 
-        self.log('args:')
-        self.log(json.dumps(self.module.params), pretty_print=True)
         try:
             self.log('Fetching resource group {0}'.format(self.name))
             rg = self.rm_client.resource_groups.get(self.name)
