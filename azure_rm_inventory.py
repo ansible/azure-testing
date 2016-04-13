@@ -134,6 +134,9 @@ Or, select hosts for specific tag key:value pairs by assigning a comma separated
 
 AZURE_TAGS=key1:value1,key2:value2
 
+If you don't need the powerstate, you can improve performance by turning off powerstate fetching:
+AZURE_INCLUDE_POWERSTATE=no
+
 azure_rm_inventory.ini
 ----------------------
 As mentioned above you can control execution using environment variables or an .ini file. A sample
@@ -216,6 +219,7 @@ AZURE_CREDENTIAL_ENV_MAPPING = dict(
 AZURE_CONFIG_SETTINGS = dict(
     resource_groups='AZURE_RESOURCE_GROUPS',
     tags='AZURE_TAGS',
+    include_powerstate='AZURE_INCLUDE_POWERSTATE',
     group_by_resource_group='AZURE_GROUP_BY_RESOURCE_GROUP',
     group_by_location='AZURE_GROUP_BY_LOCATION',
     group_by_security_group='AZURE_GROUP_BY_SECURITY_GROUP',
@@ -491,7 +495,6 @@ class AzureInventory(object):
 
     def _load_machines(self, machines):
         for machine in machines:
-
             id_dict = azure_id_to_dict(machine.id)
 
             #TODO - The API is returning an ID value containing resource group name in ALL CAPS. If/when it gets
@@ -631,26 +634,25 @@ class AzureInventory(object):
         if vars.get('security_group'):
             security_group = self._to_safe(vars['security_group'])
 
-        if self.group_by_resource_group and self._inventory.get(resource_group) is None:
-            self._inventory[resource_group] = []
-
-        if self.group_by_location and self._inventory.get(vars['location']) is None:
-            self._inventory[vars['location']] = []
-
-        if self.group_by_security_group and security_group and not self._inventory.get(security_group):
-            self._inventory[security_group] = []
+        if self.group_by_resource_group:
+            if not self._inventory.get(resource_group):
+                self._inventory[resource_group] = []
+            self._inventory[resource_group].append(host_name)
 
         if self.group_by_location:
+            if not self._inventory.get(vars['location']):
+                self._inventory[vars['location']] = []
             self._inventory[vars['location']].append(host_name)
-        if self.group_by_resource_group:
-            self._inventory[resource_group].append(host_name)
+
         if self.group_by_security_group and security_group:
+            if not self._inventory.get(security_group):
+                self._inventory[security_group] = []
             self._inventory[security_group].append(host_name)
 
         self._inventory['_meta']['hostvars'][host_name] = vars
         self._inventory['azure'].append(host_name)
 
-        if self.group_by_tag and vars.get('tags', None) is not None:
+        if self.group_by_tag and vars.get('tags'):
             for key, value in vars['tags'].iteritems():
                 safe_key = self._to_safe(key)
                 safe_value = safe_key + '_' + self._to_safe(value)

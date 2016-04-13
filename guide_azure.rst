@@ -280,7 +280,9 @@ For a given host, the inventory script provides the following host variables:
       "resource_group": "galaxy-production",
       "security_group": "object-name",
       "security_group_id": "/subscriptions/subscription-id/resourceGroups/galaxy-production/providers/Microsoft.Network/networkSecurityGroups/object-name",
-      "tags": null,
+      "tags": {
+        "db": "mysql"
+      },
       "type": "Microsoft.Compute/virtualMachines",
       "virtual_machine_size": "Standard_DS4"
     }
@@ -297,8 +299,8 @@ By default hosts are grouped by:
 * tag key
 * tag key_value
 
-You can control host groupings by either defining environment variables or creating an azure_rm_inventory.ini file in
-your current working directory.
+You can control host groupings and host selection by either defining environment variables or creating an
+azure_rm_inventory.ini file in your current working directory.
 
 NOTE: An .ini file will take precedence over environment variables.
 
@@ -313,7 +315,23 @@ Control grouping using the following variables defined in the environment:
 * AZURE_GROUP_BY_SECURITY_GROUP=yes
 * AZURE_GROUP_BY_TAG=yes
 
-A sample azure_rm_inventory.ini file is included along with the inventory script in contrib/inventory. An azure.ini
+Select hosts within specific resource groups by assigning a comma separated list to:
+
+* AZURE_RESOURCE_GROUPS=resource_group_a,resource_group_b
+
+Select hosts for specific tag key by assigning a comma separated list of tag keys to:
+
+* AZURE_TAGS=key1,key2,key3
+
+Or, select hosts for specific tag key:value pairs by assigning a comma separated list key:value pairs to:
+
+* AZURE_TAGS=key1:value1,key2:value2
+
+If you don't need the powerstate, you can improve performance by turning off powerstate fetching:
+
+* AZURE_INCLUDE_POWERSTATE=no
+
+A sample azure_rm_inventory.ini file is included along with the inventory script in contrib/inventory. An .ini
 file will contain the following:
 
 .. code-block:: ini
@@ -324,6 +342,9 @@ file will contain the following:
 
     # Control which tags are included. Set tags to a comma separated list of keys or key:value pairs
     #tags=
+
+    # Include powerstate. If you don't need powerstate information, turning it off improves runtime performance.
+    include_powerstate=yes
 
     # Control grouping with the following boolean flags. Valid values: yes, no, true, false, True, False, 0, 1.
     group_by_resource_group=yes
@@ -343,7 +364,7 @@ Here are some examples using the inventory script:
     $ ansible -i azure_rm_inventory.py Testing -m shell -a "/bin/uname -a"
 
     # Use the inventory script to print instance specific information
-    $ ./ansible/contrib/inventory/azure_rm_inventory.py --host my_instance_host_name --resource-groups=Testing
+    $ ./ansible/contrib/inventory/azure_rm_inventory.py --host my_instance_host_name --resource-groups=Testing --pretty
 
     # Use the inventory script with ansible-playbook
     $ ansible-playbook -i ./ansible/contrib/inventory/azure_rm_inventory.py test_playbook.yml
