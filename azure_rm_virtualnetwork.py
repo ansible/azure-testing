@@ -370,20 +370,8 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
 
 def main():
-    if '--interactive' in sys.argv:
-        # import the module here so we can reset the default complex args value
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group="rm_demo",
-            name='test-vnet',
-            state='present',
-            location='West US',
-            address_prefixes_cidr=['10.0.1.0/24'],
-            log_mode='stderr'
-        ))
-
     AzureRMVirtualNetwork().exec_module()
 
-main()
+if __name__ == '__main__':
+    main()
 

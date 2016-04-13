@@ -586,21 +586,8 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
 
 def main():
-    if '--interactive' in sys.argv:
-        # import the module here so we can reset the default complex args value
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group = "rm_demo",
-            name = "test-nic",
-            state = "present",
-            location = "West US",
-            subnet_id = "subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/rm_demo/providers/Microsoft.Network/virtualNetworks/test-vnet/subnets/test-subnet-1",
-            public_ip_id = None,
-            log_mode = "stderr"
-        ))
-
     AzureRMNetworkInterface().exec_module()
 
-main()
+if __name__ == '__main__':
+    main()
 

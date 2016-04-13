@@ -522,34 +522,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
 
 def main():
-    if '--interactive' in sys.argv:
-        # import the module here so we can reset the default complex args value
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group='rm_demo',
-            name='test-sg',
-            state='absent',
-            location='West US',
-            rules=[
-                dict(
-                    name="rdp",
-                    description="rdp",
-                    protocol="tcp",
-                    source_port_range="0-65535",
-                    destination_port_range="3389",
-                    source_address_prefix="0.0.0.0/0",
-                    destination_address_prefix="0.0.0.0/0",
-                    access="Allow",
-                    priority=100,
-                    direction="Inbound",
-                    purge_network_interfaces=True,
-                )
-            ],
-
-            log_mode='stderr',
-        ))
-
     AzureRMSecurityGroup().exec_module()
 
 if __name__ == '__main__':

@@ -160,14 +160,6 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
 
 
 def main():
-    if '--interactive' in sys.argv:
-        # import the module here so we can reset the default complex args value
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group="rm_demo",
-        ))
-
     AzureRMStorageAccountFacts().exec_module()
 
 if __name__ == '__main__':

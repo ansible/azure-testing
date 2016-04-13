@@ -223,22 +223,8 @@ class AzureRMSubnet(AzureRMModuleBase):
 
 
 def main():
-    if '--interactive' in sys.argv:
-        # import the module here so we can reset the default complex args value
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group='rm_demo',
-            name='test-subnet-1',
-            virtual_network_name='test-vnet',
-            address_prefix_cidr='10.0.1.0/24',
-            state='absent',
-            #location='West US',
-            log_mode='stderr',
-        ))
-
     AzureRMSubnet().exec_module()
 
-
-main()
+if __name__ == '__main__':
+    main()
 

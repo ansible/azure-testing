@@ -1234,36 +1234,8 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
 
 def main():
-    # standalone debug setup
-    if '--interactive' in sys.argv:
-        # early import the module and reset the complex args
-        import ansible.module_utils.basic
-
-        ansible.module_utils.basic.MODULE_COMPLEX_ARGS = json.dumps(dict(
-            resource_group='rm_demo',
-            name='mdavis-test1-vm',
-            state='present',
-            location='West US',
-            short_hostname='mdavis-test1-vm',
-            vm_size='Standard_A1',
-            admin_username='mdavis',
-            admin_password='R00tpassword#',
-            image_publisher='MicrosoftWindowsServer',
-            image_offer='WindowsServer',
-            image_sku='2012-R2-Datacenter',
-            image_version='4.0.20151214',
-            os_disk_storage_account_name='test',
-            os_disk_storage_container_name='vhds',
-            os_disk_storage_blob_name='mdavis-test1-vm',
-            os_type='windows',
-            delete_nics=True,
-            delete_vhds=True,
-            delete_public_ips=True,
-            nic_ids=['/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/rm_demo/providers/Microsoft.Network/networkInterfaces/test-nic'],
-            log_mode="stderr"
-        ))
-
     AzureRMVirtualMachine().exec_module()
 
-main()
+if __name__ == '__main__':
+    main()
 
