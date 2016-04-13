@@ -71,14 +71,10 @@ AZURE_FAILED_STATE = "Failed"
 AZURE_MIN_VERSION = "2016-03-30"
 
 HAS_AZURE = True
-HAS_ENUM = True
+HAS_AZURE_EXC = None
 
 try:
     from enum import Enum
-except ImportError:
-    HAS_ENUM = False
-
-try:
     from msrest.serialization import Serializer
     from msrestazure.azure_exceptions import CloudError
     from azure.mgmt.compute import __version__ as azure_compute_version
@@ -94,7 +90,8 @@ try:
     from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
                                                              ComputeManagementClientConfiguration
     from azure.storage.cloudstorageaccount import CloudStorageAccount
-except ImportError:
+except ImportError, exc:
+    HAS_AZURE_EXC = exc
     HAS_AZURE = False
 
 
@@ -141,10 +138,7 @@ class AzureRMModuleBase(object):
                                     required_if=merged_required_if)
 
         if not HAS_AZURE:
-            self.fail("The Azure Python SDK is not installed (try 'pip install azure')")
-
-        if not HAS_ENUM:
-            self.fail("The enum module is not installed (try 'pip install enum')")
+            self.fail("The Azure Python SDK is not installed (try 'pip install azure') - {0}".format(HAS_AZURE_EXC))
 
         if azure_compute_version < AZURE_MIN_VERSION:
             self.fail("Expecting azure.mgmt.compute.__version__ to be >= {0}. Found version {1} "
