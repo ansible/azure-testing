@@ -192,7 +192,6 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
             dns_servers=dict(type='list',),
             purge_address_prefixes=dict(type='bool', default=False, aliases=['purge']),
             purge_dns_servers=dict(type='bool', default=False),
-            log_path=dict(type='str', default='azure_rm_virtualnetwork.log'),
         )
 
         mutually_exclusive = [

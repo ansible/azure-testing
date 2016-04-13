@@ -171,7 +171,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             state=dict(default='present', choices=['present', 'absent']),
             force=dict(type='bool', default=False),
             tags=dict(type='dict'),
-            log_path=dict(type='str', default='azure_rm_storageaccount.log')
         )
 
         for key in AccountType:

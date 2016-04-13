@@ -37,7 +37,7 @@ AZURE_COMMON_ARGS = dict(
     client_id=dict(type='str', no_log=True),
     secret=dict(type='str', no_log=True),
     tenant=dict(type='str', no_log=True),
-    log_path=dict(type='str'),
+    log_path=dict(type='str', default='azure_rm.log'),
     log_mode=dict(type='str', choices=['stderr', 'file', 'syslog'], default='syslog'),
     filter_logger=dict(type='bool', default=True),
     debug=dict(type='bool', default=False),

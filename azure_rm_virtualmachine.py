@@ -453,7 +453,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
             delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhd']),
             delete_public_ips=dict(type='bool', default=False),
-            log_path=dict(type='str', default='azure_rm_virtualmachine.log'),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
             subnet_name=dict(type='str', aliases=['subnet'])
         )

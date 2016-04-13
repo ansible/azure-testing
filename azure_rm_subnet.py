@@ -120,7 +120,6 @@ class AzureRMSubnet(AzureRMModuleBase):
             state=dict(type='str', default='present', choices=['present', 'absent']),
             virtual_network_name=dict(type='str', required=True, aliases=['virtual_network']),
             address_prefix_cidr=dict(type='str', aliases=['address_prefix']),
-            log_path=dict(type='str', default='azure_rm_subnet.log')
         )
 
         required_if = [

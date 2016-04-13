@@ -225,7 +225,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             content_disposition=dict(type='str'),
             cache_control=dict(type='str'),
             content_md5=dict(type='str'),
-            log_path=dict(type='str', default='azure_rm_storageblob.log')
         )
 
         mutually_exclusive = [('src', 'dest')]

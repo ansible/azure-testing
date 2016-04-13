@@ -330,7 +330,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             resource_group=dict(required=True, type='str'),
             rules=dict(type='list'),
             state=dict(default='present', choices=['present', 'absent']),
-            log_path=dict(type='str', default='azure_rm_securitygroup.log')
         )
 
         super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,

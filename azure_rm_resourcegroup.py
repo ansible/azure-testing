@@ -132,7 +132,6 @@ class AzureRMResourceGroup(AzureRMModuleBase):
             name=dict(type='str', required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
             location=dict(type='str'),
-            log_path=dict(type='str', default='azure_rm_resourcegroup.log'),
             force=dict(type='bool', default=False)
         )
         super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,

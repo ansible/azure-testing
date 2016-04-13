@@ -302,7 +302,6 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             ssh_port=dict(type='int', default=22),
             rdp_port=dict(type='int', default=3389),
             public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
-            log_path=dict(type='str', default='azure_rm_networkinterface.log'),
         )
 
         super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,

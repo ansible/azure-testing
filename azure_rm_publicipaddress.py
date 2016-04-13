@@ -164,7 +164,6 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
             location=dict(type='str'),
             allocation_method=dict(type='str', default='Dynamic', choices=['Dynamic', 'Static']),
             domain_name=dict(type='str', aliases=['domain_name_label']),
-            log_path=dict(type='str', default='azure_rm_publicipaddress.log')
         )
 
         super(AzureRMPublicIPAddress, self).__init__(derived_arg_spec=self.module_arg_spec,
