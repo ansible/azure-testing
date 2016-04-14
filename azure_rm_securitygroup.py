@@ -34,10 +34,9 @@ description:
 options:
     default_rules:
         description:
-            - "List of default security rules where each rule is a dictionary with the following keys: name,
-              description, protocol, source_port_range, destination_port_range, source_address_prefix,
-              destination_address_prefix, access, priority and direction.
-              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details."
+            - The set of default rules automatically added to a security group at creation. In general default
+              rules will not be modified. Modify rules to shape the flow of traffic to or from a subnet or NIC. See
+              rules below for the makeup of a rule dict.
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
@@ -59,11 +58,49 @@ options:
         required: true
     rules:
         description:
-            - "The set of rules you will custom to shap traffic flow to a subnet or NIC. Each rule is a dictionary
-              with the following keys: name, description, protocol, source_port_range, destination_port_range,
-              source_address_prefix, destination_address_prefix, access, priority and direction.
-              See https://azure.microsoft.com/en-us/documentation/articles/virtual-networks-nsg/ for more details."
-        required: true
+            - Set of rules shaping traffic flow to or from a subnet or NIC. Each rule is a dictionary.
+        type: complex
+        contains:
+            name:
+                description: Unique name for the rule.
+                required: true
+            description:
+                description: Short description of the rule's purpose.
+            protocol:
+                description: Accepted traffic protocol.
+                choices:
+                  - Udp
+                  - Tcp
+                  - "*"
+                default: "*"
+            source_port_range:
+                description: Port or range of ports from which traffic originates.
+                default: "*"
+            destination_port_range:
+                description: Port or range of ports to which traffic is headed.
+                default: "*"
+            source_address_prefix:
+                description: IP address or CIDR from which traffic originates.
+                default: "*"
+            destination_address_prefix:
+                description: IP address or CIDR to which traffic is headed.
+                default: "*"
+            access:
+                description: Whether or not to allow the traffic flow.
+                choices:
+                  - Allow
+                  - Deny
+                default: Allow
+            priority:
+                description: Order in which to apply the rule. Must a unique integer between 100 and 4096 inclusive.
+                type: int
+                required: true
+            direction:
+                description: Indicates the direction of the traffic flow.
+                choices:
+                  - Inbound
+                  - Outbound
+                default: Inbound
     state:
         description:
             - Assert the state of the security group. Set to 'present' to create or update a security group. Set to
@@ -102,18 +139,13 @@ EXAMPLES = '''
       rules:
           - name: DenySSH
             protocol: TCP
-            source_port_range: '*'
-            source_address_prefix: '*'
-            destination_address_prefix: '*'
             destination_port_range: 22
             access: Deny 
             priority: 100
             direction: Inbound 
           - name: 'AllowSSH'
             protocol: TCP
-            source_port_range: '*' 
             source_address_prefix: '174.109.158.0/24'
-            destination_address_prefix: '*'
             destination_port_range: 22
             access: Allow
             priority: 101
@@ -126,18 +158,13 @@ EXAMPLES = '''
       rules:
           - name: DenySSH
             protocol: TCP
-            source_port_range: '*' 
-            source_address_prefix: '*'
-            destination_address_prefix: '*'
             destination_port_range: 22-23
             access: Deny
             priority: 100
             direction: Inbound 
           - name: AllowSSHFromHome
             protocol: TCP
-            source_port_range: '*' 
             source_address_prefix: '174.109.158.0/24'
-            destination_address_prefix: '*'
             destination_port_range: 22-23
             access: Allow
             priority: 102
@@ -172,20 +199,19 @@ NAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 def validate_rule(rule, rule_type=None):
-    rule_name = rule.get('name', None)
-    if not rule_name:
+    '''
+    Apply defaults to a rule dictionary and check that all values are valid.
+
+    :param rule: rule dict
+    :param rule_type: Set to 'default' if the rule is part of the default set of rules.
+    :return: None
+    '''
+
+    if not rule.get('name'):
         raise Exception("Rule name value is required.")
-    if not NAME_PATTERN.match(rule_name):
+    if not NAME_PATTERN.match(rule.get('name')):
         raise Exception("Rule name must contain only word characters plus '.','-','_'")
     
-    access = rule.get('access', None)
-    if not access:
-        raise Exception("Rule access value is required.")
-
-    access_names = [member.value for member in SecurityRuleAccess]
-    if access not in access_names:
-        raise Exception("Rule access must be one of [{0}]".format(', '.join(access_names)))
-
     priority = rule.get('priority', None)
     if not priority:
         raise Exception("Rule priority is required.")
@@ -193,32 +219,39 @@ def validate_rule(rule, rule_type=None):
         raise Exception("Rule priority attribute must be an integer.")
     if rule_type != 'default' and (priority < 100 or priority > 4096):
         raise Exception("Rule priority must be between 100 and 4096")
-    
-    if not rule.get('destination_address_prefix', None):
-        raise Exception("Rule destination_address_prefix value is required.")
-    if not rule.get('source_address_prefix', None):
-        raise Exception("Rule source_address_prefix value is required.")
 
-    protocol = rule.get('protocol', None)
-    if not protocol:
-        raise Exception("Rule protocol value is required.")
+    if not rule.get('access'):
+        rule['access'] = 'Allow'
+
+    access_names = [member.value for member in SecurityRuleAccess]
+    if rule['access'] not in access_names:
+        raise Exception("Rule access must be one of [{0}]".format(', '.join(access_names)))
+
+    if not rule.get('destination_address_prefix'):
+        rule['destination_address_prefix'] = '*'
+
+    if not rule.get('source_address_prefix'):
+        rule['source_address_prefix'] = '*'
+
+    if not rule.get('protocol'):
+        rule['protocol'] = '*'
+
     protocol_names = [member.value for member in SecurityRuleProtocol]
-    if protocol not in protocol_names:
+    if rule['protocol'] not in protocol_names:
         raise Exception("Rule protocol must be one of [{0}]".format(', '.join(protocol_names)))
-    
-    direction = rule.get('direction', None)
-    if not direction:
-        raise Exception("rule direction is required.")
+
+    if not rule.get('direction'):
+        rule['direction'] = 'Inbound'
 
     direction_names = [member.value for member in SecurityRuleDirection]
-    if direction not in direction_names:
+    if rule['direction'] not in direction_names:
         raise Exception("Rule direction must be one of [{0}]".format(', '.join(direction_names)))
-    
-    if not rule.get('source_port_range', None):
-        raise Exception("Rule source_port_range value is required.")
 
-    if not rule.get('destination_port_range', None):
-        raise Exception("Rule destination_port_range value is required")
+    if not rule.get('source_port_range'):
+        rule['source_port_range'] = '*'
+
+    if not rule.get('destination_port_range'):
+        rule['destination_port_range'] = '*'
 
 
 def compare_rules(r, rule):
@@ -251,6 +284,12 @@ def compare_rules(r, rule):
 
 
 def create_rule_instance(rule):
+    '''
+    Create an instance of SecurityRule from a dict.
+
+    :param rule: dict
+    :return: SecurityRule
+    '''
     return SecurityRule(
         rule['protocol'],
         rule['source_address_prefix'],
@@ -269,6 +308,12 @@ def create_rule_instance(rule):
 
 
 def create_rule_dict_from_obj(rule):
+    '''
+    Create a dict from an instance of a SecurityRule.
+
+    :param rule: SecurityRule
+    :return: dict
+    '''
     return dict(
         id=rule.id,
         name=rule.name,
