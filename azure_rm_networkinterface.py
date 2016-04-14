@@ -106,7 +106,7 @@ options:
         default: Dynamic
     security_group_name:
         description:
-            - Name of an existing security group with which to associate the network interface. If not provide, a
+            - Name of an existing security group with which to associate the network interface. If not provided, a
               default security group will be created.
         aliases:
             - security_group

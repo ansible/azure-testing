@@ -37,6 +37,7 @@
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
 
 - debug: var=output
@@ -49,6 +50,7 @@
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0/24"
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
   ignore_errors: yes
 
@@ -65,6 +67,7 @@
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0.0/24"
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
 
 - debug: var=output
@@ -73,17 +76,35 @@
 - assert:
     that: output.changed
 
+- name: Create network security group
+  azure_rm_securitygroup:
+    name: secgroupfoo
+    resource_group: "{{ resource_group }}"
+    tags:
+      testing: testing
+    debug: "{{ playbook_debug }}"
+    log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
 - name: Update the subnet
   azure_rm_subnet:
     name: foobar
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0.0/16"
+    security_group: secgroupfoo
     tags:
        testing: testing
        delete: on-fini
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
+
+- debug: var=output
+  when: playbook_debug
 
 - name: Should be idempotent
   azure_rm_subnet:
@@ -91,10 +112,12 @@
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0.0/16"
+    security_group: secgroupfoo
     tags:
        testing: testing
        delete: on-fini
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
 
 - debug: var=output
@@ -110,4 +133,11 @@
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     debug: "{{ playbook_debug }}"
+    log_mode: file
   register: output
+
+- name: Remove security group
+  azure_rm_securitygroup:
+    resource_group: "{{ resource_group }}"
+    name: secgroupfoo
+    state: absent
