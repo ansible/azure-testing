@@ -162,9 +162,6 @@ azure_rm_virtualmachine module at the end:
         rules:
           - name: SSH
             protocol: Tcp
-            source_port_range: '*'
-            source_address_prefix: '*'
-            destination_address_prefix: '*'
             destination_port_range: 22
             access: Allow
             priority: 101

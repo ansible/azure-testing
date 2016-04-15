@@ -34,8 +34,12 @@ options:
             - Only show results for a specific account.
     resource_group:
         description:
-            - Name of resource group from which to gather facts.
+            - Limit results to a resource group. Required when filtering by name.
         required: true
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 
 extends_documentation_fragment:
     - azure
@@ -52,10 +56,15 @@ EXAMPLES = '''
         resource_group: Testing
         name: clh0002
 
-    - name: Get facts for all accounts
+    - name: Get facts for all accounts in a resource group
       azure_rm_storageaccount_facts:
         resource_group: Testing
 
+    - name: Get facts for all accounts by tags
+      azure_rm_storageaccount_facts:
+        tags:
+          - testing
+          - foo:bar
 '''
 
 EXAMPLE_OUTPUT = '''
@@ -105,10 +114,13 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
-            resource_group=dict(required=True, type='str'),
+            resource_group=dict(type='str'),
+            tags=dict(type='list'),
         )
 
         super(AzureRMStorageAccountFacts, self).__init__(self.module_arg_spec,
+                                                         supports_tags=False,
+                                                         facts_module=True,
                                                          **kwargs)
         self.results = dict(
             changed=False,
@@ -118,16 +130,22 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
 
         self.name = None
         self.resource_group = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
-        if self.name is not None:
+        if self.name and not self.resource_group:
+            self.fail("Parameter error: resource group required when filtering by name.")
+
+        if self.name:
             self.results['results'] = self.get_account()
+        elif self.resource_group:
+            self.results['results'] = self.list_resource_group()
         else:
-            self.results['results'] = self.list_accounts()
+            self.results['results'] = self.list_all()
 
         return self.results
 
@@ -141,21 +159,35 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if account is not None:
+        if account and self.has_tags(account.tags, self.tags):
             result = [self.serialize_obj(account, AZURE_OBJECT_CLASS)]
 
         return result
 
-    def list_accounts(self):
+    def list_resource_group(self):
         self.log('List items')
         try:
             response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
         except Exception, exc:
-            self.fail("Error listing items - {0}".format(str(exc)))
+            self.fail("Error listing for resource group {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+        return results
+
+    def list_all(self):
+        self.log('List all items')
+        try:
+            response = self.storage_client.storage_accounts.list_by_resource_group(self.resource_group)
+        except Exception, exc:
+            self.fail("Error listing all items - {0}".format(str(exc)))
+
+        results = []
+        for item in response:
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 

@@ -48,6 +48,45 @@
       - "output.results.tags.delete == 'on-exit'"
       - "output.results.tags | length == 2"
 
+- name: Gather facts by name, tags
+  azure_rm_virtualnetwork_facts:
+    resource_group: "{{ resource_group }}"
+    name: my_test_network
+    tags:
+      - testing
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+    that: "output.results | length == 1"
+
+- name: Gather facts by resource group, tags
+  azure_rm_virtualnetwork_facts:
+    resource_group: "{{ resource_group }}"
+    tags:
+      - testing
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+    that: "output.results | length == 1"
+
+- name: Gather facts by tags
+  azure_rm_virtualnetwork_facts:
+    tags:
+      - testing
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+    that: "output.results | length >= 1"
+
 - name: Should be idempotent
   azure_rm_virtualnetwork:
     name: my_test_network

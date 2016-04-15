@@ -32,12 +32,13 @@ options:
     name:
         description:
             - Only show results for a specific network interface.
-        default: null
     resource_group:
         description:
-            - Name of the resource group containing the network interface(s).
-        required: true
-        default: null
+            - Name of the resource group containing the network interface(s). Required when searching by name.
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 
 extends_documentation_fragment:
     - azure
@@ -54,10 +55,16 @@ EXAMPLES = '''
         resource_group: Testing
         name: nic001
 
-    - name: Get facts for all network interfaces
+    - name: Get network interfaces within a resource group
       azure_rm_networkinterface_facts:
         resource_group: Testing
 
+    - name: Get network interfaces by tag
+      azure_rm_networkinterface_facts:
+        resource_group: Testing
+        tags:
+          - testing
+          - foo:bar
 '''
 
 from ansible.module_utils.basic import *
@@ -80,10 +87,13 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
-            resource_group=dict(required=True, type='str'),
+            resource_group=dict(type='str'),
+            tags=dict(type='list')
         )
 
         super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
+                                                           supports_tags=False,
+                                                           facts_module=True,
                                                            **kwargs)
         self.results = dict(
             changed=False,
@@ -92,16 +102,22 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.name = None
         self.resource_group = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
-        if self.name is not None:
+        if self.name and not self.resource_group:
+            self.fail("Parameter error: resource group required when filtering by name.")
+
+        if self.name:
             self.results['results'] = self.get_item()
+        elif self.resource_group:
+            self.results['results'] = self.list_resource_group()
         else:
-            self.results['results'] = self.list_items()
+            self.results['results'] = self.list_all()
 
         return self.results
 
@@ -114,21 +130,35 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         except:
             pass
 
-        if item:
+        if item and self.has_tags(item.tags, self.tags):
             result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
         return result
 
-    def list_items(self):
-        self.log('List all items')
+    def list_resource_group(self):
+        self.log('List for resource group')
         try:
             response = self.network_client.network_interfaces.list(self.resource_group)
         except Exception, exc:
-            self.fail("Error listing all items - {0}".format(str(exc)))
+            self.fail("Error listing by resource group {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+        return results
+
+    def list_all(self):
+        self.log('List all')
+        try:
+            response = self.network_client.network_interfaces.list_all()
+        except Exception, exc:
+            self.fail("Error listing all - {1}".format(self.resource_group, str(exc)))
+
+        results = []
+        for item in response:
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 

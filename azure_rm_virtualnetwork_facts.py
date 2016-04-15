@@ -34,9 +34,11 @@ options:
             - Only show results for a specific security group.
     resource_group:
         description:
-            - Name of a resource group.
-        required: true
-
+            - Limit results by resource group. Required when filtering by name.
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 extends_documentation_fragment:
     - azure
 
@@ -56,6 +58,10 @@ EXAMPLES = '''
       azure_rm_virtualnetwork_facts:
         resource_group: Testing
 
+    - name: Get facts by tags
+      azure_rm_virtualnetwork_facts:
+        tags:
+          - testing
 '''
 
 EXAMPLE_OUTPUT = '''
@@ -105,10 +111,13 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
-            resource_group=dict(required=True, type='str'),
+            resource_group=dict(type='str'),
+            tags=dict(type='list'),
         )
 
         super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
+                                                           supports_tags=False,
+                                                           facts_module=True,
                                                            **kwargs)
         self.results = dict(
             changed=False,
@@ -118,6 +127,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.name = None
         self.resource_group = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
@@ -141,23 +151,36 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if item:
+        if item and self.has_tags(item.tags, self.tags):
             results = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
+        return results
+
+    def list_resource_group(self):
+        self.log('List items for resource group')
+        try:
+            response = self.network_client.virtual_networks.list(self.resource_group)
+        except AzureHttpError, exc:
+            self.fail("Failed to list for resource group {0} - {1}".format(self.resource_group, str(exc)))
+
+        results = []
+        for item in response:
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
     def list_items(self):
         self.log('List all for items')
         try:
-            response = self.network_client.virtual_networks.list(self.resource_group)
+            response = self.network_client.virtual_networks.list_all()
         except AzureHttpError, exc:
             self.fail("Failed to list all items - {0}".format(str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
-
 
 def main():
     AzureRMNetworkInterfaceFacts().exec_module()

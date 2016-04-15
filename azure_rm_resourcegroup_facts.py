@@ -31,7 +31,11 @@ description:
 options:
     name:
         description:
-            - Only show results for a specific resource group.
+            - Limit results to a specific resource group.
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 
 extends_documentation_fragment:
     - azure
@@ -50,6 +54,11 @@ EXAMPLES = '''
     - name: Get facts for all resource groups
       azure_rm_securitygroup_facts:
 
+    - name: Get facts by tags
+      azure_rm_resourcegroup_facts:
+        tags:
+          - testing
+          - foo:bar
 '''
 
 EXAMPLE_OUTPUT = '''
@@ -92,10 +101,12 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
+            tags=dict(type='list')
         )
 
         super(AzureRMResourceGroupFacts, self).__init__(self.module_arg_spec,
                                                         supports_tags=False,
+                                                        facts_module=True,
                                                         **kwargs)
         self.results = dict(
             changed=False,
@@ -103,13 +114,14 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
         )
 
         self.name = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
-        if self.name is not None:
+        if self.name:
             self.results['results'] = self.get_item()
         else:
             self.results['results'] = self.list_items()
@@ -126,7 +138,7 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if item:
+        if item and self.has_tags(item.tags, self.tags):
             result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
         return result
@@ -140,7 +152,8 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 

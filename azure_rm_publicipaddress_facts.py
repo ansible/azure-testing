@@ -33,12 +33,14 @@ options:
     name:
         description:
             - Only show results for a specific Public IP.
-        default: null
     resource_group:
         description:
-            - Name of the resource group containing the Public IPs.
+            - Limit results by resource group. Required when using name parameter.
         required: true
-        default: null
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 
 extends_documentation_fragment:
     - azure
@@ -54,10 +56,9 @@ EXAMPLES = '''
         resource_group: Testing
         name: publicip001
 
-    - name: Get facts for all Public IPs
+    - name: Get facts for all Public IPs within a resource groups
       azure_rm_publicip_facts:
         resource_group: Testing
-
 '''
 
 EXAMPLE_OUTPUT = '''
@@ -105,10 +106,13 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         self.module_arg_spec = dict(
             name=dict(type='str'),
             resource_group=dict(required=True, type='str'),
+            tags=dict(type='list')
         )
 
         super(AzureRMPublicIPFacts, self).__init__(self.module_arg_spec,
-                                                           **kwargs)
+                                                   supports_tags=False,
+                                                   facts_module=True,
+                                                   **kwargs)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode,
@@ -117,16 +121,22 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
 
         self.name = None
         self.resource_group = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
-        if self.name is not None:
+        if self.name and not self.resource_group:
+            self.fail("Parameter error: resource group required when filtering by name.")
+
+        if self.name:
             self.results['results'] = self.get_item()
+        elif self.resource_group:
+            self.results['results'] = self.list_resource_group()
         else:
-            self.results['results'] = self.list_items()
+            self.results['results'] = self.list_all()
 
         return self.results
 
@@ -140,22 +150,37 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if item:
+        if item and self.has_tags(item.tags, self.tags):
             result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
         return result
 
-    def list_items(self):
-        self.log('List all items')
+    def list_resource_group(self):
+        self.log('List items in resource groups')
         try:
             response = self.network_client.public_ip_addresses.list(self.resource_group)
+        except AzureHttpError, exc:
+            self.fail("Error listing items in resource groups {0} - {1}".format(self.resource_group, str(exc)))
+
+        results = []
+        for item in response:
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+        return results
+
+    def list_all(self):
+        self.log('List all items')
+        try:
+            response = self.network_client.public_ip_addresses.list_all()
         except AzureHttpError, exc:
             self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
+
 
 
 def main():

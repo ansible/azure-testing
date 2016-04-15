@@ -247,6 +247,36 @@
           - output.results.tags | length == 2
           - output.results.tags.testing == 'testing'
 
+- name: Gather facts for tags
+  azure_rm_networkinterface_facts:
+    tags: testing
+  register: output
+
+- assert:
+      that:
+          - output.results | length >= 1
+
+- name: Gather facts for resource group and tags
+  azure_rm_networkinterface_facts:
+    resource_group: "{{ resource_group }}"
+    tags: testing
+  register: output
+
+- assert:
+      that:
+          - output.results | length == 1
+
+- name: Gather facts for name and tags
+  azure_rm_networkinterface_facts:
+    resource_group: "{{ resource_group }}"
+    name: nic003
+    tags: testing
+  register: output
+
+- assert:
+      that:
+          - output.results | length == 1
+
 - name: Purge one tag
   azure_rm_networkinterface:
       name: nic003
@@ -397,9 +427,20 @@
       that:
           - output.results | length == 1
 
-- name: Gather facts for all nics
+- name: Gather facts for all nics in resource groups
   azure_rm_networkinterface_facts:
       resource_group: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results | length >= 3
+
+- name: Gather facts for all nics
+  azure_rm_networkinterface_facts:
   register: output
 
 - debug: var=output

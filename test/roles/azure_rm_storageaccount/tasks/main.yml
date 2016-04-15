@@ -47,6 +47,20 @@
        - output.changed
        - output.results.id is defined
 
+ - name: Gather facts by tags
+   azure_rm_storageaccount_facts:
+       resource_group: "{{ resource_group }}"
+       tags:
+         - test
+         - galaxy
+   register: output
+
+ - debug: var=output
+   when: playbook_debug
+
+ - assert:
+       that: output.results | length == 1
+
  - name: Change account type 
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}" 

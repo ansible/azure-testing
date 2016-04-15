@@ -110,7 +110,7 @@ class AzureRMModuleBase(object):
     def __init__(self, derived_arg_spec, bypass_checks=False, no_log=False,
                  check_invalid_arguments=True, mutually_exclusive=None, required_together=None,
                  required_one_of=None, add_file_common_args=False, supports_check_mode=False,
-                 required_if=None, supports_tags=True):
+                 required_if=None, supports_tags=True, facts_module=False):
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -149,6 +149,7 @@ class AzureRMModuleBase(object):
         self._resource_client = None
         self._compute_client = None
         self.check_mode = self.module.check_mode
+        self.facts_module = facts_module
 
         # configure logging
         self._log_mode = self.module.params.get('log_mode')
@@ -225,12 +226,12 @@ class AzureRMModuleBase(object):
         :param tags: dictionary of string:string pairs
         :return: None
         '''
-        # tags must be a dictionary of string:string mappings.
-        if not isinstance(tags, dict):
-            self.fail("Tags must be a dictionary of string:string values.")
-        for key, value in tags.iteritems():
-            if not isinstance(value, str):
-                self.fail("Tags values must be strings. Found {0}:{1}".format(str(key), str(value)))
+        if not self.facts_module:
+            if not isinstance(tags, dict):
+                self.fail("Tags must be a dictionary of string:string values.")
+            for key, value in tags.iteritems():
+                if not isinstance(value, str):
+                    self.fail("Tags values must be strings. Found {0}:{1}".format(str(key), str(value)))
 
     def _tag_purge(self, tags):
         '''
@@ -297,6 +298,37 @@ class AzureRMModuleBase(object):
             if purged:
                 changed = True
         return changed, new_tags
+
+    def has_tags(self, obj_tags, tag_list):
+        '''
+        Used in fact modules to compare object tags to list of parameter tags. Return true if list of parameter tags
+        exists in object tags.
+
+        :param obj_tags: dictionary of tags from an Azure object.
+        :param tag_list: list of tag keys or tag key:value pairs
+        :return: bool
+        '''
+
+        if not obj_tags and tag_list:
+            return False
+
+        if not tag_list:
+            return True
+
+        matches = 0
+        result = False
+        for tag in tag_list:
+            tag_key = tag
+            tag_value = None
+            if ':' in tag:
+                tag_key, tag_value = tag.split(':')
+            if tag_value and obj_tags.get(tag_key) == tag_value:
+                matches += 1
+            elif not tag_value and obj_tags.get(tag_key):
+                matches += 1
+        if matches == len(tag_list):
+            result = True
+        return result
 
     def exec_module(self):
         '''

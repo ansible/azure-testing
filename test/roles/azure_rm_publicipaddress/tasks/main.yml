@@ -77,6 +77,20 @@
           - output.results.tags | length == 3
           - output.results.tags.delete == 'never'
 
+- name: Gather facts, filtering by tag
+  azure_rm_publicipaddress_facts:
+      resource_group: "{{ resource_group }}"
+      tags:
+          - testing
+          - foo:bar
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that: output.results | length == 1
+
 - name: Purge all tags
   azure_rm_publicipaddress:
       resource_group: "{{ resource_group }}"

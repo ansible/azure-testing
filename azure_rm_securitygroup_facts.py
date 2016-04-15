@@ -36,6 +36,10 @@ options:
         description:
             - Name of the resource group to use.
         required: true
+    tags:
+        description:
+            - Limit results by tag. Format tags as 'key' or 'key:value'.
+        type: list
 
 extends_documentation_fragment:
     - azure
@@ -211,9 +215,12 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         self.module_arg_spec = dict(
             name=dict(type='str'),
             resource_group=dict(required=True, type='str'),
+            tags=dict(type='list'),
         )
 
         super(AzureRMSecurityGroupFacts, self).__init__(self.module_arg_spec,
+                                                        supports_tags=False,
+                                                        facts_module=True,
                                                         **kwargs)
         self.results = dict(
             changed=False,
@@ -223,9 +230,9 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
         self.name = None
         self.resource_group = None
+        self.tags = None
 
     def exec_module_impl(self, **kwargs):
-
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
@@ -246,7 +253,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if item:
+        if item and self.has_facts(item.tags, self.tags):
             result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
         return result
@@ -260,7 +267,8 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
         results = []
         for item in response:
-            results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
+            if self.has_tags(item.tags, self.tags):
+                results.append(self.serialize_obj(item, AZURE_OBJECT_CLASS))
         return results
 
 
