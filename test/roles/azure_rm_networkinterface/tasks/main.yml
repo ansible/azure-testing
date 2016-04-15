@@ -356,7 +356,9 @@
       virtual_network_name: vnet001
       subnet: subnet001
       os_type: Windows
-      rdp_port: 9000
+      open_ports:
+          - 9000
+          - '9005-9010'
   register: output
 
 - debug: var=output
@@ -380,6 +382,7 @@
   assert:
       that:
           - output.results[0].properties.securityRules[0].properties.destinationPortRange == '9000'
+          - output.results[0].properties.securityRules[1].properties.destinationPortRange == '9005-9010'
 
 - name: Gather facts for one nic
   azure_rm_networkinterface_facts:

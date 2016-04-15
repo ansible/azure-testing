@@ -1,3 +1,4 @@
 localhost
+testvm10 ansible_host=13.93.156.218 ansible_user=chouseknecht ansible_ssh_pass=Password123 
 
 [just_created]

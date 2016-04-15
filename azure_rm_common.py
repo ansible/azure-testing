@@ -416,7 +416,7 @@ class AzureRMModuleBase(object):
             return poller.result()
         except Exception, exc:
             self.log(str(exc))
-            self.fail("Error: {0}".format(str(exc)))
+            raise Exception(str(exc))
 
     def check_provisioning_state(self, azure_object, requested_state='present'):
         '''
@@ -509,7 +509,7 @@ class AzureRMModuleBase(object):
 
         return self.get_poller_result(poller)
 
-    def create_default_securitygroup(self, resource_group, location, name, os_type, ssh_port='22', rdp_port='3389'):
+    def create_default_securitygroup(self, resource_group, location, name, os_type, open_ports):
         '''
         Create a default security group <name>01 to associate with a network interface. If a security group matching
         <name>01 exists, return it. Otherwise, create one.
@@ -538,20 +538,36 @@ class AzureRMModuleBase(object):
             return group
 
         parameters = NetworkSecurityGroup()
-        if os_type == 'Linux':
-            # add an inbound SSH rule
-            parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow SSH Access',
-                             source_port_range='*', destination_port_range=ssh_port, priority=100, name='SSH')
-            ]
-            parameters.location = location
+        parameters.location = location
+
+        if not open_ports:
+            # Open default ports based on OS type
+            if os_type == 'Linux':
+                # add an inbound SSH rule
+                parameters.security_rules = [
+                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow SSH Access',
+                                 source_port_range='*', destination_port_range='22', priority=100, name='SSH')
+                ]
+                parameters.location = location
+            else:
+                # for windows add inbound RDP rules
+                parameters.security_rules = [
+                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP port 3389',
+                                 source_port_range='*', destination_port_range='3389', priority=100, name='RDP01'),
+                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP port 5986',
+                                 source_port_range='*', destination_port_range='5986', priority=101, name='RDP01'),
+                ]
         else:
-            # for windows add an inbound RDP rule
-            parameters.security_rules=[
-                SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', description='Allow RDP Access',
-                             source_port_range='*', destination_port_range=rdp_port, priority=100, name='RDP')
-            ]
-            parameters.location = location
+            # Open custom ports
+            parameters.security_rules = []
+            priority = 100
+            for port in open_ports:
+                priority += 1
+                rule_name = "Rule_{0}".format(priority)
+                parameters.security_rules.append(
+                    SecurityRule('Tcp', '*', '*', 'Allow', 'Inbound', source_port_range='*',
+                                 destination_port_range=str(port), priority=priority, name=rule_name)
+                )
 
         self.log('Creating default security group {0}'.format(security_group_name))
         try:

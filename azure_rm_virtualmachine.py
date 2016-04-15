@@ -49,20 +49,29 @@ options:
             - State 'started' will also check that the machine exists with the requested configuration, updating it, if
               needed and leaving the machine in a powered on state.
             - State 'stopped' will also check that the machine exists with the requested configuration, updating it, if
-              needed and leaving the machine in a powered off state.
+              needed and leaving the machine in a powered off state. Pass deallocate to put the machine in a
+              'deallocated' state.
         default: started
         choices:
             - absent
             - present
             - started
             - stopped
+    deallocate:
+        description:
+            - Use with state 'stopped' to put the VM in a deallocated state.
+        default: false
+    restart:
+        description:
+            - Use with state 'present' or 'started' to restart a running VM.
+        default: false
     location:
         description:
             - Valid Azure location. Defaults to location of the resource group.
     short_hostname:
         description:
             - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
-              When creating a virtual machine, short_hostname defaults to the host name.
+              When creating a virtual machine, short_hostname defaults to name.
     vm_size:
         description:
             - A valid Azure VM size value. For example, 'Standard_D4'. The list of choices varies depending on the
@@ -74,14 +83,12 @@ options:
     admin_password:
         description:
             - Password for the admin username. Not required if the os_type is Linux and SSH password authentication
-              is disabled by setting ssh_password to false.
-    ssh_password:
+              is disabled by setting ssh_password_enabled to false.
+    ssh_password_enabled:
         description:
-            - When the os_type is Linux, setting ssh_password to false will disable SSH password authentication and
-              require use of SSH keys.
+            - When the os_type is Linux, setting ssh_password_enabled to false will disable SSH password authentication
+              and require use of SSH keys.
         default: true
-        aliases:
-            - ssh_password_enabled
     ssh_public_keys:
         description:
             - "For os_type Linux provide a list of SSH keys. Each item in the list should be a dictionary where the
@@ -139,18 +146,12 @@ options:
             - Static
         aliases:
             - public_ip_allocation
-    ssh_port:
+    open_ports:
         description:
             - If a network interface is created when creating the VM, a security group will be created as well. For
               Linux hosts a rule will be added to the security group allowing inbound TCP connections to the default
-              SSH port. Use ssh_port to override the port specified in the security rule.
-        default: 22
-    rdp_port:
-        description:
-            - If a network interface is created when creating the VM, a security group will be created as well. For
-              Windows hosts a rule will be added to the security group allowing inbound TCP connections to the default
-              RDP port. Use rdp_port to override the port specified in the security rule.
-        default: 3389
+              SSH port 22, and for Windows hosts ports 3389 and 5986 will be opened. Override the default open ports by
+              providing a list of ports.
     network_interface_names:
         description:
             - List of existing network interface names to add to the VM. If a network interface name is not provided
@@ -173,19 +174,19 @@ options:
     delete_network_interfaces:
         description:
             - When removing a VM using state 'absent', also remove any network interfaces associate with the VM.
-        default: false
+        default: true
         aliases:
             - delete_nics
     delete_virtual_storage:
         description:
             - When removing a VM using state 'absent', also remove any storage blobs associated with the VM.
-        default: false
+        default: true
         aliases:
             - delete_vhd
     delete_public_ips:
         description:
             - When removing a VM using state 'absent', also remove any public IP addresses associate with the VM.
-        default: false
+        default: true
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -242,11 +243,23 @@ EXAMPLES = '''
     name: testvm002
     state: stopped
 
+- name: Deallocate
+  azure_rm_virtualmachine:
+    resource_group: Testing
+    name: testvm002
+    state: stopped
+    deallocate: yes
+
 - name: Power On
   azure_rm_virtualmachine:
     resource_group:
     name: testvm002
-    state: started
+
+- name: Restart
+  azure_rm_virtualmachine:
+    resource_group:
+    name: testvm002
+    restart: yes
 
 '''
 
@@ -263,7 +276,7 @@ EXAMPLE_OUTPUT = '''
         "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10",
         "location": "eastus",
         "name": "testvm10",
-        "power_state": "running",
+        "powerstate": "running",
         "properties": {
             "hardwareProfile": {
                 "vmSize": "Standard_D1"
@@ -390,6 +403,7 @@ EXAMPLE_OUTPUT = '''
 }
 '''
 
+import random
 
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
@@ -436,7 +450,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             vm_size=dict(type='str', choices=[], default='Standard_D1'),
             admin_username=dict(type='str'),
             admin_password=dict(type='str', ),
-            ssh_password=dict(type='bool', aliases=['ssh_password_enabled'], default=True),
+            ssh_password_enabled=dict(type='bool', default=True),
             ssh_public_keys=dict(type='list'),
             image=dict(type='dict'),
             storage_account_name=dict(type='str', aliases=['storage_account']),
@@ -447,14 +461,15 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             os_type=dict(type='str', choices=['Linux', 'Windows'], default='Linux'),
             public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Static',
                                              aliases=['public_ip_allocation']),
-            ssh_port=dict(type='int', default=22),
-            rdp_port=dict(type='int', default=3389),
+            open_ports=dict(type='list'),
             network_interface_names=dict(type='list', aliases=['network_interfaces']),
-            delete_network_interfaces=dict(type='bool', default=False, aliases=['delete_nics']),
-            delete_virtual_storage=dict(type='bool', default=False, aliases=['delete_vhd']),
-            delete_public_ips=dict(type='bool', default=False),
+            delete_network_interfaces=dict(type='bool', default=True, aliases=['delete_nics']),
+            delete_virtual_storage=dict(type='bool', default=True, aliases=['delete_vhd']),
+            delete_public_ips=dict(type='bool', default=True),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
-            subnet_name=dict(type='str', aliases=['subnet'])
+            subnet_name=dict(type='str', aliases=['subnet']),
+            deallocate=dict(type='bool', default=False),
+            restart=dict(type='bool', default=False)
         )
 
         for key in VirtualMachineSizeTypes:
@@ -472,7 +487,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.vm_size = None
         self.admin_username = None
         self.admin_password = None
-        self.ssh_password = None
+        self.ssh_password_enabled = None
         self.ssh_public_keys = None
         self.image = None
         self.storage_account_name = None
@@ -487,10 +502,11 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.tags = None
         self.force = None
         self.public_ip_allocation_method = None
-        self.rdp_port = None
-        self.ssh_port = None
+        self.open_ports = None
         self.virtual_network_name = None
         self.subnet_name = None
+        self.deallocate = None
+        self.restart = None
 
         self.results = dict(
             changed=False,
@@ -561,7 +577,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                                                                        self.storage_container_name,
                                                                                        self.storage_blob_name)
 
-            disable_ssh_password = not self.ssh_password
+            disable_ssh_password = not self.ssh_password_enabled
 
         try:
             self.log("Fetching virtual machine {0}".format(self.name))
@@ -586,30 +602,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                         vm_dict['properties']['networkProfile']['networkInterfaces'] = updated_nics
                         changed = True
 
-                if self.vm_size and self.vm_size != vm_dict['properties']['hardwareProfile']['vmSize']:
-                    self.log('CHANGED: virtual machine {0} - vm size is different.'.format(self.name))
-                    differences.append('VM Size')
-                    vm_dict['properties']['hardwareProfile']['vmSize'] = self.vm_size
-                    changed = True
-
-                if self.image:
-                    if self.image['publisher'] != \
-                       vm_dict['properties']['storageProfile']['imageReference']['publisher'] or \
-                       self.image['offer'] != vm_dict['properties']['storageProfile']['imageReference']['offer'] or \
-                       self.image['sku'] != vm_dict['properties']['storageProfile']['imageReference']['sku']:
-                        self.log('CHANGED: virtual machine {0} - image is different.'.format(self.name))
-                        differences.append('Image')
-                        vm_dict['properties']['storageProfile']['imageReference']['publisher'] = self.image['publisher']
-                        vm_dict['properties']['storageProfile']['imageReference']['offer'] = self.image['offer']
-                        vm_dict['properties']['storageProfile']['imageReference']['sku'] = self.image['sku']
-                        changed = True
-
-                    if self.image['version'] != vm_dict['properties']['storageProfile']['imageReference']['version']:
-                        self.log('CHANGED: virtual machine {0} - image version is different.'.format(self.name))
-                        differences.append('Image versions')
-                        vm_dict['properties']['storageProfile']['imageReference']['version'] = self.image['version']
-                        changed = True
-
                 if self.os_disk_caching and \
                    self.os_disk_caching != vm_dict['properties']['storageProfile']['osDisk']['caching']:
                     self.log('CHANGED: virtual machine {0} - OS disk caching'.format(self.name))
@@ -617,27 +609,10 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     changed = True
                     vm_dict['properties']['storageProfile']['osDisk']['caching'] = self.os_disk_caching
 
-                # Not allowed to change vhd.uri
-                # if self.storage_account_name:
-                #     if requested_vhd_uri != vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri']:
-                #         self.log('CHANGED: virtual machine {0} - OS disk VHD uri'.format(self.name))
-                #         differences.append('OS Disk VHD uri')
-                #         changed = True
-                #         vm_dict['properties']['storageProfile']['osDisk']['vhd']['uri'] = requested_vhd_uri
-
                 update_tags, vm_dict['tags'] = self.update_tags(vm_dict.get('tags', dict()))
                 if update_tags:
                     differences.append('Tags')
                     changed = True
-
-                # Not allowed to change admin username
-                # if self.admin_username and self.admin_username != vm_dict['properties']['osProfile']['adminUsername']:
-                #     self.log('CHANGED: virtual machine {0} - admin username'.format(self.name))
-                #     differences.append('Admin Username')
-                #     vm_dict['properties']['osProfile']['adminUsername'] = self.admin_username
-                #     changed = True
-                #     if self.admin_password:
-                #         vm_dict['properties']['osProfile']['adminPassword'] = self.admin_password
 
                 if self.short_hostname and self.short_hostname != vm_dict['properties']['osProfile']['computerName']:
                     self.log('CHANGED: virtual machine {0} - short hostname'.format(self.name))
@@ -647,12 +622,21 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
                 self.results['differences'] = differences
 
-                if self.state == 'started' and vm_dict['power_state'] != 'running':
+                if self.state == 'started' and vm_dict['powerstate'] != 'running':
                     self.log("CHANGED: virtual machine {0} not running and requested state 'running'".format(self.name))
                     changed = True
                     powerstate_change = 'poweron'
-
-                elif self.state == 'stopped' and vm_dict['power_state'] == 'running':
+                elif self.state in ('started', 'present') and vm_dict['powerstate'] == 'running' and self.restart:
+                    self.log("CHANGED: virtual machine {0} {1} and requested state 'restarted'"
+                             .format(self.name, vm_dict['powerstate']))
+                    changed = True
+                    powerstate_change = 'restarted'
+                elif self.state == 'stopped' and self.deallocate and vm_dict['powerstate'] != 'deallocated':
+                    self.log("CHANGED: virtual machine {0} {1} and requested state 'deallocated'"
+                             .format(self.name, vm_dict['powerstate']))
+                    changed = True
+                    powerstate_change = 'deallocated'
+                elif self.state == 'stopped' and vm_dict['powerstate'] == 'running':
                     self.log("CHANGED: virtual machine {0} running and requested state 'stopped'".format(self.name))
                     changed = True
                     powerstate_change = 'poweroff'
@@ -833,14 +817,22 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     self.results['results'] = self.create_or_update_vm(vm_resource)
 
                 # Make sure we leave the machine in requested power state
-                if powerstate_change == 'poweron' and self.results['results']['power_state'] != 'running':
+                if powerstate_change == 'poweron' and self.results['results']['powerstate'] != 'running':
                     # Attempt to power on the machine
                     self.power_on_vm()
                     self.results['results'] = self.serialize_vm(self.get_vm())
 
-                elif powerstate_change == 'poweroff' and self.results['results']['power_state'] == 'running':
+                elif powerstate_change == 'poweroff' and self.results['results']['powerstate'] == 'running':
                     # Attempt to power off the machine
                     self.power_off_vm()
+                    self.results['results'] = self.serialize_vm(self.get_vm())
+
+                elif powerstate_change == 'restarted':
+                    self.restart_vm()
+                    self.results['results'] = self.serialize_vm(self.get_vm())
+
+                elif powerstate_change == 'deallocated':
+                    self.deallocate_vm()
                     self.results['results'] = self.serialize_vm(self.get_vm())
 
             elif self.state == 'absent':
@@ -870,7 +862,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         :return: dict
         '''
         result = self.serialize_obj(vm, AZURE_OBJECT_CLASS)
-        result['power_state'] = next((s.code.replace('PowerState/', '')
+        result['powerstate'] = next((s.code.replace('PowerState/', '')
                                      for s in vm.instance_view.statuses if s.code.startswith('PowerState')), None)
 
         # Expand network interfaces to include config properties
@@ -899,7 +891,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                     config['properties']['publicIPAddress']['properties'] = pip_dict['properties']
 
         self.log(result, pretty_print=True)
-        if self.state != 'absent' and not result['power_state']:
+        if self.state != 'absent' and not result['powerstate']:
             self.fail("Failed to determine PowerState of virtual machine {0}".format(self.name))
         return result
 
@@ -920,6 +912,26 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             poller = self.compute_client.virtual_machines.start(self.resource_group, self.name)
         except Exception, exc:
             self.fail("Error powering on virtual machine {0} - {1}".format(self.name, str(exc)))
+        self.get_poller_result(poller)
+        return True
+
+    def restart_vm(self):
+        self.results['actions'].append("Restart virtual machine {0}".format(self.name))
+        self.log("Restart virtual machine {0}".format(self.name))
+        try:
+            poller = self.compute_client.virtual_machines.restart(self.resource_group, self.name)
+        except Exception, exc:
+            self.fail("Error restarting virtual machine {0} - {1}".format(self.name, str(exc)))
+        self.get_poller_result(poller)
+        return True
+
+    def deallocate_vm(self):
+        self.results['actions'].append("Deallocate virtual machine {0}".format(self.name))
+        self.log("Deallocate virtual machine {0}".format(self.name))
+        try:
+            poller = self.compute_client.virtual_machines.deallocate(self.resource_group, self.name)
+        except Exception, exc:
+            self.fail("Error deallocating virtual machine {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         return True
 
@@ -1087,17 +1099,29 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
     def create_default_storage_account(self):
         '''
-        Create a default storage account <vm name>01. If <vm name>01 exists, use it.
+        Create a default storage account <vm name>XXXX, where XXXX is a random number. If <vm name>XXXX exists, use it.
         Otherwise, create one.
 
         :return: storage account object
         '''
-        storage_account_name = self.name + '01'
         account = None
+        valid_name = False
+
+        # Attempt to find a valid storage account name
+        for i in range(0, 5):
+            rand = random.randrange(1000, 9999)
+            storage_account_name = self.name[:20] + str(rand)
+            if self.check_storage_account_name(storage_account_name):
+                valid_name = True
+                break
+
+        if not valid_name:
+            self.fail("Failed to create a unique storage account name for {0}. Try using a different VM name."
+                      .format(self.name))
 
         try:
             account = self.storage_client.storage_accounts.get_properties(self.resource_group, storage_account_name)
-        except CloudError, exc:
+        except CloudError:
             pass
 
         if account:
@@ -1116,6 +1140,14 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         self.get_poller_result(poller)
         # poller is not returning a storage account object.
         return self.get_storage_account(storage_account_name)
+
+    def check_storage_account_name(self, name):
+        self.log("Checking storage account name availability for {0}".format(name))
+        try:
+            response = self.storage_client.storage_accounts.check_name_availability(name)
+        except Exception, exc:
+            self.fail("Error checking storage account name availability for {0} - {1}".format(name, str(exc)))
+        return response.name_available
 
     def create_default_nic(self):
         '''
@@ -1194,12 +1226,12 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             if not subnet_id:
                 self.fail(no_subnets_msg)
 
-        self.results['actions'].append('Creating default public IP {0}'.format(self.name + '01'))
+        self.results['actions'].append('Created default public IP {0}'.format(self.name + '01'))
         pip = self.create_default_pip(self.resource_group, self.location, self.name, self.public_ip_allocation_method)
 
         self.results['actions'].append('Created default security group {0}'.format(self.name + '01'))
         group = self.create_default_securitygroup(self.resource_group, self.location, self.name, self.os_type,
-                                                  self.ssh_port, self.rdp_port)
+                                                  self.open_ports)
 
         parameters = NetworkInterface(
             location=self.location,

@@ -9,9 +9,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm002
       state: absent
-      delete_network_interfaces: yes
-      delete_virtual_storage: yes
-      delete_public_ips: yes
   register: output
   when: remove_vm
 
@@ -80,20 +77,11 @@
 - debug: var=output
   when: playbook_debug
 
-- name: Update VM Size
+- name: Restart the virtual machine
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm002
-      vm_size: Standard_D4
-      storage_account: testaccount001
-      storage_container: testvm001
-      storage_blob: testvm001.vhd
-      admin_username: adminuser
-      admin_password: Password123!
-      short_hostname: testvm
-      os_type: Linux
-      network_interfaces: testvm001
-      image: "{{ image }}"
+      restart: yes
       debug: "{{ playbook_debug }}"
       log_mode: file
   register: output
@@ -101,11 +89,51 @@
 - debug: var=output
   when: playbook_debug
 
+- assert:
+      that:
+          - output.results.powerstate == 'running'
+          - output.changed
+
+- name: Deallocate the virtual machine
+  azure_rm_virtualmachine:
+      resource_group: "{{ resource_group }}"
+      name: testvm002
+      state: stopped
+      deallocate: yes
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - output.results.powerstate == 'deallocated'
+          - output.changed
+
+- name: Start the virtual machine
+  azure_rm_virtualmachine:
+      resource_group: "{{ resource_group }}"
+      name: testvm002
+      state: started
+      debug: "{{ playbook_debug }}"
+      log_mode: file
+  register: output
+
+- debug: var=output
+  when: playbook_debug
+
+- assert:
+      that:
+          - "output.results.powerstate in ['starting', 'running']"
+          - output.changed
+
 - name: Should be idempotent
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm002
-      vm_size: Standard_D4
+      vm_size: Standard_D1
       storage_account: testaccount001
       storage_container: testvm001
       storage_blob: testvm001.vhd
@@ -127,9 +155,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm002
       state: absent
-      delete_network_interfaces: yes
-      delete_virtual_storage: yes
-      delete_public_ips: yes
   register: output
 
 - debug: var=output

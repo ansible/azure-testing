@@ -110,16 +110,12 @@ options:
               default security group will be created.
         aliases:
             - security_group
-    ssh_port:
+    open_ports:
         description:
-            - When creating a default security group for os_type 'Linux' a rule will be added allowing SSH access. Use
-              to set the SSH port for this rule.
-        default: 22
-    rdp_port:
-        description:
-            - When creating a default security group for os_type 'Linux' a rule will be added allowing SSH access. Use
-              to set the SSH port for this rule.
-        default: 3389
+            - When a default security group is created for a Linux host a rule will be added allowing inbound TCP
+              connections to the default SSH port 22, and for a Windows host rules will be added allowing inbound
+              access to RDP ports 3389 and 5986. Override the default ports by providing a list of open ports.
+        type: list
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -299,8 +295,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             subnet_name=dict(type='str', aliases=['subnet']),
             virtual_network_name=dict(type='str', aliases=['virtual_network']),
             os_type=dict(type='str', choices=['Windows', 'Linux'], default='Linux'),
-            ssh_port=dict(type='int', default=22),
-            rdp_port=dict(type='int', default=3389),
+            open_ports=dict(type='list'),
             public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
         )
 
@@ -320,8 +315,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.virtual_network_name = None
         self.security_group_name = None
         self.os_type = None
-        self.rdp_port = None
-        self.ssh_port = None
+        self.open_ports = None
         self.public_ip_allocation_method = None
         self.public_ip = None
 
@@ -450,7 +444,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                     if not self.security_group_name:
                         # create default security group
                         nsg = self.create_default_securitygroup(self.resource_group, self.location, self.name,
-                                                                self.os_type, self.ssh_port, self.rdp_port)
+                                                                self.os_type, self.open_ports)
 
                     if not pip and self.public_ip:
                         # create a default public_ip
