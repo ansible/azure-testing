@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_publicipaddress
 
+version_added: "2.1"
+
 short_description: Manage Azure Public IP Addresses.
 
 description:
@@ -42,12 +44,14 @@ options:
             - Dynamic
             - Static
         default: Dynamic
+        required: false
     domain_name_label:
         description:
             - The customizable portion of the FQDN assigned to public IP address. This is an explicit setting. If
               no value is provided, any existing value will be removed on an existing public IP.
         aliases:
             - domain_name_label
+        required: false
     name:
         description:
             - Name of the Public IP.
@@ -60,10 +64,12 @@ options:
         choices:
             - absent
             - present
+        required: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -74,6 +80,7 @@ options:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
+        required: false
         default: false
 
 extends_documentation_fragment:
@@ -155,7 +162,7 @@ def pip_to_dict(pip):
 
 class AzureRMPublicIPAddress(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             resource_group=dict(required=True),
@@ -167,7 +174,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
         )
 
         super(AzureRMPublicIPAddress, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                     supports_check_mode=True, **kwargs)
+                                                     supports_check_mode=True)
 
         self.resource_group = None
         self.name = None

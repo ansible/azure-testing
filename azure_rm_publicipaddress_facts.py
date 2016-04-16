@@ -24,6 +24,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_publicip_facts
 
+version_added: "2.1"
+
 short_description: Get public IP facts.
 
 description:
@@ -33,14 +35,15 @@ options:
     name:
         description:
             - Only show results for a specific Public IP.
+        required: false
     resource_group:
         description:
             - Limit results by resource group. Required when using name parameter.
-        required: true
+        required: false
     tags:
         description:
-            - Limit results by tag. Format tags as 'key' or 'key:value'.
-        type: list
+            - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -101,7 +104,7 @@ AZURE_OBJECT_CLASS = 'PublicIp'
 
 class AzureRMPublicIPFacts(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
@@ -111,8 +114,7 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
 
         super(AzureRMPublicIPFacts, self).__init__(self.module_arg_spec,
                                                    supports_tags=False,
-                                                   facts_module=True,
-                                                   **kwargs)
+                                                   facts_module=True)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode,

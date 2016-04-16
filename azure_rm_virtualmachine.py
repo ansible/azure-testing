@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_virtualmachine
 
+version_added: "2.1"
+
 short_description: Manage Azure virtual machines.
 
 description:
@@ -40,6 +42,7 @@ options:
     name:
         description:
             - Name of the virtual machine.
+        required: true
     state:
         description:
             - Assert the state of the virtual machine.
@@ -52,6 +55,7 @@ options:
               needed and leaving the machine in a powered off state. Pass deallocate to put the machine in a
               'deallocated' state.
         default: started
+        required: false
         choices:
             - absent
             - present
@@ -61,40 +65,49 @@ options:
         description:
             - Use with state 'stopped' to put the VM in a deallocated state.
         default: false
+        required: false
     restart:
         description:
             - Use with state 'present' or 'started' to restart a running VM.
         default: false
+        required: false
     location:
         description:
             - Valid Azure location. Defaults to location of the resource group.
+        required: false
     short_hostname:
         description:
             - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
               When creating a virtual machine, short_hostname defaults to name.
+        required: false
     vm_size:
         description:
             - A valid Azure VM size value. For example, 'Standard_D4'. The list of choices varies depending on the
               subscription and location. Check your subscription for available choices.
         default: Standard_D1
+        required: false
     admin_username:
         description:
             - Admin username used to access the host after it is created. Required when creating a VM.
+        required: false
     admin_password:
         description:
             - Password for the admin username. Not required if the os_type is Linux and SSH password authentication
               is disabled by setting ssh_password_enabled to false.
+        required: false
     ssh_password_enabled:
         description:
             - When the os_type is Linux, setting ssh_password_enabled to false will disable SSH password authentication
               and require use of SSH keys.
         default: true
+        required: false
     ssh_public_keys:
         description:
             - "For os_type Linux provide a list of SSH keys. Each item in the list should be a dictionary where the
               dictionary contains two keys: path and key_data. Set the path to the default location of the
               authorized_keys files. On an Enterprise Linux host, for example, the path will be
               /home/<admin username>/.ssh/authorized_keys. Set key_data to the actual value of the public key."
+        required: false
     image:
         description:
             - "A dictionary describing the Marketplace image used to build the VM. Will contain keys: publisher,
@@ -105,18 +118,20 @@ options:
         description:
             - Name of an existing storage account that supports creation of VHD blobs. If not specified for a new VM,
               a new storage account named <vm name>01 will be created using storage type 'Standard_LRS'.
+        required: false
     storage_container_name:
         description:
             - Name of the container to use within the storage account to store VHD blobs. If no name is specified a
               default container will created.
         default: vhds
-
+        required: false
     storage_blob_name:
         description:
             - Name fo the storage blob used to hold the VM's OS disk image. If no name is provided, defaults to
               the VM name + '.vhd'. If you provide a name, it must end with '.vhd'
         aliases:
             - storage_blob
+        required: false
     os_disk_caching:
         description:
             - Type of OS disk caching.
@@ -126,6 +141,7 @@ options:
         default: ReadOnly
         aliases:
             - disk_caching
+        required: false
     os_type:
         description:
             - Base type of operating system.
@@ -134,6 +150,7 @@ options:
             - Linux
         default:
             - Linux
+        required: false
     public_ip_allocation_method:
         description:
             - If a public IP address is created when creating the VM (beacuse a Network Interface was not provided),
@@ -146,17 +163,20 @@ options:
             - Static
         aliases:
             - public_ip_allocation
+        required: false
     open_ports:
         description:
             - If a network interface is created when creating the VM, a security group will be created as well. For
               Linux hosts a rule will be added to the security group allowing inbound TCP connections to the default
               SSH port 22, and for Windows hosts ports 3389 and 5986 will be opened. Override the default open ports by
               providing a list of ports.
+        required: false
     network_interface_names:
         description:
             - List of existing network interface names to add to the VM. If a network interface name is not provided
               when the VM is created, a default network interface will be created. In order for the module to create
               a network interface, at least one Virtual Network with one Subnet must exist.
+        required: false
     virtual_network_name:
         description:
             - When creating a virtual machine, if a network interface name is not provided, one will be created.
@@ -164,6 +184,7 @@ options:
               Use this parameter to provide a specific virtual network instead.
         aliases:
             - virtual_network
+        required: false
     subnet_name:
         description:
             - When creating a virtual machine, if a network interface name is not provided, one will be created.
@@ -171,22 +192,26 @@ options:
               Use this parameter to provide a specific subnet instead.
         aliases:
             - virtual_network
+        required: false
     delete_network_interfaces:
         description:
             - When removing a VM using state 'absent', also remove any network interfaces associate with the VM.
         default: true
         aliases:
             - delete_nics
+        required: false
     delete_virtual_storage:
         description:
             - When removing a VM using state 'absent', also remove any storage blobs associated with the VM.
         default: true
         aliases:
             - delete_vhd
+        required: false
     delete_public_ips:
         description:
             - When removing a VM using state 'absent', also remove any public IP addresses associate with the VM.
         default: true
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -197,6 +222,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -439,7 +465,7 @@ def extract_names_from_blob_uri(blob_uri):
 
 class AzureRMVirtualMachine(AzureRMModuleBase):   
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             resource_group=dict(type='str', required=True),
@@ -476,8 +502,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             self.module_arg_spec['vm_size']['choices'].append(getattr(key, 'value'))
 
         super(AzureRMVirtualMachine, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                    supports_check_mode=True,
-                                                    **kwargs)
+                                                    supports_check_mode=True)
 
         self.resource_group = None
         self.name = None

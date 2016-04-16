@@ -24,6 +24,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_storageaccount
 
+version_added: "2.1"
+
 short_description: Manage Azure storage accounts.
 
 description:
@@ -37,23 +39,27 @@ options:
     name:
         description:
             - Name of the storage account to update or create.
+        required: false
     state:
         description:
             - Assert the state of the storage account. Use 'present' to create or update a storage account and
               'absent' to delete an account.
         default: present
+        required: false
         choices:
             - absent
             - present
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
+        required: false
         default: resource_group location
     account_type:
         description:
             - "Type of storage account. Required when creating a storage account. NOTE: StandardZRS and PremiumLRS
               accounts cannot be changed to other account types, and other account types cannot be changed to
               StandardZRS or PremiumLRS."
+        required: false
         choices:
             - Premium_LRS
             - Standard_GRS
@@ -68,15 +74,18 @@ options:
               keys where 'name' is the CNAME source. Only one custom domain is supported per storage account at this
               time. To clear the existing custom domain, use an empty string for the custom domain name property.
             - Can be added to an existing storage account. Will be ignored during storage account creation.
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
+        required: false
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -160,7 +169,7 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]+$")
 
 class AzureRMStorageAccount(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             account_type=dict(type='str', choices=[], aliases=['type']),
@@ -177,8 +186,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             self.module_arg_spec['account_type']['choices'].append(getattr(key, 'value'))
 
         super(AzureRMStorageAccount, self).__init__(self.module_arg_spec,
-                                                    supports_check_mode=True,
-                                                    **kwargs)
+                                                    supports_check_mode=True)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode

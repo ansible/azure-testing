@@ -23,6 +23,9 @@
 DOCUMENTATION = '''
 ---
 module: azure_rm_virtualnetwork
+
+version_added: "2.1"
+
 short_description: Manage Azure virtual networks.
 
 description:
@@ -40,16 +43,19 @@ options:
               a new virtual network or using purge_address_prefixes.
         aliases:
             - address_prefixes
+        required: false
     dns_servers:
         description:
             - Custom list of DNS servers. Maximum length of two. The first server in the list will be treated
               as the Primary server. This is an explicit list. Existing DNS servers will be replaced with the
               specified list. Use the purge_dns_servers option to remove all custom DNS servers and revert to
               default Azure servers.
+        required: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
+        required: false
     name:
         description:
             - name of the virtual network.
@@ -63,6 +69,7 @@ options:
             - Use with state present to remove existing DNS servers, reverting to default Azure servers. Mutually
               exclusive with dns_servers.
         default: false
+        required: false
     state:
         description:
             - Assert the state of the virtual network. Use 'present' to create or update and
@@ -71,6 +78,7 @@ options:
         choices:
             - absent
             - present
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -81,6 +89,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -181,7 +190,7 @@ def virtual_network_to_dict(vnet):
 
 class AzureRMVirtualNetwork(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             resource_group=dict(required=True),
@@ -205,8 +214,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
         super(AzureRMVirtualNetwork, self).__init__(self.module_arg_spec,
                                                     mutually_exclusive=mutually_exclusive,
                                                     required_if=required_if,
-                                                    supports_check_mode=True,
-                                                    **kwargs)
+                                                    supports_check_mode=True)
         self.resource_group = None
         self.name = None
         self.state = None

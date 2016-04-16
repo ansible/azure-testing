@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_securitygroup
 
+version_added: "2.1"
+
 short_description: Manage Azure network security groups.
 
 description:
@@ -37,21 +39,26 @@ options:
             - The set of default rules automatically added to a security group at creation. In general default
               rules will not be modified. Modify rules to shape the flow of traffic to or from a subnet or NIC. See
               rules below for the makeup of a rule dict.
+        required: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
+        required: false
     name:
         description:
             - Name of the security group to operate on.
+        required: false
     purge_default_rules:
         description:
             - Remove any existing rules not matching those defined in the default_rules parameter.
         default: false
+        required: false
     purge_rules:
         description:
             - Remove any existing rules not matching those defined in the rules parameters.
         default: false
+        required: false
     resource_group:
         description:
             - Name of the resource group the security group belongs to.
@@ -60,6 +67,7 @@ options:
         description:
             - Set of rules shaping traffic flow to or from a subnet or NIC. Each rule is a dictionary.
         type: complex
+        required: false
         contains:
             name:
                 description: Unique name for the rule.
@@ -106,6 +114,7 @@ options:
             - Assert the state of the security group. Set to 'present' to create or update a security group. Set to
               'absent' to remove a security group.
         default: present
+        required: false
         choices:
             - absent
             - present
@@ -119,6 +128,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -364,7 +374,7 @@ def create_network_security_group_dict(nsg):
 
 class AzureRMSecurityGroup(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             default_rules=dict(type='list'),
@@ -378,8 +388,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
         )
 
         super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
-                                                   supports_check_mode=True,
-                                                   **kwargs)
+                                                   supports_check_mode=True)
 
         self.default_rules = None
         self.location = None

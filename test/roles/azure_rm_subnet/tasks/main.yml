@@ -141,3 +141,12 @@
     resource_group: "{{ resource_group }}"
     name: secgroupfoo
     state: absent
+
+- name: Remove virtual network
+  azure_rm_virtualnetwork:
+    name: My_Virtual_Network
+    resource_group: "{{ resource_group }}"
+    state: absent
+    log_mode: file
+    debug: "{{ playbook_debug }}"
+  register: output

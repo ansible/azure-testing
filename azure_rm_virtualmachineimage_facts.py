@@ -24,6 +24,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_virtualmachineimage_facts
 
+version_added: "2.1"
+
 short_description: Get virtual machine image facts.
 
 description:
@@ -33,6 +35,7 @@ options:
     name:
         description:
             - Only show results for a specific security group.
+        required: false
     location:
         description:
             - Azure location value (ie. westus, eastus, eastus2, northcentralus, etc.). Supplying only a
@@ -41,15 +44,19 @@ options:
     publisher:
         description:
             - Name of an image publisher. List image offerings associated with a particular publisher.
+        required: false
     offer:
         description:
             - Name of an image offering. Combine with sku to see a list of available image versions.
+        required: false
     sku:
         description:
             - Image offering SKU. Combine with offer to see a list of available versions.
+        required: false
     version:
         description:
             - Specific version number of an image.
+        required: false
 
 extends_documentation_fragment:
     - azure

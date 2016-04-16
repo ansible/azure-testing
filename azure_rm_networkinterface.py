@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_networkinterface
 
+version_added: "2.1"
+
 short_description: Manage Azure network interfaces.
 
 description:
@@ -39,6 +41,7 @@ options:
     name:
         description:
             - Name of the network interface.
+        required: true
     state:
         description:
             - Assert the state of the network interface. Use 'present' to create or update an interface and
@@ -47,22 +50,26 @@ options:
         choices:
             - absent
             - present
+        required: false
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
         default: resource_group location
+        required: false
     virtual_network_name:
         description:
             - Name of an existing virtual network with which the network interface will be associated. Required
               when creating a network interface.
         aliases:
             - virtual_network
+        required: false
     subnet_name:
         description:
             - Name of an existing subnet within the specified virtual network. Required when creating a network
               interface
         aliases:
             - subnet
+        required: false
     os_type:
         description:
             - Determines any rules to be added to a default security group. When creating a network interface, if no
@@ -73,9 +80,11 @@ options:
             - Windows
             - Linux
         default: Linux
+        required: false
     private_ip_address:
         description:
             - Valid IPv4 address that falls within the specified subnet.
+        required: false
     private_ip_allocation_method:
         description:
             - "Specify whether or not the assigned IP address is permanent. NOTE: when creating a network interface
@@ -85,17 +94,20 @@ options:
         choices:
             - Dynamic
             - Static
+        required: false
     public_ip:
         description:
             - When creating a network interface, if no public IP address name is provided a default public IP
               address will be created. Set to false, if you do not want a public IP address automatically created.
         default: true
+        required: false
     public_ip_address_name:
         description:
             - Name of an existing public IP address object to associate with the security group.
         aliases:
             - public_ip_address
             - public_ip_name
+        required: false
     public_ip_allocation_method:
         description:
             - If a public_ip_address_name is not provided, a default public IP address will be created. The allocation
@@ -104,18 +116,21 @@ options:
             - Dynamic
             - Static
         default: Dynamic
+        required: false
     security_group_name:
         description:
             - Name of an existing security group with which to associate the network interface. If not provided, a
               default security group will be created.
         aliases:
             - security_group
+        required: false
     open_ports:
         description:
             - When a default security group is created for a Linux host a rule will be added allowing inbound TCP
               connections to the default SSH port 22, and for a Windows host rules will be added allowing inbound
               access to RDP ports 3389 and 5986. Override the default ports by providing a list of open ports.
         type: list
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -126,6 +141,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -280,7 +296,7 @@ def nic_to_dict(nic):
 
 class AzureRMNetworkInterface(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             resource_group=dict(required=True),
@@ -300,7 +316,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         )
 
         super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                      supports_check_mode=True, **kwargs)
+                                                      supports_check_mode=True)
 
         self.resource_group = None
         self.name = None
@@ -556,27 +572,27 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.log("Fetching public ip address {0}".format(name))
         try:
             public_ip = self.network_client.public_ip_addresses.get(self.resource_group, name)
-            return public_ip
         except Exception, exc:
             self.fail("Error: fetching public ip address {0} - {1}".format(self.name, str(exc)))
+        return public_ip
 
     def get_subnet(self, vnet_name, subnet_name):
         self.log("Fetching subnet {0} in virtual network {1}".format(subnet_name, vnet_name))
         try:
             subnet = self.network_client.subnets.get(self.resource_group, vnet_name, subnet_name)
-            return subnet
         except Exception, exc:
             self.fail("Error: fetching subnet {0} in virtual network {1} - {2}".format(subnet_name,
                                                                                       vnet_name,
                                                                                       str(exc)))
+        return subnet
 
     def get_security_group(self, name):
         self.log("Fetching security group {0}".format(name))
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, name)
-            return nsg
         except Exception, exc:
             self.fail("Error: fetching network security group {0} - {1}.".format(name, str(exc)))
+        return nsg
 
 
 def main():

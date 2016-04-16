@@ -25,6 +25,8 @@ module: azure_rm_storageblob
 
 short_description: Manage blob containers and blob objects.
 
+version_added: "2.1"
+
 description:
     - Create, update and delete blob containers and blob objects. Use to upload a file and store it as a blob object,
       or download a blob object to a file.
@@ -54,28 +56,35 @@ options:
     cache_control:
         description:
             - Set the blob cache-control header.
+        required: false
     content_disposition:
         description:
             - Set the blob content-disposition header.
+        required: false
     content_encoding:
         description:
             - Set the blob encoding header.
+        required: false
     content_language:
         description:
             - Set the blob content-language header.
+        required: false
     content_md5:
         description:
             - Set the blob md5 hash value.
+        required: false
     dest:
         description:
             - Destination file path. Use with state 'present' to download a blob.
         aliases:
             - destination
+        required: false
     force:
         description:
             - Overwrite existing blob or file when uploading or downloading. Force deletion of a container
               that contains blobs.
         default: false
+        required: false
     resource_group:
         description:
             - Name of the resource group to use.
@@ -85,6 +94,7 @@ options:
             - Source file path. Use with state 'present' to upload a blob.
         aliases:
             - source
+        required: false
     state:
         description:
             - Assert the state of a container or blob.
@@ -97,6 +107,7 @@ options:
               to download. If a blob (uploading) or a file (downloading) already exists, it will not be overwritten
               unless the force parameter is true.
         default: present
+        required: false
         choices:
             - absent
             - present
@@ -104,6 +115,7 @@ options:
         description:
             - Determine a container's level of public access. By default containers are private. Can only be set at
               time of container creation.
+        required: false
         choices:
             - container
             - blob
@@ -116,6 +128,7 @@ options:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
+        required: false
         default: false
 
 extends_documentation_fragment:
@@ -207,7 +220,7 @@ NAME_PATTERN = re.compile(r"^(?!-)(?!.*--)[a-z0-9\-]+$")
 
 class AzureRMStorageBlob(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             storage_account_name=dict(required=True, type='str', aliases=['account_name']),
@@ -232,8 +245,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
                                                  supports_check_mode=True,
                                                  mutually_exclusive=mutually_exclusive,
-                                                 supports_tags=True,
-                                                 **kwargs)
+                                                 supports_tags=True)
 
         self.blob_client = None
         self.blob_details = None

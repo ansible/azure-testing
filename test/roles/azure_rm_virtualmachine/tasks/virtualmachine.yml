@@ -91,7 +91,7 @@
 
 - assert:
       that:
-          - output.results.powerstate == 'running'
+          - "output.results.powerstate in ['starting', 'running']"
           - output.changed
 
 - name: Deallocate the virtual machine

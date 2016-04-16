@@ -119,7 +119,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results.powerstate != 'running'
+      that: "output.results.powerstate not in ['starting', 'running']"
 
 - name: Power On
   azure_rm_virtualmachine:
@@ -134,4 +134,4 @@
   when: playbook_debug
 
 - assert:
-      that: output.results.powerstate == 'running'
+      that: "output.results.powerstate in ['starting', 'running']"

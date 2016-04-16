@@ -22,6 +22,9 @@
 DOCUMENTATION = '''
 ---
 module: azure_rm_subnet
+
+version_added: "2.1"
+
 short_description: Manage Azure subnets.
 
 description:
@@ -48,6 +51,7 @@ options:
     security_group_name:
         description:
             - Name of an existing security group with which to associate the subnet.
+        required: false
         aliases:
             - security_group
     state:
@@ -141,7 +145,7 @@ def subnet_to_dict(subnet):
 
 class AzureRMSubnet(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             resource_group=dict(required=True),
@@ -158,8 +162,7 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         super(AzureRMSubnet, self).__init__(self.module_arg_spec,
                                             supports_check_mode=True,
-                                            required_if=required_if,
-                                            **kwargs)
+                                            required_if=required_if)
 
         self.results = dict(
             changed=False,

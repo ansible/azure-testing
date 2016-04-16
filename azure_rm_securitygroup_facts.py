@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_securitygroup_facts
 
+version_added: "2.1"
+
 short_description: Get security group facts.
 
 description:
@@ -32,14 +34,15 @@ options:
     name:
         description:
             - Only show results for a specific security group.
+        required: false
     resource_group:
         description:
             - Name of the resource group to use.
         required: true
     tags:
         description:
-            - Limit results by tag. Format tags as 'key' or 'key:value'.
-        type: list
+            - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -210,7 +213,7 @@ AZURE_OBJECT_CLASS = 'NetworkSecurityGroup'
 
 class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         self.module_arg_spec = dict(
             name=dict(type='str'),
@@ -220,8 +223,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
         super(AzureRMSecurityGroupFacts, self).__init__(self.module_arg_spec,
                                                         supports_tags=False,
-                                                        facts_module=True,
-                                                        **kwargs)
+                                                        facts_module=True)
         self.results = dict(
             changed=False,
             check_mode=self.check_mode,
@@ -253,7 +255,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         except CloudError:
             pass
 
-        if item and self.has_facts(item.tags, self.tags):
+        if item and self.has_tags(item.tags, self.tags):
             result = [self.serialize_obj(item, AZURE_OBJECT_CLASS)]
 
         return result

@@ -23,6 +23,8 @@ DOCUMENTATION = '''
 ---
 module: azure_rm_resourcegroup
 
+version_added: "2.1"
+
 short_description: Manage Azure resource groups.
 
 description:
@@ -34,10 +36,12 @@ options:
             - Remove a resource group and all associated resources. Use with state 'absent' to delete a resource
               group that contains resources.
         default: false
+        required: false
     location:
         description:
             - Azure location for the resource group. Required when creating a new resource group. Cannot
               be changed once resource group is created.
+        required: false
     name:
         description:
             - Name of the resource group.
@@ -51,6 +55,7 @@ options:
         choices:
             - absent
             - present
+        required: false
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -61,6 +66,7 @@ options:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
               the object's metadata.
         default: false
+        required: false
 
 extends_documentation_fragment:
     - azure
@@ -128,7 +134,7 @@ def resource_group_to_dict(rg):
 
 class AzureRMResourceGroup(AzureRMModuleBase):
     
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.module_arg_spec = dict(
             name=dict(type='str', required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
@@ -137,8 +143,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         )
         super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
                                                    supports_check_mode=True,
-                                                   supports_tags=True,
-                                                   **kwargs)
+                                                   supports_tags=True)
 
         self.name = None
         self.state = None
