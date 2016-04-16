@@ -21,13 +21,11 @@
 
 import ConfigParser
 import json
-import logging
 import os
 import re
 import sys
 import copy
 
-from logging import Handler, NOTSET
 from os.path import expanduser
 from ansible.module_utils.basic import *
 
@@ -37,10 +35,6 @@ AZURE_COMMON_ARGS = dict(
     client_id=dict(type='str', no_log=True),
     secret=dict(type='str', no_log=True),
     tenant=dict(type='str', no_log=True),
-    log_path=dict(type='str', default='azure_rm.log'),
-    log_mode=dict(type='str', choices=['stderr', 'file', 'syslog'], default='syslog'),
-    filter_logger=dict(type='bool', default=True),
-    debug=dict(type='bool', default=False),
 )
 
 AZURE_CREDENTIAL_ENV_MAPPING = dict(
@@ -112,8 +106,6 @@ class AzureRMModuleBase(object):
                  required_one_of=None, add_file_common_args=False, supports_check_mode=False,
                  required_if=None, supports_tags=True, facts_module=False):
 
-        self._logger = logging.getLogger(self.__class__.__name__)
-
         merged_arg_spec = dict()
         merged_arg_spec.update(AZURE_COMMON_ARGS)
         if supports_tags:
@@ -151,25 +143,6 @@ class AzureRMModuleBase(object):
         self.check_mode = self.module.check_mode
         self.facts_module = facts_module
 
-        # configure logging
-        self._log_mode = self.module.params.get('log_mode')
-        self._filter_logger = self.module.params.get('filter_logger')
-        self.debug = self._logger.debug
-
-        if self._log_mode == 'syslog':
-            handler = AzureSysLogHandler(level=logging.DEBUG, module=self.module)
-            self._logger.addHandler(handler)
-            logging.basicConfig(level=logging.DEBUG)
-        elif self._log_mode == 'file':
-            self._log_path = self.module.params.get('log_path')
-            logging.basicConfig(level=logging.DEBUG, filename=self._log_path)
-        elif self._log_mode == 'stderr':
-            logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
-
-        if self._filter_logger:
-            for h in logging.root.handlers:
-                h.addFilter(logging.Filter(name=self._logger.name))
-
         # authenticate
         self.credentials = self._get_credentials(self.module.params)
         if not self.credentials:
@@ -197,6 +170,12 @@ class AzureRMModuleBase(object):
         if self.module.params.get('tags'):
             self.validate_tags(self.module.params['tags'])
 
+        res = self.exec_module(**self.module.params)
+        self.module.exit_json(**res)
+
+    def exec_module(self, **kwargs):
+        self.fail("Error: {0} failed to implement exec_module method.".format(self.__class__.__name__))
+
     def fail(self, msg):
         '''
         Shortcut for calling module.fail()
@@ -207,17 +186,12 @@ class AzureRMModuleBase(object):
         self.module.fail_json(msg=msg)
 
     def log(self, msg, pretty_print=False):
-        '''
-        Call logger.debug with message text or JSON.
-
-        :param msg: string or blob of JSON.
-        :param pretty_print: set to True if msg is JSON.
-        :return: None
-        '''
-        if pretty_print:
-            self.debug(json.dumps(msg, indent=4, sort_keys=True))
-        else:
-            self.debug(msg)
+        pass
+        # log_file = open('azure_rm.log', 'a')
+        # if pretty_print:
+        #     log_file.write(json.dumps(msg, indent=4, sort_keys=True))
+        # else:
+        #     log_file.write(msg + u'\n')
 
     def validate_tags(self, tags):
         '''
@@ -229,7 +203,7 @@ class AzureRMModuleBase(object):
         if not self.facts_module:
             if not isinstance(tags, dict):
                 self.fail("Tags must be a dictionary of string:string values.")
-            for key, value in tags.iteritems():
+            for key, value in tags.items():
                 if not isinstance(value, str):
                     self.fail("Tags values must be strings. Found {0}:{1}".format(str(key), str(value)))
 
@@ -271,7 +245,7 @@ class AzureRMModuleBase(object):
             new_tags = dict()
         changed = False
         if self.module.params.get('tags'):
-            for key, value in self.module.params['tags'].iteritems():
+            for key, value in self.module.params['tags'].items():
                 if not (new_tags.get(key) and new_tags[key] == value):
                     changed = True
                     new_tags[key] = value
@@ -330,15 +304,6 @@ class AzureRMModuleBase(object):
             result = True
         return result
 
-    def exec_module(self):
-        '''
-        Execute module implementation.
-
-        :return: None
-        '''
-        res = self.exec_module_impl(**self.module.params)
-        self.module.exit_json(**res)
-
     def get_resource_group(self, resource_group):
         '''
         Fetch a resource group.
@@ -354,8 +319,7 @@ class AzureRMModuleBase(object):
             self.fail("Error retrieving resource group {0} - {1}".format(resource_group, str(exc)))
 
     def _get_profile(self, profile="default"):
-        path = expanduser("~")
-        path += "/.azure/credentials"
+        path = expanduser("~/.azure/credentials")
         try:
             config = ConfigParser.ConfigParser()
             config.read(path)
@@ -376,7 +340,7 @@ class AzureRMModuleBase(object):
 
     def _get_env_credentials(self):
         env_credentials = dict()
-        for attribute, env_variable in AZURE_CREDENTIAL_ENV_MAPPING.iteritems():
+        for attribute, env_variable in AZURE_CREDENTIAL_ENV_MAPPING.items():
             env_credentials[attribute] = os.environ.get(env_variable, None)
 
         if env_credentials['profile'] is not None:
@@ -395,7 +359,7 @@ class AzureRMModuleBase(object):
         self.log('Getting credentials')
 
         arg_credentials = dict()
-        for attribute, env_variable in AZURE_CREDENTIAL_ENV_MAPPING.iteritems():
+        for attribute, env_variable in AZURE_CREDENTIAL_ENV_MAPPING.items():
             arg_credentials[attribute] = params.get(attribute, None)
 
         # try module params
@@ -448,7 +412,7 @@ class AzureRMModuleBase(object):
             return poller.result()
         except Exception, exc:
             self.log(str(exc))
-            raise Exception(str(exc))
+            raise
 
     def check_provisioning_state(self, azure_object, requested_state='present'):
         '''
@@ -622,7 +586,7 @@ class AzureRMModuleBase(object):
 
     @property
     def storage_client(self):
-        self.log('Creating storage client...')
+        self.log('Getting storage client...')
         if not self._storage_client:
             self._storage_client = StorageManagementClient(
                 StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id))
@@ -654,14 +618,3 @@ class AzureRMModuleBase(object):
                 ComputeManagementClientConfiguration(self.azure_credentials, self.subscription_id))
             self._register('Microsoft.Compute')
         return self._compute_client
-
-
-class AzureSysLogHandler(Handler):
-
-    def __init__(self, level=NOTSET, module=None):
-        self.module = module
-        super(AzureSysLogHandler, self).__init__(level)
-
-    def emit(self, record):
-        log_entry = self.format(record)
-        self.module.debug(log_entry)

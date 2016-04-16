@@ -205,13 +205,13 @@ EXAMPLE_OUTPUT = '''
         },
         "enable_ip_forwarding": false,
         "etag": "W/\"be115a43-2148-4545-a324-f33ad444c926\"",
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/nic003",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/nic003",
         "ip_configuration": {
             "name": "default",
             "private_ip_address": "10.1.0.10",
             "private_ip_allocation_method": "Static",
             "public_ip_address": {
-                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/publicip001",
+                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/publicip001",
                 "name": "publicip001"
             },
             "subnet": {}
@@ -315,9 +315,6 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             public_ip_allocation_method=dict(type='str', choices=['Dynamic', 'Static'], default='Dynamic'),
         )
 
-        super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                      supports_check_mode=True)
-
         self.resource_group = None
         self.name = None
         self.location = None
@@ -337,14 +334,18 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
-            results=dict()
+            results=dict(),
         )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
+                                                      supports_check_mode=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         results = dict()
         changed = False
@@ -538,13 +539,13 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             elif self.state == 'absent':
                 self.log('Deleting network interface {0}'.format(self.name))
                 self.delete_nic()
-    
+
         return self.results
 
     def create_or_update_nic(self, nic):
         try:
             poller = self.network_client.network_interfaces.create_or_update(self.resource_group, self.name, nic)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating or updating network interface {0} - {1}".format(self.name, str(exc)))
         new_nic = self.get_poller_result(poller)
         self.log("new_nic:")
@@ -561,7 +562,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
     def delete_nic(self):
         try:
             poller = self.network_client.network_interfaces.delete(self.resource_group, self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error deleting network interface {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # Delete doesn't return anything. If we get this far, assume success
@@ -572,7 +573,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.log("Fetching public ip address {0}".format(name))
         try:
             public_ip = self.network_client.public_ip_addresses.get(self.resource_group, name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error: fetching public ip address {0} - {1}".format(self.name, str(exc)))
         return public_ip
 
@@ -580,7 +581,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.log("Fetching subnet {0} in virtual network {1}".format(subnet_name, vnet_name))
         try:
             subnet = self.network_client.subnets.get(self.resource_group, vnet_name, subnet_name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error: fetching subnet {0} in virtual network {1} - {2}".format(subnet_name,
                                                                                       vnet_name,
                                                                                       str(exc)))
@@ -590,13 +591,13 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
         self.log("Fetching security group {0}".format(name))
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error: fetching network security group {0} - {1}.".format(name, str(exc)))
         return nsg
 
 
 def main():
-    AzureRMNetworkInterface().exec_module()
+    AzureRMNetworkInterface()
 
 if __name__ == '__main__':
     main()

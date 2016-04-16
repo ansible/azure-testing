@@ -8,8 +8,6 @@
       resource_group: "{{ resource_group }}"
       name: testing01
       state:  absent
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -24,8 +22,6 @@
       tags:
           testing: testing
           delete: on-exit
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -47,8 +43,6 @@
       tags:
           testing: testing
           delete: on-exit
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -65,8 +59,6 @@
           testing: testing
           delete: never
           foo: bar
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -96,8 +88,6 @@
       resource_group: "{{ resource_group }}"
       name: testing01
       purge_tags: yes
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -135,8 +125,6 @@
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state:  absent
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   with_items: "{{ output.results }}"
 
 - name: Gather facts for all public ips

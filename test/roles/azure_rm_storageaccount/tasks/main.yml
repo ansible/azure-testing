@@ -19,8 +19,6 @@
        resource_group: "{{ resource_group }}" 
        name: teststorageacct001
        state: absent
-       debug: "{{ playbook_debug }}"
-       log_mode: file 
    register: output
 
  - debug: var=output
@@ -31,8 +29,6 @@
        resource_group: "{{ resource_group }}" 
        name: teststorageacct001
        account_type: Standard_LRS
-       debug: "{{ playbook_debug }}" 
-       log_mode: file
        tags:
            test: test
            galaxy: galaxy
@@ -83,8 +79,6 @@
        custom_domain:
            name: "ansible.com"
            use_sub_domain: no  
-       debug: "{{ playbook_debug }}" 
-       log_mode: file
    register: change_account
    ignore_errors: yes
 
@@ -99,8 +93,6 @@
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}"
        name: teststorageacct001
-       debug: "{{ playbook_debug }}"
-       log_mode: file
        tags:
            testing: testing
            delete: never
@@ -119,8 +111,6 @@
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}"
        name: teststorageacct001
-       debug: "{{ playbook_debug }}"
-       log_mode: file
        tags:
            testing: testing
            delete: never
@@ -166,8 +156,6 @@
        resource_group: "{{ resource_group }}" 
        name: teststorageacct001
        state: absent
-       debug: "{{ playbook_debug }}" 
-       log_mode: file
    register: output
 
  - debug: var=output

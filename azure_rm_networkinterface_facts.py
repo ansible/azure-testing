@@ -95,10 +95,6 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
             tags=dict(type='list')
         )
 
-        super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
-                                                           supports_tags=False,
-                                                           facts_module=True
-                                                           )
         self.results = dict(
             changed=False,
             results=[]
@@ -108,7 +104,12 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.resource_group = None
         self.tags = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
+                                                           supports_tags=False,
+                                                           facts_module=True
+                                                           )
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
@@ -143,7 +144,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.log('List for resource group')
         try:
             response = self.network_client.network_interfaces.list(self.resource_group)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error listing by resource group {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
@@ -156,7 +157,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.log('List all')
         try:
             response = self.network_client.network_interfaces.list_all()
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error listing all - {1}".format(self.resource_group, str(exc)))
 
         results = []
@@ -167,7 +168,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
 
 def main():
-    AzureRMNetworkInterfaceFacts().exec_module()
+    AzureRMNetworkInterfaceFacts()
 
 if __name__ == '__main__':
     main()

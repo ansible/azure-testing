@@ -101,10 +101,10 @@ EXAMPLE_OUTPUT = '''
     "check_mode": false,
     "results": {
         "address_prefix": "10.1.0.0/16",
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/My_Virtual_Network/subnets/foobar",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/My_Virtual_Network/subnets/foobar",
         "name": "foobar",
         "network_security_group": {
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroupfoo",
+            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroupfoo",
             "name": "secgroupfoo"
         },
         "provisioning_state": "Succeeded"
@@ -160,13 +160,8 @@ class AzureRMSubnet(AzureRMModuleBase):
             ('state', 'present', ['address_prefix_cidr'])
         ]
 
-        super(AzureRMSubnet, self).__init__(self.module_arg_spec,
-                                            supports_check_mode=True,
-                                            required_if=required_if)
-
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results={}
         )
 
@@ -177,13 +172,19 @@ class AzureRMSubnet(AzureRMModuleBase):
         self.address_prefix_cidr = None
         self.security_group_name = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMSubnet, self).__init__(self.module_arg_spec,
+                                            supports_check_mode=True,
+                                            required_if=required_if)
+
+    def exec_module(self, **kwargs):
 
         nsg = None
         subnet = None
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must begin with a letter or number, end with a letter, number "
@@ -283,7 +284,7 @@ class AzureRMSubnet(AzureRMModuleBase):
             poller = self.network_client.subnets.delete(self.resource_group,
                                                         self.virtual_network_name,
                                                         self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error deleting subnet {0} - {1}".format(self.name, str(exc)))
 
         return self.get_poller_result(poller)
@@ -293,13 +294,13 @@ class AzureRMSubnet(AzureRMModuleBase):
         nsg = None
         try:
             nsg = self.network_client.network_security_groups.get(self.resource_group, name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error: fetching network security group {0} - {1}.".format(name, str(exc)))
         return nsg
 
 
 def main():
-    AzureRMSubnet().exec_module()
+    AzureRMSubnet()
 
 if __name__ == '__main__':
     main()

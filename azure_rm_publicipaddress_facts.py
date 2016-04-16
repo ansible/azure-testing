@@ -72,7 +72,7 @@ EXAMPLE_OUTPUT = '''
         "results": [
             {
                 "etag": "W/\"a31a6d7d-cb18-40a5-b16d-9f4a36c1b18a\"",
-                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
+                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
                 "location": "eastus2",
                 "name": "pip2001",
                 "properties": {
@@ -112,12 +112,8 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
             tags=dict(type='list')
         )
 
-        super(AzureRMPublicIPFacts, self).__init__(self.module_arg_spec,
-                                                   supports_tags=False,
-                                                   facts_module=True)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=[]
         )
 
@@ -125,7 +121,11 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         self.resource_group = None
         self.tags = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMPublicIPFacts, self).__init__(self.module_arg_spec,
+                                                   supports_tags=False,
+                                                   facts_module=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
@@ -161,7 +161,7 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         self.log('List items in resource groups')
         try:
             response = self.network_client.public_ip_addresses.list(self.resource_group)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Error listing items in resource groups {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
@@ -174,7 +174,7 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.network_client.public_ip_addresses.list_all()
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
@@ -186,7 +186,7 @@ class AzureRMPublicIPFacts(AzureRMModuleBase):
 
 
 def main():
-    AzureRMPublicIPFacts().exec_module()
+    AzureRMPublicIPFacts()
 
 if __name__ == '__main__':
     main()

@@ -98,7 +98,7 @@ EXAMPLE_OUTPUT = '''
     "check_mode": false,
     "contains_resources": true,
     "results": {
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing",
         "location": "westus",
         "name": "Testing",
         "provisioning_state": "Succeeded",
@@ -141,9 +141,6 @@ class AzureRMResourceGroup(AzureRMModuleBase):
             location=dict(type='str'),
             force=dict(type='bool', default=False)
         )
-        super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
-                                                   supports_check_mode=True,
-                                                   supports_tags=True)
 
         self.name = None
         self.state = None
@@ -154,14 +151,19 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.results = dict(
             changed=False,
             contains_resources=False,
-            check_mode=self.check_mode,
-            results=dict()
+            results=dict(),
         )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
+                                                   supports_check_mode=True,
+                                                   supports_tags=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         results = dict()
         changed = False
@@ -232,14 +234,14 @@ class AzureRMResourceGroup(AzureRMModuleBase):
     def create_or_update_resource_group(self, params):
         try:
             result = self.rm_client.resource_groups.create_or_update(self.name, params)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating or updating resource group {0} - {1}".format(self.name, str(exc)))
         return resource_group_to_dict(result)
 
     def delete_resource_group(self):
         try:
             poller = self.rm_client.resource_groups.delete(self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error delete resource group {0} - {1}".format(self.name, str(exc)))
 
         self.get_poller_result(poller)
@@ -252,7 +254,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         found = False
         try:
             response = self.rm_client.resource_groups.list_resources(self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error checking for resource existence in {0} - {1}".format(self.name, str(exc)))
         for item in response:
             found = True
@@ -262,13 +264,13 @@ class AzureRMResourceGroup(AzureRMModuleBase):
     def name_exists(self):
         try:
             exists = self.rm_client.resource_groups.check_existence(self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error checking for existence of name {0} - {1}".format(self.name, str(exc)))
         return exists
 
 
 def main():
-    AzureRMResourceGroup().exec_module()
+    AzureRMResourceGroup()
 
 if __name__ == '__main__':
     main()

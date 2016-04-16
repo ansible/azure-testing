@@ -69,7 +69,7 @@ EXAMPLE_OUTPUT = '''
     "changed": false,
     "results": [
         {
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing",
+            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing",
             "location": "westus",
             "name": "Testing",
             "properties": {
@@ -107,9 +107,6 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
             tags=dict(type='list')
         )
 
-        super(AzureRMResourceGroupFacts, self).__init__(self.module_arg_spec,
-                                                        supports_tags=False,
-                                                        facts_module=True)
         self.results = dict(
             changed=False,
             results=[]
@@ -118,7 +115,11 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
         self.name = None
         self.tags = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMResourceGroupFacts, self).__init__(self.module_arg_spec,
+                                                        supports_tags=False,
+                                                        facts_module=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
@@ -149,7 +150,7 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.rm_client.resource_groups.list()
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Failed to list all items - {1}".format(str(exc)))
 
         results = []
@@ -160,7 +161,7 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
 
 
 def main():
-    AzureRMResourceGroupFacts().exec_module()
+    AzureRMResourceGroupFacts()
 
 if __name__ == '__main__':
     main()

@@ -76,7 +76,7 @@ EXAMPLE_OUTPUT = '''
     "results": [
         {
             "etag": "W/\"532ba1be-ae71-40f2-9232-3b1d9cf5e37e\"",
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet2001",
+            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet2001",
             "location": "eastus2",
             "name": "vnet2001",
             "properties": {
@@ -120,12 +120,8 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
             tags=dict(type='list'),
         )
 
-        super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
-                                                           supports_tags=False,
-                                                           facts_module=True)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=[]
         )
 
@@ -133,7 +129,11 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.resource_group = None
         self.tags = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMNetworkInterfaceFacts, self).__init__(self.module_arg_spec,
+                                                           supports_tags=False,
+                                                           facts_module=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
@@ -164,7 +164,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.log('List items for resource group')
         try:
             response = self.network_client.virtual_networks.list(self.resource_group)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Failed to list for resource group {0} - {1}".format(self.resource_group, str(exc)))
 
         results = []
@@ -177,7 +177,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         self.log('List all for items')
         try:
             response = self.network_client.virtual_networks.list_all()
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Failed to list all items - {0}".format(str(exc)))
 
         results = []
@@ -187,7 +187,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
         return results
 
 def main():
-    AzureRMNetworkInterfaceFacts().exec_module()
+    AzureRMNetworkInterfaceFacts()
 
 if __name__ == '__main__':
     main()

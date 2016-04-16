@@ -173,9 +173,6 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
             domain_name=dict(type='str', aliases=['domain_name_label']),
         )
 
-        super(AzureRMPublicIPAddress, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                     supports_check_mode=True)
-
         self.resource_group = None
         self.name = None
         self.location = None
@@ -186,14 +183,18 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results={}
         )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMPublicIPAddress, self).__init__(derived_arg_spec=self.module_arg_spec,
+                                                     supports_check_mode=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         results = dict()
         changed = False
@@ -279,7 +280,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
     def create_or_update_pip(self, pip):
         try:
             poller = self.network_client.public_ip_addresses.create_or_update(self.resource_group, self.name, pip)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error creating or updating {0} - {1}".format(self.name, str(exc)))
         pip = self.get_poller_result(poller)
         return pip_to_dict(pip)
@@ -287,7 +288,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
     def delete_pip(self):
         try:
             poller = self.network_client.public_ip_addresses.delete(self.resource_group, self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error deleting {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # Delete returns nada. If we get here, assume that all is well.
@@ -296,7 +297,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
 
 
 def main():
-    AzureRMPublicIPAddress().exec_module()
+    AzureRMPublicIPAddress()
 
 if __name__ == '__main__':
     main()

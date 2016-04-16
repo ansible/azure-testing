@@ -72,14 +72,14 @@ EXAMPLE_OUTPUT = '''
     "results": [
         {
             "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001",
+            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001",
             "location": "eastus2",
             "name": "secgroup001",
             "properties": {
                 "defaultSecurityRules": [
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowVnetInBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowVnetInBound",
                         "name": "AllowVnetInBound",
                         "properties": {
                             "access": "Allow",
@@ -96,7 +96,7 @@ EXAMPLE_OUTPUT = '''
                     },
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowAzureLoadBalancerInBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowAzureLoadBalancerInBound",
                         "name": "AllowAzureLoadBalancerInBound",
                         "properties": {
                             "access": "Allow",
@@ -113,7 +113,7 @@ EXAMPLE_OUTPUT = '''
                     },
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/DenyAllInBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/DenyAllInBound",
                         "name": "DenyAllInBound",
                         "properties": {
                             "access": "Deny",
@@ -130,7 +130,7 @@ EXAMPLE_OUTPUT = '''
                     },
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowVnetOutBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowVnetOutBound",
                         "name": "AllowVnetOutBound",
                         "properties": {
                             "access": "Allow",
@@ -147,7 +147,7 @@ EXAMPLE_OUTPUT = '''
                     },
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowInternetOutBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/AllowInternetOutBound",
                         "name": "AllowInternetOutBound",
                         "properties": {
                             "access": "Allow",
@@ -164,7 +164,7 @@ EXAMPLE_OUTPUT = '''
                     },
                     {
                         "etag": "W/\"d036f4d7-d977-429a-a8c6-879bc2523399\"",
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/DenyAllOutBound",
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001/defaultSecurityRules/DenyAllOutBound",
                         "name": "DenyAllOutBound",
                         "properties": {
                             "access": "Deny",
@@ -182,7 +182,7 @@ EXAMPLE_OUTPUT = '''
                 ],
                 "networkInterfaces": [
                     {
-                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/nic004"
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/nic004"
                     }
                 ],
                 "provisioningState": "Succeeded",
@@ -221,12 +221,8 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
             tags=dict(type='list'),
         )
 
-        super(AzureRMSecurityGroupFacts, self).__init__(self.module_arg_spec,
-                                                        supports_tags=False,
-                                                        facts_module=True)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=[]
         )
 
@@ -234,7 +230,11 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         self.resource_group = None
         self.tags = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMSecurityGroupFacts, self).__init__(self.module_arg_spec,
+                                                        supports_tags=False,
+                                                        facts_module=True)
+
+    def exec_module(self, **kwargs):
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
 
@@ -264,7 +264,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
         self.log('List all items')
         try:
             response = self.network_client.network_security_groups.list(self.resource_group)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error listing all items - {0}".format(str(exc)))
 
         results = []
@@ -275,7 +275,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
 
 def main():
-    AzureRMSecurityGroupFacts().exec_module()
+    AzureRMSecurityGroupFacts()
 
 if __name__ == '__main__':
     main()

@@ -387,9 +387,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             state=dict(default='present', choices=['present', 'absent']),
         )
 
-        super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
-                                                   supports_check_mode=True)
-
         self.default_rules = None
         self.location = None
         self.name = None
@@ -402,14 +399,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode,
             results=()
         )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
+                                                   supports_check_mode=True)
+
+    def exec_module(self, **kwargs):
         
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         changed = False
         results = dict()
@@ -426,14 +427,14 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             for rule in self.rules:
                 try:
                     validate_rule(rule)
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Error validating rule {0} - {1}".format(rule, str(exc)))
 
         if self.default_rules:
             for rule in self.default_rules:
                 try:
                     validate_rule(rule, 'default')
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Error validating default rule {0} - {1}".format(rule, str(exc)))
 
         try:
@@ -510,7 +511,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         elif self.state == 'present' and changed:
             # create the security group
-            self.debug("Create security group {0}".format(self.name))
+            self.log("Create security group {0}".format(self.name))
 
             if not self.location:
                 self.fail("Parameter error: location required when creating a security group.")
@@ -562,7 +563,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
                                                                                   self.name,
                                                                                   parameters)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Error creating/upating security group {0} - {1}".format(self.name, str(exc)))
 
         return create_network_security_group_dict(self.get_poller_result(poller))
@@ -570,13 +571,13 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
     def delete(self):
         try:
             poller = self.network_client.network_security_groups.delete(self.resource_group, self.name)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             raise Exception("Error deleting security group {0} - {1}".format(self.name, str(exc)))
         return self.get_poller_result(poller)
 
 
 def main():
-    AzureRMSecurityGroup().exec_module()
+    AzureRMSecurityGroup()
 
 if __name__ == '__main__':
     main()

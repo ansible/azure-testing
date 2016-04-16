@@ -136,7 +136,7 @@ EXAMPLE_OUTPUT = '''
             "127.0.0.3"
         ],
         "etag": "W/\"0712e87c-f02f-4bb3-8b9e-2da0390a3886\"",
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/my_test_network",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/my_test_network",
         "location": "eastus",
         "name": "my_test_network",
         "provisioning_state": "Succeeded",
@@ -211,10 +211,6 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
             ('purge_address_prefixes', True, ['address_prefixes_cidr'])
         ]
 
-        super(AzureRMVirtualNetwork, self).__init__(self.module_arg_spec,
-                                                    mutually_exclusive=mutually_exclusive,
-                                                    required_if=required_if,
-                                                    supports_check_mode=True)
         self.resource_group = None
         self.name = None
         self.state = None
@@ -226,14 +222,20 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
         self.results=dict(
             changed=False,
-            check_mode=self.check_mode,
             results={}
         )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMVirtualNetwork, self).__init__(self.module_arg_spec,
+                                                    mutually_exclusive=mutually_exclusive,
+                                                    required_if=required_if,
+                                                    supports_check_mode=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
@@ -368,7 +370,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
     def delete_virtual_network(self):
         try:
             poller = self.network_client.virtual_networks.delete(self.resource_group, self.name)
-        except Exception, exc:
+        except Exception as exc:
             self.fail("Error deleting virtual network {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # The poller does not actually return anything. If we got this far, the we'll assume
@@ -378,7 +380,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
 
 def main():
-    AzureRMVirtualNetwork().exec_module()
+    AzureRMVirtualNetwork()
 
 if __name__ == '__main__':
     main()

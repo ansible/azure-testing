@@ -23,8 +23,6 @@
       testing: testing
       delete: on-exit
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -36,8 +34,6 @@
     name: foobar
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -49,8 +45,6 @@
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0/24"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
   ignore_errors: yes
 
@@ -66,8 +60,6 @@
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     address_prefix_cidr: "10.1.0.0/24"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -82,8 +74,6 @@
     resource_group: "{{ resource_group }}"
     tags:
       testing: testing
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -99,8 +89,6 @@
     tags:
        testing: testing
        delete: on-fini
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -116,8 +104,6 @@
     tags:
        testing: testing
        delete: on-fini
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -132,8 +118,6 @@
     name: foobar
     virtual_network_name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - name: Remove security group
@@ -147,6 +131,4 @@
     name: My_Virtual_Network
     resource_group: "{{ resource_group }}"
     state: absent
-    log_mode: file
-    debug: "{{ playbook_debug }}"
   register: output

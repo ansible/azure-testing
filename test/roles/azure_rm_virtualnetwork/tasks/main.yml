@@ -2,8 +2,6 @@
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
     location: westus
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -14,8 +12,6 @@
     name: my_test_network
     resource_group: "{{ resource_group }}"
     state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -34,8 +30,6 @@
       testing: testing
       delete: on-exit
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -100,8 +94,6 @@
       testing: testing
       delete: on-exit
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -118,8 +110,6 @@
       delete: never
       foo: bar
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -135,8 +125,6 @@
       testing: 'always'
     purge_tags: yes
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -152,8 +140,6 @@
     name: my_test_network
     purge_address_prefixes: true
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
   ignore_errors: yes
 
@@ -169,8 +155,6 @@
     address_prefixes_cidr: 10.1.0.0/16
     purge_address_prefixes: true
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -188,8 +172,6 @@
     name: my_test_network
     purge_dns_servers: true
     resource_group: "{{ resource_group }}"
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output
@@ -212,6 +194,4 @@
     name: my_test_network
     resource_group: "{{ resource_group }}"
     state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output

@@ -12,8 +12,6 @@
       name: vnet001
       resource_group: "{{ resource_group }}"
       address_prefixes_cidr: "10.10.0.0/16"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -25,8 +23,6 @@
       resource_group: "{{ resource_group }}"
       virtual_network_name: vnet001
       address_prefix_cidr: "10.10.0.0/24"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -37,8 +33,6 @@
       name: vnet002
       resource_group: "{{ resource_group }}"
       address_prefixes_cidr: "10.20.0.0/16"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -50,8 +44,6 @@
       resource_group: "{{ resource_group }}"
       virtual_network_name: vnet002
       address_prefix_cidr: "10.20.0.0/24"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -99,8 +91,6 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       state: absent
   register: output
 
@@ -111,8 +101,6 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       virtual_network_name: vnet001
       security_group_name: secgroup001
       public_ip_address_name: publicip001
@@ -131,8 +119,6 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       security_group_name: secgroup001
       public_ip_address_name: publicip001
       subnet: subnet001
@@ -151,8 +137,6 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       virtual_network_name: vnet001
       subnet: subnet001
       security_group_name: secgroup001
@@ -166,8 +150,6 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       virtual_network_name: vnet001
       subnet: subnet001
       security_group_name: secgroup001
@@ -184,10 +166,8 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
       private_ip_address: 10.10.0.10
       private_ip_allocation_method: Static
-      log_mode: file
       virtual_network_name: vnet001
       subnet: subnet001
       security_group_name: secgroup001
@@ -212,8 +192,6 @@
       subnet: subnet002
       security_group_name: secgroup002
       public_ip_address_name: publicip002
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -234,8 +212,6 @@
       tags:
           testing: testing
           foo: bar
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -284,8 +260,6 @@
       tags:
           testing: testing
       purge_tags: yes
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -301,8 +275,6 @@
       name: nic003
       resource_group: "{{ resource_group }}"
       purge_tags: yes
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -318,7 +290,6 @@
       name: "{{ item }}"
       resource_group: "{{ resource_group }}"
       state: absent
-      debug: "{{ playbook_debug }}"
   register: output
   with_items:
       - nic004
@@ -350,8 +321,6 @@
   azure_rm_networkinterface:
       name: nic004
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       virtual_network_name: vnet001
       subnet: subnet001
   register: output
@@ -381,8 +350,6 @@
   azure_rm_networkinterface:
       name: nic005
       resource_group: "{{ resource_group }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
       virtual_network_name: vnet001
       subnet: subnet001
       os_type: Windows

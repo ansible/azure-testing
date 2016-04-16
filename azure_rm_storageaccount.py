@@ -120,7 +120,7 @@ EXAMPLE_OUTPUT = '''
     "results": {
         "account_type": "Standard_RAGRS",
         "custom_domain": null,
-        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/clh0003",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/clh0003",
         "location": "eastus2",
         "name": "clh0003",
         "primary_endpoints": {
@@ -185,11 +185,8 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         for key in AccountType:
             self.module_arg_spec['account_type']['choices'].append(getattr(key, 'value'))
 
-        super(AzureRMStorageAccount, self).__init__(self.module_arg_spec,
-                                                    supports_check_mode=True)
         self.results = dict(
             changed=False,
-            check_mode=self.check_mode
         )
 
         self.account_dict = None
@@ -202,10 +199,15 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.tags = None
         self.force = None
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMStorageAccount, self).__init__(self.module_arg_spec,
+                                                    supports_check_mode=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
@@ -338,7 +340,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                         self.storage_client.storage_accounts.update(self.resource_group,
                                                                     self.name,
                                                                     parameters)
-                    except Exception, exc:
+                    except Exception as exc:
                         self.fail("Failed to update account type: {0}".format(str(exc)))
 
         if self.custom_domain:
@@ -353,7 +355,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 parameters = StorageAccountUpdateParameters(custom_domain=new_domain)
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Failed to update custom domain: {0}".format(str(exc)))
 
         update_tags, self.account_dict['tags'] = self.update_tags(self.account_dict['tags'])
@@ -363,7 +365,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 parameters = StorageAccountUpdateParameters(tags=self.account_dict['tags'])
                 try:
                     self.storage_client.storage_accounts.update(self.resource_group, self.name, parameters)
-                except Exception, exc:
+                except Exception as exc:
                     self.fail("Failed to update tags: {0}".format(str(exc)))
 
     def create_account(self):
@@ -430,12 +432,12 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
             keys['key1'] = account_keys.key1
             keys['key2'] = account_keys.key2
-        except AzureHttpError, e:
+        except AzureHttpError as e:
             self.fail("check_for_container:Failed to get account keys: {0}".format(e))
 
         try:
             cloud_storage = CloudStorageAccount(self.name, keys['key1']).create_page_blob_service()
-        except Exception, e:
+        except Exception as e:
             self.fail("check_for_container:Error creating blob service: {0}".format(e))
 
         try:
@@ -450,7 +452,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
 
 def main():
-    AzureRMStorageAccount().exec_module()
+    AzureRMStorageAccount()
 
 if __name__ == '__main__':
     main()

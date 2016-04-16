@@ -242,11 +242,6 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
         mutually_exclusive = [('src', 'dest')]
 
-        super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
-                                                 supports_check_mode=True,
-                                                 mutually_exclusive=mutually_exclusive,
-                                                 supports_tags=True)
-
         self.blob_client = None
         self.blob_details = None
         self.storage_account_name = None
@@ -261,16 +256,24 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         self.state = None
         self.tags = None
         self.public_access = None
-        self.results = dict(changed=False,
-                            check_mode=self.module.check_mode,
-                            actions=[],
-                            container=dict(),
-                            blob=dict())
+        self.results = dict(
+            changed=False,
+            actions=[],
+            container=dict(),
+            blob=dict()
+        )
 
-    def exec_module_impl(self, **kwargs):
+        super(AzureRMStorageBlob, self).__init__(derived_arg_spec=self.module_arg_spec,
+                                                 supports_check_mode=True,
+                                                 mutually_exclusive=mutually_exclusive,
+                                                 supports_tags=True)
+
+    def exec_module(self, **kwargs):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
+
+        self.results['check_mode'] = self.check_mode
 
         if not NAME_PATTERN.match(self.container):
             self.fail("Parameter error: container_name must consist of lowercase letters, "
@@ -383,7 +386,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.create_container(self.container, metadata=tags, public_access=self.public_access)
-            except AzureHttpError, exc:
+            except AzureHttpError as exc:
                 self.fail("Error creating container {0} - {1}".format(self.container, str(exc)))
         self.container_obj = self.get_container()
         self.results['changed'] = True
@@ -406,7 +409,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
             try:
                 self.blob_client.create_blob_from_path(self.container, self.blob, self.src,
                                                        metadata=self.tags, content_settings=content_settings)
-            except AzureHttpError, exc:
+            except AzureHttpError as exc:
                 self.fail("Error creating blob {0} - {1}".format(self.blob, str(exc)))
 
         self.blob_obj = self.get_blob()
@@ -419,7 +422,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.get_blob_to_path(self.container, self.blob, self.dest)
-            except Exception, exc:
+            except Exception as exc:
                 self.fail("Failed to download blob {0}:{1} to {2} - {3}".format(self.container,
                                                                                 self.blob,
                                                                                 self.dest,
@@ -456,8 +459,8 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     try:
                         self.log('Attempting to makedirs {0}'.format(self.dest))
                         os.makddirs(self.dest)
-                    except IOError, exc:
-                        self.fail("Failed to create directory {0} - {1}".format(self.dest, exc))
+                    except IOError as exc:
+                        self.fail("Failed to create directory {0} - {1}".format(self.dest, str(exc)))
                     self.dest += self.blob
             else:
                 # does path exist without basename
@@ -468,8 +471,8 @@ class AzureRMStorageBlob(AzureRMModuleBase):
                     try:
                         self.log('Attempting to makedirs {0}'.format(path))
                         os.makedirs(path)
-                    except IOError, exc:
-                        self.fail("Failed to create directory {0} - {1}".format(path, exc))
+                    except IOError as exc:
+                        self.fail("Failed to create directory {0} - {1}".format(path, str(exc)))
             self.log('Checking final path {0}'.format(self.dest))
             if os.path.isfile(self.dest) and not self.force:
                 # dest already exists and we're not forcing
@@ -481,7 +484,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.delete_container(self.container)
-            except AzureHttpError, exc:
+            except AzureHttpError as exc:
                 self.fail("Error deleting container {0} - {1}".format(self.container, str(exc)))
 
         self.results['changed'] = True
@@ -490,7 +493,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
     def container_has_blobs(self):
         try:
             list_generator = self.blob_client.list_blobs(self.container)
-        except AzureHttpError, exc:
+        except AzureHttpError as exc:
             self.fail("Error list blobs in {0} - {1}".format(self.container, str(exc)))
         if len(list_generator.items) > 0:
             return True
@@ -500,7 +503,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.delete_blob(self.container, self.blob)
-            except AzureHttpError, exc:
+            except AzureHttpError as exc:
                 self.fail("Error deleting blob {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
 
         self.results['changed'] = True
@@ -511,7 +514,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.set_container_metadata(self.container, metadata=tags)
-            except AzureHttpError, exc:
+            except AzureHttpError as exc:
                 self.fail("Error updating container tags {0} - {1}".format(self.container, str(exc)))
         self.container_obj = self.get_container()
         self.results['changed'] = True
@@ -522,8 +525,8 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.set_blob_metadata(self.container, self.blob, metadata=tags)
-            except AzureHttpError, exc:
-                self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, exc))
+            except AzureHttpError as exc:
+                self.fail("Update blob tags {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
         self.results['actions'].append("updated blob {0}:{1} tags.".format(self.container, self.blob))
@@ -558,8 +561,8 @@ class AzureRMStorageBlob(AzureRMModuleBase):
         if not self.check_mode:
             try:
                 self.blob_client.set_blob_properties(self.container, self.blob, content_settings=content_settings)
-            except AzureHttpError, exc:
-                self.fail("Update blob content settings {0}:{1} - {2}".format(self.container, self.blob, exc))
+            except AzureHttpError as exc:
+                self.fail("Update blob content settings {0}:{1} - {2}".format(self.container, self.blob, str(exc)))
 
         self.blob_obj = self.get_blob()
         self.results['changed'] = True
@@ -569,7 +572,7 @@ class AzureRMStorageBlob(AzureRMModuleBase):
 
 
 def main():
-    AzureRMStorageBlob().exec_module()
+    AzureRMStorageBlob()
 
 if __name__ == '__main__':
     main()

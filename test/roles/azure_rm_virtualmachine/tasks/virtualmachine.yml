@@ -20,8 +20,6 @@
       resource_group: "{{ resource_group }}"
       name: testaccount001
       account_type: Standard_LRS
-      debug: "{{ playbook_debug }}"
-      log_mode: file
 
 - name: Create virtual network
   azure_rm_virtualnetwork:
@@ -70,8 +68,6 @@
       os_type: Linux
       network_interfaces: testvm001
       image: "{{ image }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -82,8 +78,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm002
       restart: yes
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -100,8 +94,6 @@
       name: testvm002
       state: stopped
       deallocate: yes
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -117,8 +109,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm002
       state: started
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -143,8 +133,6 @@
       os_type: Linux
       network_interfaces: testvm001
       image: "{{ image }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - assert:

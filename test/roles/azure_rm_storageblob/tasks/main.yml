@@ -9,16 +9,12 @@
     name: testgroup03blobs
     account_type: Standard_LRS
     state: present
-    debug: "{{ playbook_debug }}"
-    log_mode: file
 
 - name: Create container
   azure_rm_storageblob:
     resource_group: "{{ resource_group }}" 
     account_name: testgroup03blobs 
     container_name: my-blobs
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: create_facts
 
 - debug: var=create_facts
@@ -36,9 +32,7 @@
         val1: foo
         val2: bar
     force: yes 
-    debug: "{{ playbook_debug }}"
-    log_mode: file
-  register: upload_facts 
+  register: upload_facts
 
 - debug: var=upload_facts
   when: playbook_debug
@@ -54,9 +48,7 @@
     tags:
         val1: foo
         val2: bar
-    debug: "{{ playbook_debug }}"
-    log_mode: file
-  register: upload_facts 
+  register: upload_facts
 
 - debug: var=upload_facts
   when: playbook_debug
@@ -71,7 +63,6 @@
     container_name: my-blobs
     blob: 'Ratings.png'
     dest: './roles/azure_rm_storageblob/files/Ratings.png'
-    debug: "{{ playbook_debug }}"
   register: download_results
 
 - debug: var=download_results 
@@ -89,8 +80,6 @@
     container_name: my-blobs
     blob: 'Ratings.png'
     dest: '/tmp/Ratings.png'
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: download_results
 
 - assert: 
@@ -106,8 +95,6 @@
     resource_group: "{{ resource_group }}" 
     account_name: testgroup03blobs 
     container_name: my-blobs 
-    debug: "{{ playbook_debug }}"
-    log_mode: file
     state: absent
   register: output
 
@@ -124,9 +111,7 @@
     container_name: my-blobs 
     blob: "Ratings.png"
     state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
-  register: output 
+  register: output
 
 - debug: var=output
   when: playbook_debug
@@ -139,8 +124,6 @@
     resource_group: "{{ resource_group }}" 
     account_name: testgroup03blobs 
     container_name: my-blobs 
-    debug: "{{ playbook_debug }}"
-    log_mode: file
     state: absent
   register: output
 
@@ -156,8 +139,6 @@
     location: "{{ location }}"
     name: testgroup03blobs
     state: absent 
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
 
 - debug: var=output

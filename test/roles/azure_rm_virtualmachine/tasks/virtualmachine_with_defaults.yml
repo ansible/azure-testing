@@ -12,8 +12,6 @@
     resource_group: "{{ resource_group }}"
     name: testvm10
     state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
   when: remove_vm
 
@@ -25,8 +23,6 @@
     resource_group: "{{ resource_group }}"
     name: testvm20
     state: absent
-    debug: "{{ playbook_debug }}"
-    log_mode: file
   register: output
   when: remove_vm
 
@@ -45,8 +41,6 @@
       open_ports:
         - "22-23"
       image: "{{ image }}"
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -70,9 +64,7 @@
       vm_size: Standard_D1
       admin_username: chouseknecht
       image: "{{ image }}"
-      debug: "{{ playbook_debug }}"
       state: present
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -88,9 +80,7 @@
       vm_size: Standard_D1
       admin_username: chouseknecht
       image: "{{ image }}"
-      debug: "{{ playbook_debug }}"
       state: present
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -111,8 +101,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm10
       state: stopped
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
@@ -126,8 +114,6 @@
       resource_group: "{{ resource_group }}"
       name: testvm10
       state: started
-      debug: "{{ playbook_debug }}"
-      log_mode: file
   register: output
 
 - debug: var=output
