@@ -106,11 +106,22 @@ EXAMPLES = '''
         state: absent
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "changed": false,
-    "check_mode": false,
-    "results": {
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample:{
         "dns_settings": {},
         "etag": "W/\"a5e56955-12df-445a-bda4-dc129d22c12f\"",
         "idle_timeout_in_minutes": 4,
@@ -122,7 +133,6 @@ EXAMPLE_OUTPUT = '''
         "tags": {},
         "type": "Microsoft.Network/publicIPAddresses"
     }
-}
 '''
 
 from ansible.module_utils.basic import *
@@ -183,7 +193,7 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results={}
+            results=dict()
         )
 
         super(AzureRMPublicIPAddress, self).__init__(derived_arg_spec=self.module_arg_spec,

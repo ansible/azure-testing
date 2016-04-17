@@ -192,11 +192,22 @@ EXAMPLES = '''
             state: absent
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "changed": true,
-    "check_mode": false,
-    "results": {
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
         "dns_settings": {
             "applied_dns_servers": [],
             "dns_servers": [],
@@ -225,7 +236,6 @@ EXAMPLE_OUTPUT = '''
         "tags": null,
         "type": "Microsoft.Network/networkInterfaces"
     }
-}
 '''
 
 from ansible.module_utils.basic import *

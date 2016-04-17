@@ -94,6 +94,18 @@ EXAMPLES = '''
 
 '''
 
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: []
+'''
 
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *

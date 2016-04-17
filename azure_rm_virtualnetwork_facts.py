@@ -68,32 +68,33 @@ EXAMPLES = '''
         tags:
           - testing
 '''
-
-EXAMPLE_OUTPUT = '''
-{
-    "changed": false,
-    "check_mode": false,
-    "results": [
-        {
-            "etag": "W/\"532ba1be-ae71-40f2-9232-3b1d9cf5e37e\"",
-            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet2001",
-            "location": "eastus2",
-            "name": "vnet2001",
-            "properties": {
-                "addressSpace": {
-                    "addressPrefixes": [
-                        "10.10.0.0/16"
-                    ]
-                },
-                "provisioningState": "Succeeded",
-                "resourceGuid": "a7ba285f-f7e7-4e17-992a-de4d39f28612",
-                "subnets": []
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: [{
+        "etag": "W/\"532ba1be-ae71-40f2-9232-3b1d9cf5e37e\"",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet2001",
+        "location": "eastus2",
+        "name": "vnet2001",
+        "properties": {
+            "addressSpace": {
+                "addressPrefixes": [
+                    "10.10.0.0/16"
+                ]
             },
-            "type": "Microsoft.Network/virtualNetworks"
-        }
-    ]
-}
-
+            "provisioningState": "Succeeded",
+            "resourceGuid": "a7ba285f-f7e7-4e17-992a-de4d39f28612",
+            "subnets": []
+        },
+        "type": "Microsoft.Network/virtualNetworks"
+    }]
 '''
 
 from ansible.module_utils.basic import *

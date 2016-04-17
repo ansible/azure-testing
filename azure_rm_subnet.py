@@ -95,11 +95,22 @@ EXAMPLES = '''
         state: absent
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "changed": false,
-    "check_mode": false,
-    "results": {
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
         "address_prefix": "10.1.0.0/16",
         "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/My_Virtual_Network/subnets/foobar",
         "name": "foobar",
@@ -109,7 +120,6 @@ EXAMPLE_OUTPUT = '''
         },
         "provisioning_state": "Succeeded"
     }
-}
 '''
 
 
@@ -162,7 +172,7 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results={}
+            results=dict()
         )
 
         self.resource_group = None

@@ -64,28 +64,29 @@ EXAMPLES = '''
         resource_group: Testing
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "output": {
-        "changed": false,
-        "check_mode": false,
-        "results": [
-            {
-                "etag": "W/\"a31a6d7d-cb18-40a5-b16d-9f4a36c1b18a\"",
-                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
-                "location": "eastus2",
-                "name": "pip2001",
-                "properties": {
-                    "idleTimeoutInMinutes": 4,
-                    "provisioningState": "Succeeded",
-                    "publicIPAllocationMethod": "Dynamic",
-                    "resourceGuid": "29de82f4-a7da-440e-bd3d-9cabb79af95a"
-                },
-                "type": "Microsoft.Network/publicIPAddresses"
-            }
-        ]
-    }
-}
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: [{
+        "etag": "W/\"a31a6d7d-cb18-40a5-b16d-9f4a36c1b18a\"",
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/pip2001",
+        "location": "eastus2",
+        "name": "pip2001",
+        "properties": {
+            "idleTimeoutInMinutes": 4,
+            "provisioningState": "Succeeded",
+            "publicIPAllocationMethod": "Dynamic",
+            "resourceGuid": "29de82f4-a7da-440e-bd3d-9cabb79af95a"
+        },
+        "type": "Microsoft.Network/publicIPAddresses"
+    }]
 '''
 
 

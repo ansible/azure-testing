@@ -71,6 +71,54 @@ EXAMPLES = '''
           - foo:bar
 '''
 
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: [{
+        "dns_settings": {
+            "applied_dns_servers": [],
+            "dns_servers": [],
+            "internal_dns_name_label": null,
+            "internal_fqdn": null
+        },
+        "enable_ip_forwarding": false,
+        "etag": "W/\"59726bfc-08c4-44ed-b900-f6a559876a9d\"",
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/nic003",
+        "ip_configuration": {
+            "name": "default",
+            "private_ip_address": "10.10.0.4",
+            "private_ip_allocation_method": "Dynamic",
+            "public_ip_address": {
+                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/publicip001",
+                "name": "publicip001"
+            },
+            "subnet": {
+                "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/virtualNetworks/vnet001/subnets/subnet001",
+                "name": "subnet001",
+                "virtual_network_name": "vnet001"
+            }
+        },
+        "location": "westus",
+        "mac_address": null,
+        "name": "nic003",
+        "network_security_group": {
+            "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Testing/providers/Microsoft.Network/networkSecurityGroups/secgroup001",
+            "name": "secgroup001"
+        },
+        "primary": null,
+        "provisioning_state": "Succeeded",
+        "tags": {},
+        "type": "Microsoft.Network/networkInterfaces"
+    }]
+'''
+
 from ansible.module_utils.basic import *
 from ansible.module_utils.azure_rm_common import *
 

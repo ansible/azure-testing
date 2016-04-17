@@ -121,12 +121,22 @@ EXAMPLES = '''
         resource_group: Testing
         state: absent
 '''
-
-EXAMPLE_OUTPUT = '''
-{
-    "changed": true,
-    "check_mode": false,
-    "results": {
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
         "address_prefixes": [
             "10.1.0.0/16",
             "172.100.0.0/16"
@@ -143,7 +153,6 @@ EXAMPLE_OUTPUT = '''
         "tags": null,
         "type": "Microsoft.Network/virtualNetworks"
     }
-}
 '''
 
 
@@ -222,7 +231,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
         self.results=dict(
             changed=False,
-            results={}
+            results=dict()
         )
 
         super(AzureRMVirtualNetwork, self).__init__(self.module_arg_spec,

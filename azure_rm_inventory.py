@@ -22,9 +22,9 @@
 '''
 Azure External Inventory Script
 ===============================
-Generates dynamic inventory by making API requests to Azure using the Azure
-Python SDK. For instruction on installing the Azure Python SDK see
-http://azure-sdk-for-python.readthedocs.org/
+Generates dynamic inventory by making API requests to the Azure Resource
+Manager using the AAzure Python SDK. For instruction on installing the
+Azure Python SDK see http://azure-sdk-for-python.readthedocs.org/
 
 Authentication
 --------------
@@ -201,7 +201,7 @@ try:
                                                                          ResourceManagementClientConfiguration
     from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
                                                              ComputeManagementClientConfiguration
-except ImportError, exc:
+except ImportError as exc:
     HAS_AZURE_EXC = exc
     HAS_AZURE = False
 

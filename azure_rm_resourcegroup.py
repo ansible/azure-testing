@@ -91,13 +91,22 @@ EXAMPLES = '''
         name: Testing
         state: absent
 '''
-
-EXAMPLE_OUTPUT = '''
-{
-    "changed": true,
-    "check_mode": false,
-    "contains_resources": true,
-    "results": {
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
         "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing",
         "location": "westus",
         "name": "Testing",
@@ -107,7 +116,6 @@ EXAMPLE_OUTPUT = '''
             "testing": "no"
         }
     }
-}
 '''
 
 from ansible.module_utils.basic import *

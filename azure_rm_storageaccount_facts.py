@@ -70,32 +70,36 @@ EXAMPLES = '''
           - foo:bar
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "changed": false,
-    "check_mode": false,
-    "results": [
-        {
-            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/testaccount001",
-            "location": "eastus2",
-            "name": "testaccount001",
-            "properties": {
-                "accountType": "Standard_LRS",
-                "creationTime": "2016-03-28T02:46:58.290113Z",
-                "primaryEndpoints": {
-                    "blob": "https://testaccount001.blob.core.windows.net/",
-                    "file": "https://testaccount001.file.core.windows.net/",
-                    "queue": "https://testaccount001.queue.core.windows.net/",
-                    "table": "https://testaccount001.table.core.windows.net/"
-                },
-                "primaryLocation": "eastus2",
-                "provisioningState": "Succeeded",
-                "statusOfPrimary": "Available"
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: [{
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/testing/providers/Microsoft.Storage/storageAccounts/testaccount001",
+        "location": "eastus2",
+        "name": "testaccount001",
+        "properties": {
+            "accountType": "Standard_LRS",
+            "creationTime": "2016-03-28T02:46:58.290113Z",
+            "primaryEndpoints": {
+                "blob": "https://testaccount001.blob.core.windows.net/",
+                "file": "https://testaccount001.file.core.windows.net/",
+                "queue": "https://testaccount001.queue.core.windows.net/",
+                "table": "https://testaccount001.table.core.windows.net/"
             },
-            "tags": {},
-            "type": "Microsoft.Storage/storageAccounts"
+            "primaryLocation": "eastus2",
+            "provisioningState": "Succeeded",
+            "statusOfPrimary": "Available"
         },
-}
+        "tags": {},
+        "type": "Microsoft.Storage/storageAccounts"
+    }]
 '''
 
 AZURE_OBJECT_CLASS = 'StorageAccount'

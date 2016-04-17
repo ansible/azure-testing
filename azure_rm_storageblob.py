@@ -167,34 +167,48 @@ EXAMPLES = '''
     dest: ~/tmp/images/graylog.png
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "actions": [
-        "updated blob foo:graylog.png content settings."
-    ],
-    "blob": {
-        "content_length": 136532,
-        "content_settings": {
-            "cache_control": null,
-            "content_disposition": null,
-            "content_encoding": null,
-            "content_language": null,
-            "content_md5": null,
-            "content_type": "application/image"
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
+        "actions": [
+            "updated blob foo:graylog.png content settings."
+        ],
+        "blob": {
+            "content_length": 136532,
+            "content_settings": {
+                "cache_control": null,
+                "content_disposition": null,
+                "content_encoding": null,
+                "content_language": null,
+                "content_md5": null,
+                "content_type": "application/image"
+            },
+            "last_modified": "09-Mar-2016 22:08:25 +0000",
+            "name": "graylog.png",
+            "tags": {},
+            "type": "BlockBlob"
         },
-        "last_modified": "09-Mar-2016 22:08:25 +0000",
-        "name": "graylog.png",
-        "tags": {},
-        "type": "BlockBlob"
-    },
-    "changed": true,
-    "check_mode": false,
-    "container": {
-        "last_mdoified": "09-Mar-2016 19:28:26 +0000",
-        "name": "foo",
-        "tags": {}
+        "changed": true,
+        "check_mode": false,
+        "container": {
+            "last_mdoified": "09-Mar-2016 19:28:26 +0000",
+            "name": "foo",
+            "tags": {}
+        }
     }
-}
 '''
 
 

@@ -289,144 +289,158 @@ EXAMPLES = '''
 
 '''
 
-EXAMPLE_OUTPUT = '''
-{
-    "actions": [
-        "Powered on virtual machine testvm10"
-    ],
-    "changed": true,
-    "check_mode": false,
-    "differences": [],
-    "powerstate_change": "poweron",
-    "results": {
-        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10",
-        "location": "eastus",
-        "name": "testvm10",
-        "powerstate": "running",
-        "properties": {
-            "hardwareProfile": {
-                "vmSize": "Standard_D1"
-            },
-            "instanceView": {
-                "disks": [
-                    {
-                        "name": "testvm10.vhd",
-                        "statuses": [
-                            {
-                                "code": "ProvisioningState/succeeded",
-                                "displayStatus": "Provisioning succeeded",
-                                "level": "Info",
-                                "time": "2016-03-30T07:11:16.187272Z"
-                            }
-                        ]
-                    }
-                ],
-                "statuses": [
-                    {
-                        "code": "ProvisioningState/succeeded",
-                        "displayStatus": "Provisioning succeeded",
-                        "level": "Info",
-                        "time": "2016-03-30T20:33:38.946916Z"
-                    },
-                    {
-                        "code": "PowerState/running",
-                        "displayStatus": "VM running",
-                        "level": "Info"
-                    }
-                ],
-                "vmAgent": {
-                    "extensionHandlers": [],
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: True
+check_mode:
+    description: Whether or not the module was executed in check mode.
+    returned: always
+    type: bool
+    sample: True
+Results:
+    description: Facts about the current state of the object.
+    returned: always
+    type: dict
+    sample: {
+        "actions": [
+            "Powered on virtual machine testvm10"
+        ],
+        "changed": true,
+        "check_mode": false,
+        "differences": [],
+        "powerstate_change": "poweron",
+        "results": {
+            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10",
+            "location": "eastus",
+            "name": "testvm10",
+            "powerstate": "running",
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "Standard_D1"
+                },
+                "instanceView": {
+                    "disks": [
+                        {
+                            "name": "testvm10.vhd",
+                            "statuses": [
+                                {
+                                    "code": "ProvisioningState/succeeded",
+                                    "displayStatus": "Provisioning succeeded",
+                                    "level": "Info",
+                                    "time": "2016-03-30T07:11:16.187272Z"
+                                }
+                            ]
+                        }
+                    ],
                     "statuses": [
                         {
                             "code": "ProvisioningState/succeeded",
-                            "displayStatus": "Ready",
+                            "displayStatus": "Provisioning succeeded",
                             "level": "Info",
-                            "message": "GuestAgent is running and accepting new configurations.",
-                            "time": "2016-03-30T20:31:16.000Z"
+                            "time": "2016-03-30T20:33:38.946916Z"
+                        },
+                        {
+                            "code": "PowerState/running",
+                            "displayStatus": "VM running",
+                            "level": "Info"
                         }
                     ],
-                    "vmAgentVersion": "WALinuxAgent-2.0.16"
-                }
-            },
-            "networkProfile": {
-                "networkInterfaces": [
-                    {
-                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01",
-                        "name": "testvm10_NIC01",
-                        "properties": {
-                            "dnsSettings": {
-                                "appliedDnsServers": [],
-                                "dnsServers": []
-                            },
-                            "enableIPForwarding": false,
-                            "ipConfigurations": [
-                                {
-                                    "etag": "W/\"041c8c2a-d5dd-4cd7-8465-9125cfbe2cf8\"",
-                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default",
-                                    "name": "default",
-                                    "properties": {
-                                        "privateIPAddress": "10.10.0.5",
-                                        "privateIPAllocationMethod": "Dynamic",
-                                        "provisioningState": "Succeeded",
-                                        "publicIPAddress": {
-                                            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/testvm10_PIP01",
-                                            "name": "testvm10_PIP01",
-                                            "properties": {
-                                                "idleTimeoutInMinutes": 4,
-                                                "ipAddress": "13.92.246.197",
-                                                "ipConfiguration": {
-                                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default"
-                                                },
-                                                "provisioningState": "Succeeded",
-                                                "publicIPAllocationMethod": "Static",
-                                                "resourceGuid": "3447d987-ca0d-4eca-818b-5dddc0625b42"
+                    "vmAgent": {
+                        "extensionHandlers": [],
+                        "statuses": [
+                            {
+                                "code": "ProvisioningState/succeeded",
+                                "displayStatus": "Ready",
+                                "level": "Info",
+                                "message": "GuestAgent is running and accepting new configurations.",
+                                "time": "2016-03-30T20:31:16.000Z"
+                            }
+                        ],
+                        "vmAgentVersion": "WALinuxAgent-2.0.16"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01",
+                            "name": "testvm10_NIC01",
+                            "properties": {
+                                "dnsSettings": {
+                                    "appliedDnsServers": [],
+                                    "dnsServers": []
+                                },
+                                "enableIPForwarding": false,
+                                "ipConfigurations": [
+                                    {
+                                        "etag": "W/\"041c8c2a-d5dd-4cd7-8465-9125cfbe2cf8\"",
+                                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default",
+                                        "name": "default",
+                                        "properties": {
+                                            "privateIPAddress": "10.10.0.5",
+                                            "privateIPAllocationMethod": "Dynamic",
+                                            "provisioningState": "Succeeded",
+                                            "publicIPAddress": {
+                                                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/testvm10_PIP01",
+                                                "name": "testvm10_PIP01",
+                                                "properties": {
+                                                    "idleTimeoutInMinutes": 4,
+                                                    "ipAddress": "13.92.246.197",
+                                                    "ipConfiguration": {
+                                                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default"
+                                                    },
+                                                    "provisioningState": "Succeeded",
+                                                    "publicIPAllocationMethod": "Static",
+                                                    "resourceGuid": "3447d987-ca0d-4eca-818b-5dddc0625b42"
+                                                }
                                             }
                                         }
                                     }
+                                ],
+                                "macAddress": "00-0D-3A-12-AA-14",
+                                "primary": true,
+                                "provisioningState": "Succeeded",
+                                "resourceGuid": "10979e12-ccf9-42ee-9f6d-ff2cc63b3844",
+                                "virtualMachine": {
+                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10"
                                 }
-                            ],
-                            "macAddress": "00-0D-3A-12-AA-14",
-                            "primary": true,
-                            "provisioningState": "Succeeded",
-                            "resourceGuid": "10979e12-ccf9-42ee-9f6d-ff2cc63b3844",
-                            "virtualMachine": {
-                                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10"
                             }
                         }
-                    }
-                ]
-            },
-            "osProfile": {
-                "adminUsername": "chouseknecht",
-                "computerName": "test10",
-                "linuxConfiguration": {
-                    "disablePasswordAuthentication": false
+                    ]
                 },
-                "secrets": []
-            },
-            "provisioningState": "Succeeded",
-            "storageProfile": {
-                "dataDisks": [],
-                "imageReference": {
-                    "offer": "CentOS",
-                    "publisher": "OpenLogic",
-                    "sku": "7.1",
-                    "version": "7.1.20160308"
+                "osProfile": {
+                    "adminUsername": "chouseknecht",
+                    "computerName": "test10",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false
+                    },
+                    "secrets": []
                 },
-                "osDisk": {
-                    "caching": "ReadOnly",
-                    "createOption": "fromImage",
-                    "name": "testvm10.vhd",
-                    "osType": "Linux",
-                    "vhd": {
-                        "uri": "https://testvm10sa1.blob.core.windows.net/vhds/testvm10.vhd"
+                "provisioningState": "Succeeded",
+                "storageProfile": {
+                    "dataDisks": [],
+                    "imageReference": {
+                        "offer": "CentOS",
+                        "publisher": "OpenLogic",
+                        "sku": "7.1",
+                        "version": "7.1.20160308"
+                    },
+                    "osDisk": {
+                        "caching": "ReadOnly",
+                        "createOption": "fromImage",
+                        "name": "testvm10.vhd",
+                        "osType": "Linux",
+                        "vhd": {
+                            "uri": "https://testvm10sa1.blob.core.windows.net/vhds/testvm10.vhd"
+                        }
                     }
                 }
-            }
-        },
-        "type": "Microsoft.Compute/virtualMachines"
+            },
+            "type": "Microsoft.Compute/virtualMachines"
+        }
     }
-}
 '''
 
 import random
@@ -535,7 +549,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             actions=[],
             differences=None,
             powerstate_change=None,
-            results={}
+            results=dict()
         )
 
         super(AzureRMVirtualMachine, self).__init__(derived_arg_spec=self.module_arg_spec,

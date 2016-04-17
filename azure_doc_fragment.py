@@ -30,10 +30,12 @@ options:
         description:
             - Active Directory username. Use when authenticating with an Active Directory user rather than service
               principal.
+        required: false
     password:
         description:
             - Active Directory user password. Use when authenticating with an Active Directory user rather than service
               principal.
+        required: false
     profile:
         description:
             - Security profile found in ~/.azure/credentials file.

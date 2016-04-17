@@ -63,25 +63,28 @@ EXAMPLES = '''
           - testing
           - foo:bar
 '''
-
-EXAMPLE_OUTPUT = '''
-{
-    "changed": false,
-    "results": [
-        {
-            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing",
-            "location": "westus",
-            "name": "Testing",
-            "properties": {
-                "provisioningState": "Succeeded"
-            },
-            "tags": {
-                "delete": "never",
-                "testing": "testing"
-            }
+RETURN = '''
+changed:
+    description: Whether or not the object was changed.
+    returned: always
+    type: bool
+    sample: False
+Results:
+    description: List containing a set of facts for each selected object.
+    returned: always
+    type: list
+    sample: [{
+        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing",
+        "location": "westus",
+        "name": "Testing",
+        "properties": {
+            "provisioningState": "Succeeded"
+        },
+        "tags": {
+            "delete": "never",
+            "testing": "testing"
         }
-    ]
-}
+    }]
 '''
 
 from ansible.module_utils.basic import *
