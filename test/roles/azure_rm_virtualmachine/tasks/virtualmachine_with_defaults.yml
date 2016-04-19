@@ -50,7 +50,7 @@
   add_host:
       groups: just_created
       hostname: testvm10
-      ansible_host: "{{ output.results.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress }}"
+      ansible_host: "{{ otuput.state.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress }}"
       ansible_user: chouseknecht
       ansible_ssh_pass: Password123
 
@@ -93,7 +93,7 @@
   add_host:
       groups: just_created
       hostname: testvm20
-      ansible_ssh_host: "{{ output.results.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress }}"
+      ansible_ssh_host: "{{ otuput.state.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress }}"
       ansible_ssh_user: chouseknecht
 
 - name: Power Off
@@ -107,7 +107,7 @@
   when: playbook_debug
 
 - assert:
-      that: "output.results.powerstate not in ['starting', 'running']"
+      that: "otuput.state.powerstate not in ['starting', 'running']"
 
 - name: Power On
   azure_rm_virtualmachine:
@@ -120,4 +120,4 @@
   when: playbook_debug
 
 - assert:
-      that: "output.results.powerstate in ['starting', 'running']"
+      that: "otuput.state.powerstate in ['starting', 'running']"

@@ -85,7 +85,7 @@
 
 - assert:
       that:
-          - "output.results.powerstate in ['starting', 'running']"
+          - "output.state.powerstate in ['starting', 'running']"
           - output.changed
 
 - name: Deallocate the virtual machine
@@ -101,7 +101,7 @@
 
 - assert:
       that:
-          - output.results.powerstate == 'deallocated'
+          - output.state.powerstate == 'deallocated'
           - output.changed
 
 - name: Start the virtual machine
@@ -116,7 +116,7 @@
 
 - assert:
       that:
-          - "output.results.powerstate in ['starting', 'running']"
+          - "output.state.powerstate in ['starting', 'running']"
           - output.changed
 
 - name: Should be idempotent
@@ -158,7 +158,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 0
+      that: output.objects | length == 0
 
 - name: PIP should be gone
   azure_rm_publicipaddress_facts:
@@ -170,4 +170,4 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 0
+      that: output.objects | length == 0

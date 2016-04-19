@@ -31,7 +31,7 @@
 - debug: var=output
   when: playbook_debug
 
-- assert: { that: "{{ output.results.rules | length }} == 2" }
+- assert: { that: "{{ output.state.rules | length }} == 2" }
 
 - name: Gather facts by tags
   azure_rm_securitygroup_facts:
@@ -45,7 +45,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 1
+      that: output.objects | length == 1
 
 - name: Add/Update rules on existing security group
   azure_rm_securitygroup:
@@ -67,7 +67,7 @@
 - debug: var=output
   when: playbook_debug
 
-- assert: { that: "{{ output.results.rules | length }} == 3" }
+- assert: { that: "{{ output.state.rules | length }} == 3" }
 
 - name: Test idempotence
   azure_rm_securitygroup:
@@ -107,8 +107,8 @@
 
 - assert:
       that:
-          - output.results.tags | length == 4
-          - output.results.tags.delete == 'never'
+          - output.state.tags | length == 4
+          - output.state.tags.delete == 'never'
 
 - name: Purge tags
   azure_rm_securitygroup:
@@ -125,8 +125,8 @@
 
 - assert:
       that:
-          - output.results.tags | length == 2
-          - output.results.tags.delete == 'on-exit'
+          - output.state.tags | length == 2
+          - output.state.tags.delete == 'on-exit'
 
 - name: Gather facts for one accounts
   azure_rm_securitygroup_facts:
@@ -139,7 +139,7 @@
 
 - assert:
       that:
-          - output.results | length == 1
+          - output.objects | length == 1
 
 - name: Gather facts for all accounts
   azure_rm_securitygroup_facts:
@@ -151,14 +151,14 @@
 
 - assert:
       that:
-          - output.results | length > 0
+          - output.objects | length > 0
 
 - name: Delete all security groups
   azure_rm_securitygroup:
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state: absent
-  with_items: "{{ output.results }}"
+  with_items: "{{ output.state }}"
 
 - name: Should have no security groups remaining
   azure_rm_securitygroup_facts:
@@ -170,5 +170,5 @@
 
 - assert:
       that:
-          - output.results | length == 0
+          - output.objects | length == 0
 

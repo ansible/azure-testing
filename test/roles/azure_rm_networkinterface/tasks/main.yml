@@ -180,8 +180,8 @@
 - assert:
       that:
           - output.changed
-          - output.results.ip_configuration.private_ip_address == '10.10.0.10'
-          - output.results.ip_configuration.private_ip_allocation_method == 'Static'
+          - output.state.ip_configuration.private_ip_address == '10.10.0.10'
+          - output.state.ip_configuration.private_ip_allocation_method == 'Static'
 
 - name: Should change virtual network and subnet
   azure_rm_networkinterface:
@@ -200,10 +200,10 @@
 - assert:
       that:
           - output.changed
-          - "'10.20' in output.results.ip_configuration.private_ip_address"
-          - output.results.ip_configuration.private_ip_allocation_method == 'Dynamic'
-          - output.results.ip_configuration.subnet.name == 'subnet002'
-          - output.results.ip_configuration.public_ip_address.name == 'publicip002'
+          - "'10.20' in output.state.ip_configuration.private_ip_address"
+          - output.state.ip_configuration.private_ip_allocation_method == 'Dynamic'
+          - output.state.ip_configuration.subnet.name == 'subnet002'
+          - output.state.ip_configuration.public_ip_address.name == 'publicip002'
 
 - name: Add tags
   azure_rm_networkinterface:
@@ -220,8 +220,8 @@
 - assert:
       that:
           - output.changed
-          - output.results.tags | length == 2
-          - output.results.tags.testing == 'testing'
+          - output.state.tags | length == 2
+          - output.state.tags.testing == 'testing'
 
 - name: Gather facts for tags
   azure_rm_networkinterface_facts:
@@ -268,7 +268,7 @@
 - assert:
       that:
           - output.changed
-          - output.results.tags | length == 1
+          - output.state.tags | length == 1
 
 - name: Purge all tags
   azure_rm_networkinterface:
@@ -283,7 +283,7 @@
 - assert:
       that:
           - output.changed
-          - output.results.tags | length == 0
+          - output.state.tags | length == 0
 
 - name: Remove network interface, if it exists
   azure_rm_networkinterface:
@@ -330,8 +330,8 @@
 
 - assert:
       that:
-          - output.results.ip_configuration.public_ip_address.name == 'nic00401'
-          - output.results.network_security_group.name == 'nic00401'
+          - output.state.ip_configuration.public_ip_address.name == 'nic00401'
+          - output.state.network_security_group.name == 'nic00401'
 
 - name: Gather facts for security group nic00401
   azure_rm_securitygroup_facts:
@@ -344,7 +344,7 @@
 
 - assert:
       that:
-          - output.results[0].properties.securityRules[0].properties.destinationPortRange == '22'
+          - output.objects[0].properties.securityRules[0].properties.destinationPortRange == '22'
 
 - name: Should create default security group and default public ip for windows host
   azure_rm_networkinterface:
@@ -363,8 +363,8 @@
 
 - assert:
       that:
-          - output.results.ip_configuration.public_ip_address.name == 'nic00501'
-          - output.results.network_security_group.name == 'nic00501'
+          - output.state.ip_configuration.public_ip_address.name == 'nic00501'
+          - output.state.network_security_group.name == 'nic00501'
 
 - name: Gather facts for security group nic00501
   azure_rm_securitygroup_facts:
@@ -378,8 +378,8 @@
 - name: Security group should allow RDP access on custom port
   assert:
       that:
-          - output.results[0].properties.securityRules[0].properties.destinationPortRange == '9000'
-          - output.results[0].properties.securityRules[1].properties.destinationPortRange == '9005-9010'
+          - output.objects[0].properties.securityRules[0].properties.destinationPortRange == '9000'
+          - output.objects[0].properties.securityRules[1].properties.destinationPortRange == '9005-9010'
 
 - name: Gather facts for one nic
   azure_rm_networkinterface_facts:
@@ -392,7 +392,7 @@
 
 - assert:
       that:
-          - output.results | length == 1
+          - output.objects | length == 1
 
 - name: Gather facts for all nics in resource groups
   azure_rm_networkinterface_facts:
@@ -404,7 +404,7 @@
 
 - assert:
       that:
-          - output.results | length >= 3
+          - output.objects | length >= 3
 
 - name: Gather facts for all nics
   azure_rm_networkinterface_facts:
@@ -415,7 +415,7 @@
 
 - assert:
       that:
-          - output.results | length >= 3
+          - output.objects | length >= 3
 
 - name: Delete nic
   azure_rm_networkinterface:

@@ -29,10 +29,10 @@
 
 - assert:
       that:
-          - output.results.public_ip_allocation_method == 'Static'
-          - output.results.dns_settings.domain_name_label == 'autotest01'
-          - output.results.tags | length == 2
-          - output.results.tags.testing == 'testing'
+          - output.state.public_ip_allocation_method == 'Static'
+          - output.state.dns_settings.domain_name_label == 'autotest01'
+          - output.state.tags | length == 2
+          - output.state.tags.testing == 'testing'
 
 - name: Should be idempotent
   azure_rm_publicipaddress:
@@ -66,8 +66,8 @@
 
 - assert:
       that:
-          - output.results.tags | length == 3
-          - output.results.tags.delete == 'never'
+          - output.state.tags | length == 3
+          - output.state.tags.delete == 'never'
 
 - name: Gather facts, filtering by tag
   azure_rm_publicipaddress_facts:
@@ -81,7 +81,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 1
+      that: output.objects | length == 1
 
 - name: Purge all tags
   azure_rm_publicipaddress:
@@ -95,7 +95,7 @@
 
 - assert:
       that:
-          - output.results.tags | length == 0
+          - output.state.tags | length == 0
 
 - name: Gather facts for a public ip
   azure_rm_publicipaddress_facts:
@@ -107,7 +107,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 1
+      that: output.objects | length == 1
 
 - name: Gather facts for all public ips
   azure_rm_publicipaddress_facts:
@@ -118,14 +118,14 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length > 0
+      that: output.objects | length > 0
 
 - name: Remove all public ips
   azure_rm_publicipaddress:
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state:  absent
-  with_items: "{{ output.results }}"
+  with_items: "{{ output.state }}"
 
 - name: Gather facts for all public ips
   azure_rm_publicipaddress_facts:
@@ -136,4 +136,4 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 0
+      that: output.objects | length == 0

@@ -37,10 +37,10 @@
 
 - assert:
     that:
-      - "output.results.address_prefixes | length == 2"
-      - "output.results.dns_servers | length == 2"
-      - "output.results.tags.delete == 'on-exit'"
-      - "output.results.tags | length == 2"
+      - "output.state.address_prefixes | length == 2"
+      - "output.state.dns_servers | length == 2"
+      - "output.state.tags.delete == 'on-exit'"
+      - "output.state.tags | length == 2"
 
 - name: Gather facts by name, tags
   azure_rm_virtualnetwork_facts:
@@ -54,7 +54,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.results | length == 1"
+    that: "output.objects | length == 1"
 
 - name: Gather facts by resource group, tags
   azure_rm_virtualnetwork_facts:
@@ -67,7 +67,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.results | length == 1"
+    that: "output.objects | length == 1"
 
 - name: Gather facts by tags
   azure_rm_virtualnetwork_facts:
@@ -79,7 +79,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.results | length >= 1"
+    that: "output.objects | length >= 1"
 
 - name: Should be idempotent
   azure_rm_virtualnetwork:
@@ -116,7 +116,7 @@
   when: playbook_debug
 
 - assert:
-     that: output.results.tags | length == 3
+     that: output.state.tags | length == 3
 
 - name: Purge tags
   azure_rm_virtualnetwork:
@@ -132,8 +132,8 @@
 
 - assert:
      that:
-       - output.results.tags | length == 1
-       - output.results.tags.testing == 'always'
+       - output.state.tags | length == 1
+       - output.state.tags.testing == 'always'
 
 - name: Should require address_prefixes_cidr when purge_address_prefixes
   azure_rm_virtualnetwork:
@@ -162,10 +162,10 @@
 
 - assert:
     that:
-        - output.results.address_prefixes | length == 1
-        - output.results.address_prefixes[0] == '10.1.0.0/16'
-        - output.results.dns_servers | length == 2
-        - output.results.dns_servers[0] == '127.0.0.1'
+        - output.state.address_prefixes | length == 1
+        - output.state.address_prefixes[0] == '10.1.0.0/16'
+        - output.state.dns_servers | length == 2
+        - output.state.dns_servers[0] == '127.0.0.1'
 
 - name: Purge DNS servers
   azure_rm_virtualnetwork:
@@ -178,7 +178,7 @@
   when: playbook_debug
 
 - assert:
-    that: output.results['dns_servers'] is undefined
+    that: output.state['dns_servers'] is undefined
 
 - name: Gather facts
   azure_rm_virtualnetwork_facts:
@@ -187,7 +187,7 @@
   register: output
 
 - assert:
-    that: "output.results | length == 1"
+    that: "output.objects | length == 1"
 
 - name: Delete virtual network
   azure_rm_virtualnetwork:

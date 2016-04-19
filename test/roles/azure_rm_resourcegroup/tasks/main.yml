@@ -12,9 +12,9 @@
 
 - assert:
       that:
-          - output.results.tags.testing == 'testing'
-          - output.results.tags.delete == 'never'
-          - output.results.location == '{{ location }}'
+          - output.state.tags.testing == 'testing'
+          - output.state.tags.delete == 'never'
+          - output.state.location == '{{ location }}'
 
 - name: Should be idempotent
   azure_rm_resourcegroup:
@@ -44,10 +44,10 @@
 
 - assert:
    that:
-     - output.results.tags | length == 3
-     - output.results.tags.testing == 'no'
-     - output.results.tags.delete == 'on-exit'
-     - output.results.tags.foo == 'bar'
+     - output.state.tags | length == 3
+     - output.state.tags.testing == 'no'
+     - output.state.tags.delete == 'on-exit'
+     - output.state.tags.foo == 'bar'
 
 - name: Gather facts by tags
   azure_rm_resourcegroup_facts:
@@ -60,7 +60,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 1
+      that: output.objects | length == 1
 
 - name: Purge one tag
   azure_rm_resourcegroup:
@@ -75,9 +75,9 @@
 
 - assert:
     that:
-      - output.results.tags | length == 2
-      - output.results.tags.testing == 'no'
-      - output.results.tags.delete == 'on-exit'
+      - output.state.tags | length == 2
+      - output.state.tags.testing == 'no'
+      - output.state.tags.delete == 'on-exit'
 
 - name: Purge all tags
   azure_rm_resourcegroup:
@@ -89,7 +89,7 @@
 
 - assert:
     that:
-      - output.results.tags | length == 0
+      - output.state.tags | length == 0
 
 - name: Add a resource
   azure_rm_virtualnetwork:
@@ -128,7 +128,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length == 1
+      that: output.objects | length == 1
 
 - name: Gather facts for all resource groups
   azure_rm_resourcegroup_facts:
@@ -138,7 +138,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.results | length > 1
+      that: output.objects | length > 1
 
 - name: Force remove resource group
   azure_rm_resourcegroup:
