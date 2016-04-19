@@ -74,11 +74,13 @@ options:
     location:
         description:
             - Valid Azure location. Defaults to location of the resource group.
+        default: null
         required: false
     short_hostname:
         description:
             - Name assigned internally to the host. On a linux VM this is the name returned by the `hostname` command.
               When creating a virtual machine, short_hostname defaults to name.
+        default: null
         required: false
     vm_size:
         description:
@@ -89,11 +91,13 @@ options:
     admin_username:
         description:
             - Admin username used to access the host after it is created. Required when creating a VM.
+        default: null
         required: false
     admin_password:
         description:
             - Password for the admin username. Not required if the os_type is Linux and SSH password authentication
               is disabled by setting ssh_password_enabled to false.
+        default: null
         required: false
     ssh_password_enabled:
         description:
@@ -107,6 +111,7 @@ options:
               dictionary contains two keys: path and key_data. Set the path to the default location of the
               authorized_keys files. On an Enterprise Linux host, for example, the path will be
               /home/<admin username>/.ssh/authorized_keys. Set key_data to the actual value of the public key."
+        default: null
         required: false
     image:
         description:
@@ -118,6 +123,7 @@ options:
         description:
             - Name of an existing storage account that supports creation of VHD blobs. If not specified for a new VM,
               a new storage account named <vm name>01 will be created using storage type 'Standard_LRS'.
+        default: null
         required: false
     storage_container_name:
         description:
@@ -131,6 +137,7 @@ options:
               the VM name + '.vhd'. If you provide a name, it must end with '.vhd'
         aliases:
             - storage_blob
+        default: null
         required: false
     os_disk_caching:
         description:
@@ -170,12 +177,14 @@ options:
               Linux hosts a rule will be added to the security group allowing inbound TCP connections to the default
               SSH port 22, and for Windows hosts ports 3389 and 5986 will be opened. Override the default open ports by
               providing a list of ports.
+        default: null
         required: false
     network_interface_names:
         description:
             - List of existing network interface names to add to the VM. If a network interface name is not provided
               when the VM is created, a default network interface will be created. In order for the module to create
               a network interface, at least one Virtual Network with one Subnet must exist.
+        default: null
         required: false
     virtual_network_name:
         description:
@@ -184,6 +193,7 @@ options:
               Use this parameter to provide a specific virtual network instead.
         aliases:
             - virtual_network
+        default: null
         required: false
     subnet_name:
         description:
@@ -192,6 +202,7 @@ options:
               Use this parameter to provide a specific subnet instead.
         aliases:
             - virtual_network
+        default: null
         required: false
     delete_network_interfaces:
         description:
@@ -216,6 +227,7 @@ options:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
+        default: null
         required: false
     purge_tags:
         description:
@@ -295,151 +307,150 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
+actions:
+    description: List of descriptive actions performed by the module.
     returned: always
-    type: bool
-    sample: True
-Results:
+    type: list
+    sample: [
+        "Powered on virtual machine testvm10"
+    ]
+differences:
+    description: List of differences between the requested configuraiton and actual VM configuration.
+    returned: always
+    type: list
+    sample: []
+powerstate:
+    description: Indicates if the state is running, stopped, deallocated
+    returned: always
+    type: string
+    sample: running
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
     sample: {
-        "actions": [
-            "Powered on virtual machine testvm10"
-        ],
-        "changed": true,
-        "check_mode": false,
-        "differences": [],
-        "powerstate_change": "poweron",
-        "results": {
-            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10",
-            "location": "eastus",
-            "name": "testvm10",
-            "powerstate": "running",
-            "properties": {
-                "hardwareProfile": {
-                    "vmSize": "Standard_D1"
-                },
-                "instanceView": {
-                    "disks": [
-                        {
-                            "name": "testvm10.vhd",
-                            "statuses": [
-                                {
-                                    "code": "ProvisioningState/succeeded",
-                                    "displayStatus": "Provisioning succeeded",
-                                    "level": "Info",
-                                    "time": "2016-03-30T07:11:16.187272Z"
-                                }
-                            ]
-                        }
-                    ],
-                    "statuses": [
-                        {
-                            "code": "ProvisioningState/succeeded",
-                            "displayStatus": "Provisioning succeeded",
-                            "level": "Info",
-                            "time": "2016-03-30T20:33:38.946916Z"
-                        },
-                        {
-                            "code": "PowerState/running",
-                            "displayStatus": "VM running",
-                            "level": "Info"
-                        }
-                    ],
-                    "vmAgent": {
-                        "extensionHandlers": [],
+        "properties": {
+            "hardwareProfile": {
+                "vmSize": "Standard_D1"
+            },
+            "instanceView": {
+                "disks": [
+                    {
+                        "name": "testvm10.vhd",
                         "statuses": [
                             {
                                 "code": "ProvisioningState/succeeded",
-                                "displayStatus": "Ready",
+                                "displayStatus": "Provisioning succeeded",
                                 "level": "Info",
-                                "message": "GuestAgent is running and accepting new configurations.",
-                                "time": "2016-03-30T20:31:16.000Z"
+                                "time": "2016-03-30T07:11:16.187272Z"
                             }
-                        ],
-                        "vmAgentVersion": "WALinuxAgent-2.0.16"
+                        ]
                     }
-                },
-                "networkProfile": {
-                    "networkInterfaces": [
+                ],
+                "statuses": [
+                    {
+                        "code": "ProvisioningState/succeeded",
+                        "displayStatus": "Provisioning succeeded",
+                        "level": "Info",
+                        "time": "2016-03-30T20:33:38.946916Z"
+                    },
+                    {
+                        "code": "PowerState/running",
+                        "displayStatus": "VM running",
+                        "level": "Info"
+                    }
+                ],
+                "vmAgent": {
+                    "extensionHandlers": [],
+                    "statuses": [
                         {
-                            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01",
-                            "name": "testvm10_NIC01",
-                            "properties": {
-                                "dnsSettings": {
-                                    "appliedDnsServers": [],
-                                    "dnsServers": []
-                                },
-                                "enableIPForwarding": false,
-                                "ipConfigurations": [
-                                    {
-                                        "etag": "W/\"041c8c2a-d5dd-4cd7-8465-9125cfbe2cf8\"",
-                                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default",
-                                        "name": "default",
-                                        "properties": {
-                                            "privateIPAddress": "10.10.0.5",
-                                            "privateIPAllocationMethod": "Dynamic",
-                                            "provisioningState": "Succeeded",
-                                            "publicIPAddress": {
-                                                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/testvm10_PIP01",
-                                                "name": "testvm10_PIP01",
-                                                "properties": {
-                                                    "idleTimeoutInMinutes": 4,
-                                                    "ipAddress": "13.92.246.197",
-                                                    "ipConfiguration": {
-                                                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default"
-                                                    },
-                                                    "provisioningState": "Succeeded",
-                                                    "publicIPAllocationMethod": "Static",
-                                                    "resourceGuid": "3447d987-ca0d-4eca-818b-5dddc0625b42"
-                                                }
+                            "code": "ProvisioningState/succeeded",
+                            "displayStatus": "Ready",
+                            "level": "Info",
+                            "message": "GuestAgent is running and accepting new configurations.",
+                            "time": "2016-03-30T20:31:16.000Z"
+                        }
+                    ],
+                    "vmAgentVersion": "WALinuxAgent-2.0.16"
+                }
+            },
+            "networkProfile": {
+                "networkInterfaces": [
+                    {
+                        "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01",
+                        "name": "testvm10_NIC01",
+                        "properties": {
+                            "dnsSettings": {
+                                "appliedDnsServers": [],
+                                "dnsServers": []
+                            },
+                            "enableIPForwarding": false,
+                            "ipConfigurations": [
+                                {
+                                    "etag": "W/\"041c8c2a-d5dd-4cd7-8465-9125cfbe2cf8\"",
+                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default",
+                                    "name": "default",
+                                    "properties": {
+                                        "privateIPAddress": "10.10.0.5",
+                                        "privateIPAllocationMethod": "Dynamic",
+                                        "provisioningState": "Succeeded",
+                                        "publicIPAddress": {
+                                            "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/publicIPAddresses/testvm10_PIP01",
+                                            "name": "testvm10_PIP01",
+                                            "properties": {
+                                                "idleTimeoutInMinutes": 4,
+                                                "ipAddress": "13.92.246.197",
+                                                "ipConfiguration": {
+                                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Network/networkInterfaces/testvm10_NIC01/ipConfigurations/default"
+                                                },
+                                                "provisioningState": "Succeeded",
+                                                "publicIPAllocationMethod": "Static",
+                                                "resourceGuid": "3447d987-ca0d-4eca-818b-5dddc0625b42"
                                             }
                                         }
                                     }
-                                ],
-                                "macAddress": "00-0D-3A-12-AA-14",
-                                "primary": true,
-                                "provisioningState": "Succeeded",
-                                "resourceGuid": "10979e12-ccf9-42ee-9f6d-ff2cc63b3844",
-                                "virtualMachine": {
-                                    "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10"
                                 }
+                            ],
+                            "macAddress": "00-0D-3A-12-AA-14",
+                            "primary": true,
+                            "provisioningState": "Succeeded",
+                            "resourceGuid": "10979e12-ccf9-42ee-9f6d-ff2cc63b3844",
+                            "virtualMachine": {
+                                "id": "/subscriptions/XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX/resourceGroups/Testing/providers/Microsoft.Compute/virtualMachines/testvm10"
                             }
                         }
-                    ]
+                    }
+                ]
+            },
+            "osProfile": {
+                "adminUsername": "chouseknecht",
+                "computerName": "test10",
+                "linuxConfiguration": {
+                    "disablePasswordAuthentication": false
                 },
-                "osProfile": {
-                    "adminUsername": "chouseknecht",
-                    "computerName": "test10",
-                    "linuxConfiguration": {
-                        "disablePasswordAuthentication": false
-                    },
-                    "secrets": []
+                "secrets": []
+            },
+            "provisioningState": "Succeeded",
+            "storageProfile": {
+                "dataDisks": [],
+                "imageReference": {
+                    "offer": "CentOS",
+                    "publisher": "OpenLogic",
+                    "sku": "7.1",
+                    "version": "7.1.20160308"
                 },
-                "provisioningState": "Succeeded",
-                "storageProfile": {
-                    "dataDisks": [],
-                    "imageReference": {
-                        "offer": "CentOS",
-                        "publisher": "OpenLogic",
-                        "sku": "7.1",
-                        "version": "7.1.20160308"
-                    },
-                    "osDisk": {
-                        "caching": "ReadOnly",
-                        "createOption": "fromImage",
-                        "name": "testvm10.vhd",
-                        "osType": "Linux",
-                        "vhd": {
-                            "uri": "https://testvm10sa1.blob.core.windows.net/vhds/testvm10.vhd"
-                        }
+                "osDisk": {
+                    "caching": "ReadOnly",
+                    "createOption": "fromImage",
+                    "name": "testvm10.vhd",
+                    "osType": "Linux",
+                    "vhd": {
+                        "uri": "https://testvm10sa1.blob.core.windows.net/vhds/testvm10.vhd"
                     }
                 }
-            },
-            "type": "Microsoft.Compute/virtualMachines"
-        }
+            }
+        },
+        "type": "Microsoft.Compute/virtualMachines"
     }
 '''
 
@@ -549,7 +560,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
             actions=[],
             differences=None,
             powerstate_change=None,
-            results=dict()
+            state=dict()
         )
 
         super(AzureRMVirtualMachine, self).__init__(derived_arg_spec=self.module_arg_spec,
@@ -559,8 +570,6 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         changed = False
         powerstate_change = None
@@ -694,7 +703,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                 changed = True
 
         self.results['changed'] = changed
-        self.results['results'] = results
+        self.results['state'] = results
         self.results['powerstate_change'] = powerstate_change
 
         if self.check_mode:
@@ -784,7 +793,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
 
                     self.log("Create virtual machine with parameters:")
                     self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
-                    self.results['results'] = self.create_or_update_vm(vm_resource)
+                    self.results['state'] = self.create_or_update_vm(vm_resource)
 
                 elif self.results['differences'] and len(self.results['differences']) > 0:
                     # Update the VM based on detected config differences
@@ -854,30 +863,31 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
                                     )
                     self.log("Update virtual machine with parameters:")
                     self.log(self.serialize_obj(vm_resource, 'VirtualMachine'), pretty_print=True)
-                    self.results['results'] = self.create_or_update_vm(vm_resource)
+                    self.results['state'] = self.create_or_update_vm(vm_resource)
 
                 # Make sure we leave the machine in requested power state
-                if powerstate_change == 'poweron' and self.results['results']['powerstate'] != 'running':
+                if powerstate_change == 'poweron' and self.results['state']['powerstate'] != 'running':
                     # Attempt to power on the machine
                     self.power_on_vm()
-                    self.results['results'] = self.serialize_vm(self.get_vm())
+                    self.results['state'] = self.serialize_vm(self.get_vm())
 
-                elif powerstate_change == 'poweroff' and self.results['results']['powerstate'] == 'running':
+                elif powerstate_change == 'poweroff' and self.results['state']['powerstate'] == 'running':
                     # Attempt to power off the machine
                     self.power_off_vm()
-                    self.results['results'] = self.serialize_vm(self.get_vm())
+                    self.results['state'] = self.serialize_vm(self.get_vm())
 
                 elif powerstate_change == 'restarted':
                     self.restart_vm()
-                    self.results['results'] = self.serialize_vm(self.get_vm())
+                    self.results['state'] = self.serialize_vm(self.get_vm())
 
                 elif powerstate_change == 'deallocated':
                     self.deallocate_vm()
-                    self.results['results'] = self.serialize_vm(self.get_vm())
+                    self.results['state'] = self.serialize_vm(self.get_vm())
 
             elif self.state == 'absent':
                 # delete the VM
                 self.log("Delete virtual machine {0}".format(self.name))
+                self.results['state']['status'] = 'Deleted'
                 self.delete_vm(vm)
 
         return self.results
@@ -956,7 +966,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         return True
 
     def restart_vm(self):
-        self.results['actions'].append("Restart virtual machine {0}".format(self.name))
+        self.results['actions'].append("Restarted virtual machine {0}".format(self.name))
         self.log("Restart virtual machine {0}".format(self.name))
         try:
             poller = self.compute_client.virtual_machines.restart(self.resource_group, self.name)
@@ -966,7 +976,7 @@ class AzureRMVirtualMachine(AzureRMModuleBase):
         return True
 
     def deallocate_vm(self):
-        self.results['actions'].append("Deallocate virtual machine {0}".format(self.name))
+        self.results['actions'].append("Deallocated virtual machine {0}".format(self.name))
         self.log("Deallocate virtual machine {0}".format(self.name))
         try:
             poller = self.compute_client.virtual_machines.deallocate(self.resource_group, self.name)

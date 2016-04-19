@@ -35,6 +35,7 @@ options:
     name:
         description:
             - Only show results for a specific security group.
+        default: null
         required: false
     location:
         description:
@@ -44,18 +45,22 @@ options:
     publisher:
         description:
             - Name of an image publisher. List image offerings associated with a particular publisher.
+        default: null
         required: false
     offer:
         description:
             - Name of an image offering. Combine with sku to see a list of available image versions.
+        default: null
         required: false
     sku:
         description:
             - Image offering SKU. Combine with offer to see a list of available versions.
+        default: null
         required: false
     version:
         description:
             - Specific version number of an image.
+        default: null
         required: false
 
 extends_documentation_fragment:
@@ -100,7 +105,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -149,13 +154,13 @@ class AzureRMVirtualMachineImageFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.location and self.publisher and self.offer and self.sku and self.version:
-            self.results['results'] = self.get_item()
+            self.results['objects'] = self.get_item()
         elif self.location and self.publisher and self.offer and self.sku:
-            self.results['results'] = self.list_images()
+            self.results['objects'] = self.list_images()
         elif self.location and self.publisher:
-            self.results['results'] = self.list_offers()
+            self.results['objects'] = self.list_offers()
         elif self.location:
-            self.results['results'] = self.list_publishers()
+            self.results['objects'] = self.list_publishers()
 
         return self.results
 

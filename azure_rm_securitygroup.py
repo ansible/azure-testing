@@ -40,6 +40,7 @@ options:
               rules will not be modified. Modify rules to shape the flow of traffic to or from a subnet or NIC. See
               rules below for the makeup of a rule dict.
         required: false
+        default: null
     location:
         description:
             - Valid azure location. Defaults to location of the resource group.
@@ -49,6 +50,7 @@ options:
         description:
             - Name of the security group to operate on.
         required: false
+        default: null
     purge_default_rules:
         description:
             - Remove any existing rules not matching those defined in the default_rules parameter.
@@ -68,6 +70,7 @@ options:
             - Set of rules shaping traffic flow to or from a subnet or NIC. Each rule is a dictionary.
         type: complex
         required: false
+        default: null
         contains:
             name:
                 description: Unique name for the rule.
@@ -123,6 +126,7 @@ options:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
+        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
@@ -196,12 +200,7 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
-    type: bool
-    sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -552,7 +551,7 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=dict()
+            state=dict()
         )
 
         super(AzureRMSecurityGroup, self).__init__(self.module_arg_spec,
@@ -562,8 +561,6 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
         
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         changed = False
         results = dict()
@@ -658,9 +655,9 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                 changed = True
 
             self.results['changed'] = changed
-            self.results['results'] = results
+            self.results['state'] = results
             if not self.check_mode:
-                self.results['results'] = self.create_or_update(results)
+                self.results['state'] = self.create_or_update(results)
 
         elif self.state == 'present' and changed:
             # create the security group
@@ -683,19 +680,19 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
                 results['tags'] = self.tags
 
             self.results['changed'] = changed
-            self.results['results'] = results
+            self.results['state'] = results
             if not self.check_mode:
-                self.results['results'] = self.create_or_update(results)
+                self.results['state'] = self.create_or_update(results)
 
         elif self.state == 'absent' and changed:
             self.log("Delete security group {0}".format(self.name))
             self.results['changed'] = changed
-            self.results['results'] = dict()
+            self.results['state'] = dict()
             if not self.check_mode:
                 self.delete()
                 # the delete does not actually return anything. if no exception, then we'll assume
                 # it worked.
-                self.results['results']['status'] = 'Deleted'
+                self.results['state']['status'] = 'Deleted'
 
         return self.results
 

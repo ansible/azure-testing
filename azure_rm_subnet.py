@@ -52,6 +52,7 @@ options:
         description:
             - Name of an existing security group with which to associate the subnet.
         required: false
+        default: null
         aliases:
             - security_group
     state:
@@ -101,12 +102,7 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
-    type: bool
-    sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -172,7 +168,7 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=dict()
+            state=dict()
         )
 
         self.resource_group = None
@@ -193,8 +189,6 @@ class AzureRMSubnet(AzureRMModuleBase):
 
         for key in self.module_arg_spec:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         if not NAME_PATTERN.match(self.name):
             self.fail("Parameter error: name must begin with a letter or number, end with a letter, number "
@@ -238,7 +232,7 @@ class AzureRMSubnet(AzureRMModuleBase):
                 changed = True
 
         self.results['changed'] = changed
-        self.results['results'] = results
+        self.results['state'] = results
 
         if not self.check_mode:
 
@@ -268,13 +262,13 @@ class AzureRMSubnet(AzureRMModuleBase):
                                                                              location=nsg.location,
                                                                              resource_guid=nsg.resource_guid)
 
-                self.results['results'] = self.create_or_update_subnet(subnet)
+                self.results['state'] = self.create_or_update_subnet(subnet)
             elif self.state == 'absent':
                 # delete subnet
                 self.delete_subnet()
                 # the delete does not actually return anything. if no exception, then we'll assume
                 # it worked.
-                self.results['results']['status'] = 'Deleted'
+                self.results['state']['status'] = 'Deleted'
 
         return self.results
 

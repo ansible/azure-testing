@@ -35,14 +35,17 @@ options:
         description:
             - Only show results for a specific account.
         required: false
+        default: null
     resource_group:
         description:
             - Limit results to a resource group. Required when filtering by name.
         required: false
+        default: null
     tags:
         description:
             - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
         required: false
+        default: null
 
 extends_documentation_fragment:
     - azure
@@ -76,7 +79,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -127,7 +130,7 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=[]
+            objects=[]
         )
 
         self.name = None
@@ -147,11 +150,11 @@ class AzureRMStorageAccountFacts(AzureRMModuleBase):
             self.fail("Parameter error: resource group required when filtering by name.")
 
         if self.name:
-            self.results['results'] = self.get_account()
+            self.results['objects'] = self.get_account()
         elif self.resource_group:
-            self.results['results'] = self.list_resource_group()
+            self.results['objects'] = self.list_resource_group()
         else:
-            self.results['results'] = self.list_all()
+            self.results['objects'] = self.list_all()
 
         return self.results
 

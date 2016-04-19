@@ -42,10 +42,12 @@ options:
             - Azure location for the resource group. Required when creating a new resource group. Cannot
               be changed once resource group is created.
         required: false
+        default: null
     name:
         description:
             - Name of the resource group.
         required: true
+        default: null
     state:
         description:
             - Assert the state of the resource group. Use 'present' to create or update and
@@ -61,6 +63,7 @@ options:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
+        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
@@ -97,12 +100,11 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
+contains_resources:
+    description: Whether or not the resource group contains associated resources.
     type: bool
     sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -159,7 +161,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.results = dict(
             changed=False,
             contains_resources=False,
-            results=dict(),
+            state=dict(),
         )
 
         super(AzureRMResourceGroup, self).__init__(self.module_arg_spec,
@@ -170,8 +172,6 @@ class AzureRMResourceGroup(AzureRMModuleBase):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         results = dict()
         changed = False
@@ -204,7 +204,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
                 changed = True
 
         self.results['changed'] = changed
-        self.results['results'] = results
+        self.results['state'] = results
         self.results['contains_resources'] = contains_resources
 
         if self.check_mode:
@@ -231,7 +231,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
                         location=results['location'],
                         tags=results['tags']
                     )
-                self.results['results'] = self.create_or_update_resource_group(params)
+                self.results['state'] = self.create_or_update_resource_group(params)
             elif self.state == 'absent':
                 if contains_resources and not self.force:
                     self.fail("Error removing resource group {0}. Resources exist within the group.".format(self.name))
@@ -255,7 +255,7 @@ class AzureRMResourceGroup(AzureRMModuleBase):
         self.get_poller_result(poller)
         # The delete operation doesn't return anything.
         # If we got here, assume all is good
-        self.results['results'] = 'Deleted'
+        self.results['state']['status'] = 'Deleted'
         return True
 
     def resources_exist(self):

@@ -63,6 +63,7 @@ options:
         aliases:
             - virtual_network
         required: false
+        default: null
     subnet_name:
         description:
             - Name of an existing subnet within the specified virtual network. Required when creating a network
@@ -70,6 +71,7 @@ options:
         aliases:
             - subnet
         required: false
+        default: null
     os_type:
         description:
             - Determines any rules to be added to a default security group. When creating a network interface, if no
@@ -108,6 +110,7 @@ options:
             - public_ip_address
             - public_ip_name
         required: false
+        default: null
     public_ip_allocation_method:
         description:
             - If a public_ip_address_name is not provided, a default public IP address will be created. The allocation
@@ -124,6 +127,7 @@ options:
         aliases:
             - security_group
         required: false
+        default: null
     open_ports:
         description:
             - When a default security group is created for a Linux host a rule will be added allowing inbound TCP
@@ -131,6 +135,7 @@ options:
               access to RDP ports 3389 and 5986. Override the default ports by providing a list of open ports.
         type: list
         required: false
+        default: null
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
@@ -198,12 +203,7 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
-    type: bool
-    sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -344,7 +344,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=dict(),
+            state=dict(),
         )
 
         super(AzureRMNetworkInterface, self).__init__(derived_arg_spec=self.module_arg_spec,
@@ -354,8 +354,6 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         results = dict()
         changed = False
@@ -451,7 +449,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                 changed = True
 
         self.results['changed'] = changed
-        self.results['results'] = results
+        self.results['state'] = results
 
         if self.check_mode:
             return self.results
@@ -544,7 +542,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
                 request = self.serialize_obj(nic, 'NetworkInterface')
                 self.log(request, pretty_print=True)
 
-                self.results['results'] = self.create_or_update_nic(nic)
+                self.results['state'] = self.create_or_update_nic(nic)
 
             elif self.state == 'absent':
                 self.log('Deleting network interface {0}'.format(self.name))
@@ -576,7 +574,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             self.fail("Error deleting network interface {0} - {1}".format(self.name, str(exc)))
         self.get_poller_result(poller)
         # Delete doesn't return anything. If we get this far, assume success
-        self.results['results'] = 'Deleted'
+        self.results['state']['status'] = 'Deleted'
         return True
 
     def get_public_ip_address(self, name):

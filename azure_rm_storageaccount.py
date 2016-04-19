@@ -40,6 +40,7 @@ options:
         description:
             - Name of the storage account to update or create.
         required: false
+        default: null
     state:
         description:
             - Assert the state of the storage account. Use 'present' to create or update a storage account and
@@ -60,6 +61,7 @@ options:
               accounts cannot be changed to other account types, and other account types cannot be changed to
               StandardZRS or PremiumLRS."
         required: false
+        default: null
         choices:
             - Premium_LRS
             - Standard_GRS
@@ -75,11 +77,13 @@ options:
               time. To clear the existing custom domain, use an empty string for the custom domain name property.
             - Can be added to an existing storage account. Will be ignored during storage account creation.
         required: false
+        default: null
     tags:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
+        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
@@ -120,12 +124,7 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
-    type: bool
-    sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -197,7 +196,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=dict()
+            state=dict()
         )
 
         self.account_dict = None
@@ -217,8 +216,6 @@ class AzureRMStorageAccount(AzureRMModuleBase):
 
         for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
-
-        self.results['check_mode'] = self.check_mode
 
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
@@ -246,18 +243,18 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                       "to be {2}.".format(self.name, self.account_dict['provisioning_state'], AZURE_SUCCESS_STATE))
 
         if self.account_dict is not None:
-            self.results['results'] = self.account_dict
+            self.results['state'] = self.account_dict
         else:
-            self.results['results'] = dict()
+            self.results['state'] = dict()
 
         if self.state == 'present':
             if not self.account_dict:
-                self.results['results'] = self.create_account()
+                self.results['state'] = self.create_account()
             else:
                 self.update_account()
         elif self.state == 'absent' and self.account_dict:
             self.delete_account()
-            self.results['results'] = dict(Status='Deleted')
+            self.results['state'] = dict(Status='Deleted')
 
         return self.results
 

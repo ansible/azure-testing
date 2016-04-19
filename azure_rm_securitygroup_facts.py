@@ -35,6 +35,7 @@ options:
         description:
             - Only show results for a specific security group.
         required: false
+        default: null
     resource_group:
         description:
             - Name of the resource group to use.
@@ -43,6 +44,7 @@ options:
         description:
             - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
         required: false
+        default: null
 
 extends_documentation_fragment:
     - azure
@@ -71,7 +73,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -227,7 +229,7 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=[]
+            objects=[]
         )
 
         self.name = None
@@ -243,9 +245,9 @@ class AzureRMSecurityGroupFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name is not None:
-            self.results['results'] = self.get_item()
+            self.results['objects'] = self.get_item()
         else:
-            self.results['results'] = self.list_items()
+            self.results['objects'] = self.list_items()
 
         return self.results
 

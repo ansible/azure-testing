@@ -35,10 +35,12 @@ options:
         description:
             - Limit results to a specific resource group.
         required: false
+        default: null
     tags:
         description:
             - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
         required: false
+        default: null
 
 extends_documentation_fragment:
     - azure
@@ -69,7 +71,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -128,9 +130,9 @@ class AzureRMResourceGroupFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name:
-            self.results['results'] = self.get_item()
+            self.results['objects'] = self.get_item()
         else:
-            self.results['results'] = self.list_items()
+            self.results['objects'] = self.list_items()
 
         return self.results
 

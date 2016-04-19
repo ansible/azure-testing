@@ -35,14 +35,17 @@ options:
         description:
             - Only show results for a specific network interface.
         required: false
+        default: null
     resource_group:
         description:
             - Name of the resource group containing the network interface(s). Required when searching by name.
         required: false
+        default: null
     tags:
         description:
             - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
         required: false
+        default: null
 
 extends_documentation_fragment:
     - azure
@@ -77,7 +80,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -145,7 +148,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=[]
+            objects=[]
         )
 
         self.name = None
@@ -166,11 +169,11 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
             self.fail("Parameter error: resource group required when filtering by name.")
 
         if self.name:
-            self.results['results'] = self.get_item()
+            self.results['objects'] = self.get_item()
         elif self.resource_group:
-            self.results['results'] = self.list_resource_group()
+            self.results['objects'] = self.list_resource_group()
         else:
-            self.results['results'] = self.list_all()
+            self.results['objects'] = self.list_all()
 
         return self.results
 

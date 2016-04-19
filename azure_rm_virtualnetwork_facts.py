@@ -34,14 +34,17 @@ options:
     name:
         description:
             - Only show results for a specific security group.
+        default: null
         required: false
     resource_group:
         description:
             - Limit results by resource group. Required when filtering by name.
+        default: null
         required: false
     tags:
         description:
             - Limit results by providing a list of tags. Format tags as 'key' or 'key:value'.
+        default: null
         required: false
 
 extends_documentation_fragment:
@@ -74,7 +77,7 @@ changed:
     returned: always
     type: bool
     sample: False
-Results:
+objects:
     description: List containing a set of facts for each selected object.
     returned: always
     type: list
@@ -123,7 +126,7 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            results=[]
+            objects=[]
         )
 
         self.name = None
@@ -140,9 +143,9 @@ class AzureRMNetworkInterfaceFacts(AzureRMModuleBase):
             setattr(self, key, kwargs[key])
 
         if self.name is not None:
-            self.results['results'] = self.get_item()
+            self.results['objects'] = self.get_item()
         else:
-            self.results['results'] = self.list_items()
+            self.results['objects'] = self.list_items()
 
         return self.results
 

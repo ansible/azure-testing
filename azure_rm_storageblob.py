@@ -42,6 +42,7 @@ options:
         description:
             - Name of a blob object within the container.
         required: false
+        default: null
         aliases:
             - blob_name
     container:
@@ -53,32 +54,40 @@ options:
     content_type:
         description:
             - Set the blob content-type header. For example, 'image/png'.
+        default: null
+        required: false
     cache_control:
         description:
             - Set the blob cache-control header.
         required: false
+        default: null
     content_disposition:
         description:
             - Set the blob content-disposition header.
         required: false
+        default: null
     content_encoding:
         description:
             - Set the blob encoding header.
         required: false
+        default: null
     content_language:
         description:
             - Set the blob content-language header.
         required: false
+        default: null
     content_md5:
         description:
             - Set the blob md5 hash value.
         required: false
+        default: null
     dest:
         description:
             - Destination file path. Use with state 'present' to download a blob.
         aliases:
             - destination
         required: false
+        default: null
     force:
         description:
             - Overwrite existing blob or file when uploading or downloading. Force deletion of a container
@@ -95,6 +104,7 @@ options:
         aliases:
             - source
         required: false
+        default: null
     state:
         description:
             - Assert the state of a container or blob.
@@ -116,6 +126,7 @@ options:
             - Determine a container's level of public access. By default containers are private. Can only be set at
               time of container creation.
         required: false
+        default: null
         choices:
             - container
             - blob
@@ -124,6 +135,7 @@ options:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
         required: false
+        default: null
     purge_tags:
         description:
             - Use to remove tags from an object. Any tags not found in the tags parameter will be removed from
@@ -173,41 +185,40 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
+actions:
+    description: List of descriptive actions taken by the module.
     returned: always
-    type: bool
-    sample: True
-Results:
-    description: Facts about the current state of the object.
+    type: list
+    sample: [
+        "updated blob foo:graylog.png content settings."
+    ]
+blob:
+    description: Facts about the current state of the blob.
+    returned: when a blob is operated on
+    type: dict
+    sample: {
+        "content_length": 136532,
+        "content_settings": {
+            "cache_control": null,
+            "content_disposition": null,
+            "content_encoding": null,
+            "content_language": null,
+            "content_md5": null,
+            "content_type": "application/image"
+        },
+        "last_modified": "09-Mar-2016 22:08:25 +0000",
+        "name": "graylog.png",
+        "tags": {},
+        "type": "BlockBlob"
+    }
+container:
+    description: Facts about the current state of the selcted container.
     returned: always
     type: dict
     sample: {
-        "actions": [
-            "updated blob foo:graylog.png content settings."
-        ],
-        "blob": {
-            "content_length": 136532,
-            "content_settings": {
-                "cache_control": null,
-                "content_disposition": null,
-                "content_encoding": null,
-                "content_language": null,
-                "content_md5": null,
-                "content_type": "application/image"
-            },
-            "last_modified": "09-Mar-2016 22:08:25 +0000",
-            "name": "graylog.png",
-            "tags": {},
-            "type": "BlockBlob"
-        },
-        "changed": true,
-        "check_mode": false,
-        "container": {
-            "last_mdoified": "09-Mar-2016 19:28:26 +0000",
-            "name": "foo",
-            "tags": {}
-        }
+        "last_mdoified": "09-Mar-2016 19:28:26 +0000",
+        "name": "foo",
+        "tags": {}
     }
 '''
 

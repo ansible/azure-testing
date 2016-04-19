@@ -43,6 +43,7 @@ options:
               a new virtual network or using purge_address_prefixes.
         aliases:
             - address_prefixes
+        default: null
         required: false
     dns_servers:
         description:
@@ -50,6 +51,7 @@ options:
               as the Primary server. This is an explicit list. Existing DNS servers will be replaced with the
               specified list. Use the purge_dns_servers option to remove all custom DNS servers and revert to
               default Azure servers.
+        default: null
         required: false
     location:
         description:
@@ -83,6 +85,7 @@ options:
         description:
             - "Dictionary of string:string pairs to assign as metadata to the object. Metadata tags on the object
               will be updated with any provided values. To remove tags use the purge_tags option."
+        default: null
         required: false
     purge_tags:
         description:
@@ -127,12 +130,7 @@ changed:
     returned: always
     type: bool
     sample: True
-check_mode:
-    description: Whether or not the module was executed in check mode.
-    returned: always
-    type: bool
-    sample: True
-Results:
+state:
     description: Facts about the current state of the object.
     returned: always
     type: dict
@@ -231,7 +229,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
 
         self.results=dict(
             changed=False,
-            results=dict()
+            state=dict()
         )
 
         super(AzureRMVirtualNetwork, self).__init__(self.module_arg_spec,
@@ -321,7 +319,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                 changed = True
 
         self.results['changed'] = changed
-        self.results['results'] = results
+        self.results['state'] = results
 
         if self.check_mode:
             return self.results
@@ -345,7 +343,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                         )
                     if self.tags:
                         vnet.tags = self.tags
-                    self.results['results'] = self.create_or_update_vnet(vnet)
+                    self.results['state'] = self.create_or_update_vnet(vnet)
                 else:
                     # update existing virtual network
                     self.log("Update virtual network {0}".format(self.name))
@@ -360,7 +358,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                         vnet.dhcp_options = DhcpOptions(
                             dns_servers=results['dns_servers']
                         )
-                    self.results['results'] = self.create_or_update_vnet(vnet)
+                    self.results['state'] = self.create_or_update_vnet(vnet)
             elif self.state == 'absent':
                 self.delete_virtual_network()
 
@@ -384,7 +382,7 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
         self.get_poller_result(poller)
         # The poller does not actually return anything. If we got this far, the we'll assume
         # that the operation succeeded.
-        self.results['results']['status'] = 'Deleted'
+        self.results['state']['status'] = 'Deleted'
         return True
 
 
