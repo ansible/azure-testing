@@ -200,11 +200,11 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
     def __init__(self):
 
         self.module_arg_spec = dict(
-            resource_group=dict(required=True),
-            name=dict(required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            resource_group=dict(type='str', required=True),
+            name=dict(type='str', required=True),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             location=dict(type='str'),
-            address_prefixes_cidr =dict(type='list', aliases=['address_prefixes']),
+            address_prefixes_cidr=dict(type='list', aliases=['address_prefixes']),
             dns_servers=dict(type='list',),
             purge_address_prefixes=dict(type='bool', default=False, aliases=['purge']),
             purge_dns_servers=dict(type='bool', default=False),

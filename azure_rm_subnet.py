@@ -154,8 +154,8 @@ class AzureRMSubnet(AzureRMModuleBase):
     def __init__(self):
 
         self.module_arg_spec = dict(
-            resource_group=dict(required=True),
-            name=dict(required=True),
+            resource_group=dict(type='str', required=True),
+            name=dict(type='str', required=True),
             state=dict(type='str', default='present', choices=['present', 'absent']),
             virtual_network_name=dict(type='str', required=True, aliases=['virtual_network']),
             address_prefix_cidr=dict(type='str', aliases=['address_prefix']),

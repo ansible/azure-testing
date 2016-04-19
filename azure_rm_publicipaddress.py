@@ -171,9 +171,9 @@ class AzureRMPublicIPAddress(AzureRMModuleBase):
     def __init__(self):
 
         self.module_arg_spec = dict(
-            resource_group=dict(required=True),
-            name=dict(required=True),
-            state=dict(default='present', choices=['present', 'absent']),
+            resource_group=dict(type='str', required=True),
+            name=dict(type='str', required=True),
+            state=dict(type='str', default='present', choices=['present', 'absent']),
             location=dict(type='str'),
             allocation_method=dict(type='str', default='Dynamic', choices=['Dynamic', 'Static']),
             domain_name=dict(type='str', aliases=['domain_name_label']),

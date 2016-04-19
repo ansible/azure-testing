@@ -309,8 +309,8 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
     def __init__(self):
 
         self.module_arg_spec = dict(
-            resource_group=dict(required=True),
-            name=dict(required=True),
+            resource_group=dict(type='str', required=True),
+            name=dict(type='str', required=True),
             location=dict(type='str'),
             security_group_name=dict(type='str', aliases=['security_group']),
             state=dict(default='present', choices=['present', 'absent']),
