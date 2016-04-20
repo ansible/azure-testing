@@ -158,7 +158,7 @@
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state: absent
-  with_items: "{{ output.state }}"
+  with_items: "{{ output.objects }}"
 
 - name: Should have no security groups remaining
   azure_rm_securitygroup_facts:

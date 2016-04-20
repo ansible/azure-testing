@@ -230,7 +230,7 @@
 
 - assert:
       that:
-          - output.results | length >= 1
+          - output.objects | length >= 1
 
 - name: Gather facts for resource group and tags
   azure_rm_networkinterface_facts:
@@ -240,7 +240,7 @@
 
 - assert:
       that:
-          - output.results | length == 1
+          - output.objects | length == 1
 
 - name: Gather facts for name and tags
   azure_rm_networkinterface_facts:
@@ -251,7 +251,7 @@
 
 - assert:
       that:
-          - output.results | length == 1
+          - output.objects | length == 1
 
 - name: Purge one tag
   azure_rm_networkinterface:

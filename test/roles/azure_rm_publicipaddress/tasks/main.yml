@@ -125,7 +125,7 @@
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state:  absent
-  with_items: "{{ output.state }}"
+  with_items: "{{ output.objects }}"
 
 - name: Gather facts for all public ips
   azure_rm_publicipaddress_facts:
