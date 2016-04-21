@@ -26,8 +26,7 @@ description:
      - "Create or destroy Azure Resource Manager template deployments via the Azure SDK for Python.
        You can find some quick start templates in GitHub here https://github.com/azure/azure-quickstart-templates.
        If you would like to find out more information about Azure Resource Manager templates, see
-       https://azure.microsoft.com/en-us/documentation/articles/resource-group-template-deploy/. NOTE: this module
-       does NOT support check mode and is NOT idempotent. Use accordingly."
+       https://azure.microsoft.com/en-us/documentation/articles/resource-group-template-deploy/."
 
 options:
   resource_group_name:
@@ -137,7 +136,7 @@ EXAMPLES = '''
 
     - name: Add new instance to host group
       add_host: hostname={{ item['ips'][0].public_ip }} groupname=azure_vms
-      with_items: azure.instances
+      with_items: azure.deployment.instances
 
     - hosts: azure_vms
       user: devopscle
@@ -316,6 +315,47 @@ EXAMPLES = '''
 '''
 
 RETURN = '''
+msg:
+  description: String indicating if the deployment was created or deleted
+  returned: always
+  type: string
+  sample: "deployment created"
+deployment:
+  description: Deployment details
+  type: dict
+  returned: always
+  sample:{
+        "group_name": "Test_Deployment",
+        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Test_Deployment/providers/Microsoft.Resources/deployments/ansible-arm",
+        "instances": [
+            {
+                "ips": [
+                    {
+                        "dns_settings": {
+                            "domain_name_label": "testvm9910001",
+                            "fqdn": "testvm9910001.westus.cloudapp.azure.com"
+                        },
+                        "id": "/subscriptions/3f7e29ba-24e0-42f6-8d9c-5149a14bda37/resourceGroups/Test_Deployment/providers/Microsoft.Network/publicIPAddresses/myPublicIP",
+                        "name": "myPublicIP",
+                        "public_ip": "13.91.99.232",
+                        "public_ip_allocation_method": "IPAllocationMethod.dynamic"
+                    }
+                ],
+                "vm_name": "MyUbuntuVM"
+            }
+        ],
+        "name": "ansible-arm",
+        "outputs": {
+            "hostname": {
+                "type": "String",
+                "value": "testvm9910001.westus.cloudapp.azure.com"
+            },
+            "sshCommand": {
+                "type": "String",
+                "value": "ssh chouseknecht@testvm9910001.westus.cloudapp.azure.com"
+            }
+        }
+    }
 '''
 
 import time
@@ -340,27 +380,6 @@ try:
 except ImportError:
     # This is handled in azure_rm_common
     pass
-
-
-def build_deployment_body(module):
-    """
-    Build the deployment body from the module parameters
-    :param module: Ansible module containing the validated configuration for the deployment template
-    :return: body as dict
-    """
-
-    # TODO -- Is this needed? It was never called in the original azure_deployment code.
-
-    properties = dict(mode='Incremental')
-    properties['templateLink'] = \
-        dict(uri=module.params.get('template_link'),
-             contentVersion=module.params.get('content_version'))
-
-    properties['parametersLink'] = \
-        dict(uri=module.params.get('parameters_link'),
-             contentVersion=module.params.get('content_version'))
-
-    return dict(properties=properties)
 
 
 class AzureRMDeploymentManager(AzureRMModuleBase):
@@ -409,14 +428,14 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
 
     def exec_module(self, **kwargs):
 
-        for key in self.module_arg_spec.keys():
+        for key in self.module_arg_spec.keys() + ['tags']:
             setattr(self, key, kwargs[key])
 
         if self.state == 'present':
             deployment = self.deploy_template()
             self.results['deployment'] = dict(
                 name=deployment.name,
-                group_name=conn_info['resource_group_name'],
+                group_name=self.resource_group_name,
                 id=deployment.id,
                 outputs=deployment.properties.outputs,
                 instances=self._get_instances(deployment)
@@ -427,7 +446,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             if self.resource_group_exists(self.resource_group_name):
                 self.destroy_resource_group()
                 self.results['changed'] = True
-                self.results[msg] = "deployment deleted"
+                self.results['msg'] = "deployment deleted"
 
         return self.results
 
@@ -466,15 +485,20 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             result = self.rm_client.deployments.create_or_update(self.resource_group_name,
                                                                  self.deployment_name,
                                                                  deploy_parameter)
-            if self.wait_for_deployment_completion:
-                deployment_result = self.get_poller_result(result, wait=self.wait_for_deployment_polling_period)
 
+            deployment_result = self.get_poller_result(result)
+            if self.wait_for_deployment_completion:
+                while deployment_result.properties.provisioning_state not in ['Canceled', 'Failed', 'Deleted',
+                                                                              'Succeeded']:
+                    time.sleep(self.wait_for_deployment_polling_period)
+                    deployment_result = self.rm_client.deployments.get(self.resource_group_name, self.deployment_name)
         except CloudError as exc:
             failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
             self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
                       failed_deployment_operations=failed_deployment_operations)
 
         if self.wait_for_deployment_completion and deployment_result.properties.provisioning_state != 'Succeeded':
+            self.log("provisioning state: %s" % deployment_result.properties.provisioning_state)
             failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
             self.fail('Deployment failed. Deployment id: %s' % deployment_result.id,
                       failed_deployment_operations=failed_deployment_operations)
@@ -491,7 +515,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             result.wait() # Blocking wait till the delete is finished
         except CloudError as e:
             if e.status_code == 404 or e.status_code == 204:
-                return True
+                return
             else:
                 self.fail("Delete resource group and deploy failed with status code: %s and message: %s" %
                           (e.status_code, e.message))
@@ -529,12 +553,14 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
 
     def _get_failed_deployment_operations(self, deployment_name):
         results = []
+        # time.sleep(15) # there is a race condition between when we ask for deployment status and when the
+        #               # status is available.
 
         try:
             operations = self.rm_client.deployment_operations.list(self.resource_group_name, deployment_name)
         except CloudError as exc:
-            self.fail("List nested deployment operations failed with status code: %s and message: %s" %
-                      (e.status_code, e.message))
+            self.fail("Get deployment failed with status code: %s and message: %s" %
+                      (exc.status_code, exc.message))
         try:
             results = [
                 dict(
@@ -542,7 +568,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
                     operation_id=op.operation_id,
                     status_code=op.properties.status_code,
                     status_message=op.properties.status_message,
-                    target_resource = dict(
+                    target_resource=dict(
                         id=op.properties.target_resource.id,
                         resource_name=op.properties.target_resource.resource_name,
                         resource_type=op.properties.target_resource.resource_type
@@ -579,7 +605,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             if dep.resource_name not in tree:
                 tree[dep.resource_name] = dict(dep=dep, children=dict())
             if isinstance(dep, Dependency) and dep.depends_on is not None and len(dep.depends_on) > 0:
-                build_hierarchy(dep.depends_on, tree[dep.resource_name]['children'])
+                self._build_hierarchy(dep.depends_on, tree[dep.resource_name]['children'])
 
         if 'top' in tree:
             tree.pop('top', None)
@@ -590,7 +616,6 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
                         tree[key2]['children'][key1] = tree[key1]
                         tree.pop(key1)
         return tree
-
 
     def _get_ip_dict(self, ip):
         ip_dict = dict(name=ip.name,
@@ -605,9 +630,8 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             }
         return ip_dict
 
-
-    def nic_to_public_ips_instance(self, nics):
-        return [self.network_client.public_ip_addresses.get(group, public_ip_id.split('/')[-1])
+    def _nic_to_public_ips_instance(self, nics):
+        return [self.network_client.public_ip_addresses.get(self.resource_group_name, public_ip_id.split('/')[-1])
                   for nic_obj in [self.network_client.network_interfaces.get(self.resource_group_name,
                                                                              nic['dep'].resource_name) for nic in nics]
                   for public_ip_id in [ip_conf_instance.public_ip_address.id
