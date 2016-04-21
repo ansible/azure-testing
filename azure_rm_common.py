@@ -36,7 +36,7 @@ AZURE_COMMON_ARGS = dict(
     tenant=dict(type='str', no_log=True),
     ad_user=dict(type='str', no_log=True),
     password=dict(type='str', no_log=True),
-    debug=dict(type='bool', default=False),
+    # debug=dict(type='bool', default=False),
 )
 
 AZURE_CREDENTIAL_ENV_MAPPING = dict(
@@ -192,14 +192,14 @@ class AzureRMModuleBase(object):
         self.module.fail_json(msg=msg, **kwargs)
 
     def log(self, msg, pretty_print=False):
-        # pass
+        pass
         # Use only during module development
-        if self.debug:
-            log_file = open('azure_rm.log', 'a')
-            if pretty_print:
-                 log_file.write(json.dumps(msg, indent=4, sort_keys=True))
-            else:
-                 log_file.write(msg + u'\n')
+        # if self.debug:
+        #     log_file = open('azure_rm.log', 'a')
+        #     if pretty_print:
+        #          log_file.write(json.dumps(msg, indent=4, sort_keys=True))
+        #     else:
+        #          log_file.write(msg + u'\n')
 
     def validate_tags(self, tags):
         '''
