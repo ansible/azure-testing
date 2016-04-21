@@ -13,13 +13,12 @@
     - name: echo the hostname of the vm
       shell: hostname
 
-- name: remove the resource group
+- name: Remove the resource group
   hosts: localhost
   connection: local
   gather_facts: no
   tasks:
-    - azure_rm_resourcegroup:
-        name: Test_Deployment
+    - azure_rm_deployment:
+        resource_group: Test_Deployment
         state: absent
-        force: yes
-      when: remove_vms
+      when: remove_vm

@@ -249,10 +249,10 @@ class AzureRMResourceGroup(AzureRMModuleBase):
     def delete_resource_group(self):
         try:
             poller = self.rm_client.resource_groups.delete(self.name)
+            self.get_poller_result(poller)
         except Exception as exc:
             self.fail("Error delete resource group {0} - {1}".format(self.name, str(exc)))
 
-        self.get_poller_result(poller)
         # The delete operation doesn't return anything.
         # If we got here, assume all is good
         self.results['state']['status'] = 'Deleted'

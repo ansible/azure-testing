@@ -273,12 +273,14 @@ class AzureRMSubnet(AzureRMModuleBase):
         return self.results
 
     def create_or_update_subnet(self, subnet):
-
-        poller = self.network_client.subnets.create_or_update(self.resource_group,
-                                                              self.virtual_network_name,
-                                                              self.name,
-                                                              subnet)
-        new_subnet = self.get_poller_result(poller)
+        try:
+            poller = self.network_client.subnets.create_or_update(self.resource_group,
+                                                                  self.virtual_network_name,
+                                                                  self.name,
+                                                                  subnet)
+            new_subnet = self.get_poller_result(poller)
+        except Exception as exc:
+            self.fail("Error creating or updateing subnet {0} - {1}".format(self.name, str(exc)))
         self.check_provisioning_state(new_subnet)
         return subnet_to_dict(new_subnet)
 
@@ -288,10 +290,11 @@ class AzureRMSubnet(AzureRMModuleBase):
             poller = self.network_client.subnets.delete(self.resource_group,
                                                         self.virtual_network_name,
                                                         self.name)
+            result = self.get_poller_results(poller)
         except Exception as exc:
             self.fail("Error deleting subnet {0} - {1}".format(self.name, str(exc)))
 
-        return self.get_poller_result(poller)
+        return result
 
     def get_security_group(self, name):
         self.log("Fetching security group {0}".format(name))

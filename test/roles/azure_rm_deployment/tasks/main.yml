@@ -6,7 +6,7 @@
       adminUsername:
         value: chouseknecht 
       adminPassword:
-        value: password123
+        value: password123!
       dnsLabelPrefix:
         value: testvm9910001
       ubuntuOSVersion:

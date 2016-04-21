@@ -25,8 +25,7 @@ version_added: "2.1"
 description:
      - "Create or destroy Azure Resource Manager template deployments via the Azure SDK for Python.
        You can find some quick start templates in GitHub here https://github.com/azure/azure-quickstart-templates.
-       If you would like to find out more information about Azure Resource Manager templates, see
-       https://azure.microsoft.com/en-us/documentation/articles/resource-group-template-deploy/."
+       For more information on Azue resource manager templates see https://azure.microsoft.com/en-us/documentation/articles/resource-group-template-deploy/."
 
 options:
   resource_group_name:
@@ -507,9 +506,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
     def destroy_resource_group(self):
         """
         Destroy the targeted resource group
-        :return: if the result caused a change in the deployment
         """
-
         try:
             result = self.rm_client.resource_groups.delete(self.resource_group_name)
             result.wait() # Blocking wait till the delete is finished

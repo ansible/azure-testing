@@ -361,29 +361,26 @@ class AzureRMVirtualNetwork(AzureRMModuleBase):
                     self.results['state'] = self.create_or_update_vnet(vnet)
             elif self.state == 'absent':
                 self.delete_virtual_network()
+                self.results['state']['status'] = 'Deleted'
+
 
         return self.results
 
     def create_or_update_vnet(self, vnet):
         try:
             poller = self.network_client.virtual_networks.create_or_update(self.resource_group, self.name, vnet)
+            new_vnet = self.get_poller_result(poller)
         except Exception as  exc:
             self.fail("Error creating or updating virtual network {0} - {1}".format(self.name, str(exc)))
-
-        new_vnet = self.get_poller_result(poller)
-
         return virtual_network_to_dict(new_vnet)
 
     def delete_virtual_network(self):
         try:
             poller = self.network_client.virtual_networks.delete(self.resource_group, self.name)
+            result = self.get_poller_result(poller)
         except Exception as exc:
             self.fail("Error deleting virtual network {0} - {1}".format(self.name, str(exc)))
-        self.get_poller_result(poller)
-        # The poller does not actually return anything. If we got this far, the we'll assume
-        # that the operation succeeded.
-        self.results['state']['status'] = 'Deleted'
-        return True
+        return result
 
 
 def main():

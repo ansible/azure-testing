@@ -713,17 +713,18 @@ class AzureRMSecurityGroup(AzureRMModuleBase):
             poller = self.network_client.network_security_groups.create_or_update(self.resource_group,
                                                                                   self.name,
                                                                                   parameters)
+            result = self.get_poller_result(poller)
         except AzureHttpError as exc:
             self.fail("Error creating/upating security group {0} - {1}".format(self.name, str(exc)))
-
-        return create_network_security_group_dict(self.get_poller_result(poller))
+        return create_network_security_group_dict(result)
 
     def delete(self):
         try:
             poller = self.network_client.network_security_groups.delete(self.resource_group, self.name)
+            result = self.get_poller_result(poller)
         except AzureHttpError as exc:
             raise Exception("Error deleting security group {0} - {1}".format(self.name, str(exc)))
-        return self.get_poller_result(poller)
+        return result
 
 
 def main():

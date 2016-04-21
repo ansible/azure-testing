@@ -404,11 +404,10 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         self.log(str(parameters))
         try:
             poller = self.storage_client.storage_accounts.create(self.resource_group, self.name, parameters)
+            self.get_poller_result(poller)
         except AzureHttpError, e:
             self.log('Error creating storage account.')
             self.fail("Failed to create account: {0}".format(str(e)))
-
-        self.get_poller_result(poller)
         # the poller doesn't actually return anything
         return self.get_account()
 
