@@ -1,0 +1,14 @@
+- name: Create Azure Deploy
+  azure_rm_deployment:
+    resource_group_name: Test_Deployment 
+    template_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.parameters.json'
+    parameters:
+      adminUsername:
+        value: chouseknecht 
+      adminPassword:
+        value: password123
+      dnsLabelPrefix:
+        value: testvm9910001
+      ubuntuOSVersion:
+        value: "14.04.2-LTS"
+    debug: yes

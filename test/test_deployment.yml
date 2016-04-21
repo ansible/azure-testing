@@ -1,0 +1,6 @@
+- name: Test deployment module
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  roles:
+    - { role: azure_rm_deployment }
