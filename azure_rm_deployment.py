@@ -95,8 +95,8 @@ EXAMPLES = '''
   azure_rm_deployment:
     state: present
     resource_group_name: dev-ops-cle
-    parameters_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.json'
-    template_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.parameters.json'
+    template_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.json'
+    parameters_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.parameters.json'
 
 # Create or update a template deployment based on a uri to the template and parameters specified inline.
 # This deploys a VM with SSH support for a given public key, then stores the result in 'azure_vms'. The result is then
@@ -466,25 +466,15 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             result = self.rm_client.deployments.create_or_update(self.resource_group_name,
                                                                  self.deployment_name,
                                                                  deploy_parameter)
-        except CloudError as exc:
-            failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
-            self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
-                      failed_deployment_operations=failed_deployment_operations)
-
-        # Handle deployment result
-        try:
-            deployment_result = result.result() # Blocking wait, return the Deployment object
             if self.wait_for_deployment_completion:
-                while deployment_result.properties.provisioning_state not in ['Canceled', 'Failed', 'Deleted',
-                                                                              'Succeeded']:
-                    time.sleep(self.wait_for_deployment_polling_period)
-                    deployment_result = self.rm_client.deployments.get(self.resource_group_name, self.deployment_name)
+                deployment_result = self.get_poller_result(result, wait=self.wait_for_deployment_polling_period)
+
         except CloudError as exc:
             failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
             self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
                       failed_deployment_operations=failed_deployment_operations)
 
-        if deployment_result.properties.provisioning_state != 'Succeeded':
+        if self.wait_for_deployment_completion and deployment_result.properties.provisioning_state != 'Succeeded':
             failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
             self.fail('Deployment failed. Deployment id: %s' % deployment_result.id,
                       failed_deployment_operations=failed_deployment_operations)

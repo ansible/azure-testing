@@ -1,7 +1,7 @@
 - name: Create Azure Deploy
   azure_rm_deployment:
     resource_group_name: Test_Deployment 
-    template_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.parameters.json'
+    template_link: 'https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/101-vm-simple-linux/azuredeploy.json'
     parameters:
       adminUsername:
         value: chouseknecht 
@@ -11,4 +11,8 @@
         value: testvm9910001
       ubuntuOSVersion:
         value: "14.04.2-LTS"
-    debug: yes
+    debug: "{{ playbook_debug }}" 
+  register: output
+
+- debug: var=output
+  when: playbook_debug

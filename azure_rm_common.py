@@ -405,7 +405,7 @@ class AzureRMModuleBase(object):
         serializer = Serializer()
         return serializer.body(obj, class_name)
 
-    def get_poller_result(self, poller):
+    def get_poller_result(self, poller, wait=20):
         '''
         Consistent method of waiting on and retrieving results from Azure's long poller
 
@@ -413,7 +413,7 @@ class AzureRMModuleBase(object):
         :return object resulting from the original request
         '''
         try:
-            delay = 20
+            delay = wait
             while not poller.done():
                 self.log("Waiting for {0} sec".format(delay))
                 poller.wait(timeout=delay)

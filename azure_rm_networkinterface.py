@@ -555,6 +555,7 @@ class AzureRMNetworkInterface(AzureRMModuleBase):
             poller = self.network_client.network_interfaces.create_or_update(self.resource_group, self.name, nic)
         except Exception as exc:
             self.fail("Error creating or updating network interface {0} - {1}".format(self.name, str(exc)))
+
         new_nic = self.get_poller_result(poller)
         self.log("new_nic:")
         self.log(new_nic)
