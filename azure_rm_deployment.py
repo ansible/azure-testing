@@ -492,24 +492,18 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
                     time.sleep(self.wait_for_deployment_polling_period)
                     deployment_result = self.rm_client.deployments.get(self.resource_group_name, self.deployment_name)
         except CloudError as exc:
-            self._capture_failed_deployment(exc=exc)
-
-        if self.wait_for_deployment_completion and deployment_result.properties.provisioning_state != 'Succeeded':
-            self.log("provisioning state: %s" % deployment_result.properties.provisioning_state)
-            self._capture_failed_deployment(id=deployment_result.id)
-
-        return deployment_result
-
-    def _capture_failed_deployment(self, exc=None, id=None):
-        failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
-        self.log(dict(failed_deployment_operations=failed_deployment_operations), pretty_print=True)
-        if exc:
+            failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
             self.log("Deployment failed %s: %s" % (exc.status_code, exc.message))
             self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
                       failed_deployment_operations=failed_deployment_operations)
-        else:
-            self.fail('Deployment failed. Deployment id: %s' % id,
+
+        if self.wait_for_deployment_completion and deployment_result.properties.provisioning_state != 'Succeeded':
+            self.log("provisioning state: %s" % deployment_result.properties.provisioning_state)
+            failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
+            self.fail('Deployment failed. Deployment id: %s' % deployment_result.id,
                       failed_deployment_operations=failed_deployment_operations)
+
+        return deployment_result
 
     def destroy_resource_group(self):
         """
@@ -585,7 +579,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
         except:
             # If we fail here, the original error gets lost and user receives wrong error message/stacktrace
             pass
-
+        self.log(dict(failed_deployment_operations=results), pretty_print=True)
         return results
 
     def _get_instances(self, deployment):
