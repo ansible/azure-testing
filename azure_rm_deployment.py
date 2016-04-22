@@ -16,7 +16,7 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 DOCUMENTATION = '''
 ---
-module: azure_deployment
+module: azure_rm_deployment
 
 short_description: Create or destroy Azure Resource Manager template deployments
 
@@ -36,7 +36,7 @@ options:
     description:
       - The geo-locations in which the resource group will be located.
     required: false
-    default: West US
+    default: westus
   state:
     description:
       - If state is "present", template will be created. If state is "present" and if deployment exists, it will be
@@ -105,13 +105,13 @@ EXAMPLES = '''
   gather_facts: no
   tasks:
     - name: Destroy Azure Deploy
-      azure_deployment:
+      azure_rm_deployment:
         state: absent
         subscription_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         resource_group_name: dev-ops-cle
 
     - name: Create Azure Deploy
-      azure_deployment:
+      azure_rm_deployment:
         state: present
         subscription_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         resource_group_name: dev-ops-cle
@@ -147,7 +147,7 @@ EXAMPLES = '''
 
 # Deploy an Azure WebApp running a hello world'ish node app
 - name: Create Azure WebApp Deployment at http://devopscleweb.azurewebsites.net/hello.js
-  azure_deployment:
+  azure_rm_deployment:
     state: present
     subscription_id: cbbdaed0-fea9-4693-bf0c-d446ac93c030
     resource_group_name: dev-ops-cle-webapp
@@ -166,7 +166,7 @@ EXAMPLES = '''
 
 # Create or update a template deployment based on an inline template and parameters
 - name: Create Azure Deploy
-  azure_deploy:
+  azure_rm_deploy:
     state: present
     subscription_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     resource_group_name: dev-ops-cle
@@ -392,8 +392,8 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             parameters=dict(type='dict', default=None),
             template_link=dict(type='str', default=None),
             parameters_link=dict(type='str', default=None),
-            location=dict(type='str', default="West US"),
-            deployment_mode=dict(type='str', default='Complete', choices=['Complete', 'Incremental']),
+            location=dict(type='str', default="westus"),
+            deployment_mode=dict(type='str', default='complete', choices=['complete', 'incremental']),
             deployment_name=dict(type='str', default="ansible-arm"),
             wait_for_deployment_completion=dict(type='bool', default=True),
             wait_for_deployment_polling_period=dict(type='int', default=30)
@@ -492,16 +492,24 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
                     time.sleep(self.wait_for_deployment_polling_period)
                     deployment_result = self.rm_client.deployments.get(self.resource_group_name, self.deployment_name)
         except CloudError as exc:
-            failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
-            self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
-                      failed_deployment_operations=failed_deployment_operations)
+            self._capture_failed_deployment(exc=exc)
 
         if self.wait_for_deployment_completion and deployment_result.properties.provisioning_state != 'Succeeded':
             self.log("provisioning state: %s" % deployment_result.properties.provisioning_state)
-            failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
-            self.fail('Deployment failed. Deployment id: %s' % deployment_result.id,
-                      failed_deployment_operations=failed_deployment_operations)
+            self._capture_failed_deployment(id=deployment_result.id)
+
         return deployment_result
+
+    def _capture_failed_deployment(self, exc=None, id=None):
+        failed_deployment_operations = self._get_failed_deployment_operations(self.deployment_name)
+        self.log(dict(failed_deployment_operations=failed_deployment_operations), pretty_print=True)
+        if exc:
+            self.log("Deployment failed %s: %s" % (exc.status_code, exc.message))
+            self.fail("Deployment failed with status code: %s and message: %s" % (exc.status_code, exc.message),
+                      failed_deployment_operations=failed_deployment_operations)
+        else:
+            self.fail('Deployment failed. Deployment id: %s' % id,
+                      failed_deployment_operations=failed_deployment_operations)
 
     def destroy_resource_group(self):
         """
