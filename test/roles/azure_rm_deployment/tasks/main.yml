@@ -11,7 +11,7 @@
         value: testvm9910001
       ubuntuOSVersion:
         value: "14.04.2-LTS"
-    debug: "{{ playbook_debug }}" 
+    # debug: "{{ playbook_debug }}" 
   register: output
 
 - debug: var=output
