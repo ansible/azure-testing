@@ -77,7 +77,7 @@
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm002
-      restart: yes
+      restarted: yes
   register: output
 
 - debug: var=output
@@ -92,7 +92,7 @@
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm002
-      deallocate: yes
+      deallocated: yes
   register: output
 
 - debug: var=output
