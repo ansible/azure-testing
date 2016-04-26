@@ -64,7 +64,6 @@
       vm_size: Standard_D1
       admin_username: chouseknecht
       image: "{{ image }}"
-      state: present
   register: output
 
 - debug: var=output
@@ -80,7 +79,6 @@
       vm_size: Standard_D1
       admin_username: chouseknecht
       image: "{{ image }}"
-      state: present
   register: output
 
 - debug: var=output
@@ -100,7 +98,7 @@
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm10
-      state: stopped
+      stop: yes
   register: output
 
 - debug: var=output
@@ -113,7 +111,6 @@
   azure_rm_virtualmachine:
       resource_group: "{{ resource_group }}"
       name: testvm10
-      state: started
   register: output
 
 - debug: var=output
