@@ -79,14 +79,10 @@ try:
     from azure.mgmt.network.models import PublicIPAddress, NetworkSecurityGroup, SecurityRule, NetworkInterface, \
         NetworkInterfaceIPConfiguration, Subnet
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
-    from azure.mgmt.network.network_management_client import NetworkManagementClient,\
-                                                             NetworkManagementClientConfiguration
-    from azure.mgmt.resource.resources.resource_management_client import ResourceManagementClient,\
-                                                                         ResourceManagementClientConfiguration
-    from azure.mgmt.storage.storage_management_client import StorageManagementClient,\
-                                                             StorageManagementClientConfiguration
-    from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
-                                                             ComputeManagementClientConfiguration
+    from azure.mgmt.network.network_management_client import NetworkManagementClient
+    from azure.mgmt.resource.resources.resource_management_client import ResourceManagementClient
+    from azure.mgmt.storage.storage_management_client import StorageManagementClient
+    from azure.mgmt.compute.compute_management_client import ComputeManagementClient
     from azure.storage.cloudstorageaccount import CloudStorageAccount
 except ImportError, exc:
     HAS_AZURE_EXC = exc
@@ -596,9 +592,8 @@ class AzureRMModuleBase(object):
     def storage_client(self):
         self.log('Getting storage client...')
         if not self._storage_client:
-            config = StorageManagementClientConfiguration(self.azure_credentials, self.subscription_id)
-            config.add_user_agent(ANSIBLE_USER_AGENT)
-            self._storage_client = StorageManagementClient(config)
+            self._storage_client = StorageManagementClient(self.azure_credentials, self.subscription_id)
+            self._storage_client.config.add_user_agent(ANSIBLE_USER_AGENT)
             self._register('Microsoft.Storage')
         return self._storage_client
 
@@ -606,9 +601,8 @@ class AzureRMModuleBase(object):
     def network_client(self):
         self.log('Getting network client')
         if not self._network_client:
-            config = NetworkManagementClientConfiguration(self.azure_credentials, self.subscription_id)
-            config.add_user_agent(ANSIBLE_USER_AGENT)
-            self._network_client = NetworkManagementClient(config)
+            self._network_client = NetworkManagementClient(self.azure_credentials, self.subscription_id)
+            self._network_client.config.add_user_agent(ANSIBLE_USER_AGENT)
             self._register('Microsoft.Network')
         return self._network_client
 
@@ -616,17 +610,15 @@ class AzureRMModuleBase(object):
     def rm_client(self):
         self.log('Getting resource manager client')
         if not self._resource_client:
-            config = ResourceManagementClientConfiguration(self.azure_credentials, self.subscription_id)
-            config.add_user_agent(ANSIBLE_USER_AGENT)
-            self._resource_client = ResourceManagementClient(config)
+            self._resource_client = ResourceManagementClient(self.azure_credentials, self.subscription_id)
+            self._resource_client.config.add_user_agent(ANSIBLE_USER_AGENT)
         return self._resource_client
 
     @property
     def compute_client(self):
         self.log('Getting compute client')
         if not self._compute_client:
-            config = ComputeManagementClientConfiguration(self.azure_credentials, self.subscription_id)
-            config.add_user_agent(ANSIBLE_USER_AGENT)
-            self._compute_client = ComputeManagementClient(config)
+            self._compute_client = ComputeManagementClient(self.azure_credentials, self.subscription_id)
+            self._compute_client.config.add_user_agent(ANSIBLE_USER_AGENT)
             self._register('Microsoft.Compute')
         return self._compute_client
