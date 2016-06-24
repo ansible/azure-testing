@@ -454,13 +454,11 @@ class AzureRMModuleBase(object):
                     azure_object.name, azure_object.provisioning_state, AZURE_SUCCESS_STATE))
 
     def get_blob_client(self, resource_group_name, storage_account_name):
-        keys = dict()
         try:
             # Get keys from the storage account
             self.log('Getting keys')
             account_keys = self.storage_client.storage_accounts.list_keys(resource_group_name, storage_account_name)
-            keys['key1'] = account_keys.key1
-            keys['key2'] = account_keys.key2
+            keys = {v.key_name: v.value for v in account_keys.keys}
         except Exception, exc:
             self.fail("Error getting keys for account {0} - {1}".format(storage_account_name, str(exc)))
 

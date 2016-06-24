@@ -167,7 +167,8 @@ try:
                                           AccountStatus, \
                                           ProvisioningState, \
                                           StorageAccountUpdateParameters,\
-                                          CustomDomain, StorageAccountCreateParameters, KeyName
+                                          CustomDomain, StorageAccountCreateParameters, KeyName,\
+                                          Sku, Kind
 except ImportError:
     # This is handled in azure_rm_common
     pass
@@ -344,7 +345,7 @@ class AzureRMStorageAccount(AzureRMModuleBase):
                 if self.results['changed'] and not self.check_mode:
                     # Perform the update. The API only allows changing one attribute per call.
                     try:
-                        parameters = StorageAccountUpdateParameters(account_type=self.account_dict['account_type'])
+                        parameters = StorageAccountUpdateParameters(sku=Sku(self.account_dict['account_type']))
                         self.storage_client.storage_accounts.update(self.resource_group,
                                                                     self.name,
                                                                     parameters)
@@ -399,7 +400,9 @@ class AzureRMStorageAccount(AzureRMModuleBase):
             if self.tags:
                 account_dict['tags'] = self.tags
             return account_dict
-        parameters = StorageAccountCreateParameters(account_type=self.account_type, location=self.location,
+        parameters = StorageAccountCreateParameters(sku=Sku(self.account_type),
+                                                    kind=Kind.storage,
+                                                    location=self.location,
                                                     tags=self.tags)
         self.log(str(parameters))
         try:
@@ -433,12 +436,10 @@ class AzureRMStorageAccount(AzureRMModuleBase):
         not be deleted.
         '''
         self.log('Checking for existing blob containers')
-        keys = dict()
         try:
             # Get keys from the storage account
             account_keys = self.storage_client.storage_accounts.list_keys(self.resource_group, self.name)
-            keys['key1'] = account_keys.key1
-            keys['key2'] = account_keys.key2
+            keys = {v.key_name: v.value for v in account_keys.keys}
         except AzureHttpError as e:
             self.fail("check_for_container:Failed to get account keys: {0}".format(e))
 
