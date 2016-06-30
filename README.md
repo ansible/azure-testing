@@ -1,4 +1,3 @@
-# azurerm
-Azure Resource Manager Modules
+#Azure Testing
 
-NOTE: ACTIVE DEVELOPMENT ON THESE MODULES HAS MOVED TO https://github.com/ansible/ansible-modules-core/tree/devel/cloud/azure  
+This is the testing repo for the [Ansible Azure modules](https://github.com/ansible/ansible-modules-core/tree/devel/cloud/azure).
