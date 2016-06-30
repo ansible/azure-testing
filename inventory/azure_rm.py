@@ -195,12 +195,9 @@ try:
     from azure.mgmt.compute import __version__ as azure_compute_version
     from azure.common import AzureMissingResourceHttpError, AzureHttpError
     from azure.common.credentials import ServicePrincipalCredentials, UserPassCredentials
-    from azure.mgmt.network.network_management_client import NetworkManagementClient,\
-                                                             NetworkManagementClientConfiguration
-    from azure.mgmt.resource.resources.resource_management_client import ResourceManagementClient,\
-                                                                         ResourceManagementClientConfiguration
-    from azure.mgmt.compute.compute_management_client import ComputeManagementClient,\
-                                                             ComputeManagementClientConfiguration
+    from azure.mgmt.network.network_management_client import NetworkManagementClient
+    from azure.mgmt.resource.resources.resource_management_client import ResourceManagementClient
+    from azure.mgmt.compute.compute_management_client import ComputeManagementClient
 except ImportError as exc:
     HAS_AZURE_EXC = exc
     HAS_AZURE = False
@@ -363,7 +360,7 @@ class AzureRM(object):
         self.log('Getting network client')
         if not self._network_client:
             self._network_client = NetworkManagementClient(
-                NetworkManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+                self.azure_credentials, self.subscription_id)
             self._register('Microsoft.Network')
         return self._network_client
 
@@ -372,7 +369,7 @@ class AzureRM(object):
         self.log('Getting resource manager client')
         if not self._resource_client:
             self._resource_client = ResourceManagementClient(
-                ResourceManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+                self.azure_credentials, self.subscription_id)
         return self._resource_client
 
     @property
@@ -380,7 +377,7 @@ class AzureRM(object):
         self.log('Getting compute client')
         if not self._compute_client:
             self._compute_client = ComputeManagementClient(
-                ComputeManagementClientConfiguration(self.azure_credentials, self.subscription_id))
+                self.azure_credentials, self.subscription_id)
             self._register('Microsoft.Compute')
         return self._compute_client
 
