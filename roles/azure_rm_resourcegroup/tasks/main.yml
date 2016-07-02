@@ -60,7 +60,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_resourcegroups | length == 1
 
 - name: Purge one tag
   azure_rm_resourcegroup:
@@ -68,7 +68,7 @@
     tags:
       testing: 'no'
       delete: 'on-exit'
-    purge_tags: yes
+    debug: yes
   register: output
 
 - debug: var=output
@@ -79,10 +79,21 @@
       - output.state.tags.testing == 'no'
       - output.state.tags.delete == 'on-exit'
 
+- name: Purge no tags
+  azure_rm_resourcegroup:
+    name: "{{ resource_group }}"
+  register: output
+
+- debug: var=output
+
+- assert:
+    that:
+      - output.state.tags | length == 2
+
 - name: Purge all tags
   azure_rm_resourcegroup:
     name: "{{ resource_group }}"
-    purge_tags: yes
+    tags: {}
   register: output
 
 - debug: var=output
@@ -128,7 +139,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_resourcegroups | length == 1
 
 - name: Gather facts for all resource groups
   azure_rm_resourcegroup_facts:
@@ -138,7 +149,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length > 1
+      that: azure_resourcegroups | length > 1
 
 - name: Force remove resource group
   azure_rm_resourcegroup:

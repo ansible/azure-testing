@@ -54,7 +54,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.objects | length == 1"
+    that: "azure_virtualnetworks | length == 1"
 
 - name: Gather facts by resource group, tags
   azure_rm_virtualnetwork_facts:
@@ -67,7 +67,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.objects | length == 1"
+    that: "azure_virtualnetworks | length == 1"
 
 - name: Gather facts by tags
   azure_rm_virtualnetwork_facts:
@@ -79,7 +79,7 @@
   when: playbook_debug
 
 - assert:
-    that: "output.objects | length >= 1"
+    that: "azure_virtualnetworks | length >= 1"
 
 - name: Should be idempotent
   azure_rm_virtualnetwork:
@@ -123,7 +123,6 @@
     name: my_test_network
     tags:
       testing: 'always'
-    purge_tags: yes
     resource_group: "{{ resource_group }}"
   register: output
 
@@ -187,7 +186,7 @@
   register: output
 
 - assert:
-    that: "output.objects | length == 1"
+    that: "azure_virtualnetworks | length == 1"
 
 - name: Delete virtual network
   azure_rm_virtualnetwork:

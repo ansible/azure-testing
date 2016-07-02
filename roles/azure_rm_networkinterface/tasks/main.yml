@@ -219,7 +219,6 @@
 
 - assert:
       that:
-          - output.changed
           - output.state.tags | length == 2
           - output.state.tags.testing == 'testing'
 
@@ -230,7 +229,7 @@
 
 - assert:
       that:
-          - output.objects | length >= 1
+          - azure_networkinterfacersi | length >= 1
 
 - name: Gather facts for resource group and tags
   azure_rm_networkinterface_facts:
@@ -240,7 +239,7 @@
 
 - assert:
       that:
-          - output.objects | length == 1
+          - azure_networkinterfaces| length == 1
 
 - name: Gather facts for name and tags
   azure_rm_networkinterface_facts:
@@ -251,15 +250,14 @@
 
 - assert:
       that:
-          - output.objects | length == 1
+          - azure_networkinterfaces | length == 1
 
 - name: Purge one tag
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
       tags:
-          testing: testing
-      purge_tags: yes
+        testing: testing
   register: output
 
 - debug: var=output
@@ -274,7 +272,7 @@
   azure_rm_networkinterface:
       name: nic003
       resource_group: "{{ resource_group }}"
-      purge_tags: yes
+      tags: {}
   register: output
 
 - debug: var=output
@@ -344,7 +342,7 @@
 
 - assert:
       that:
-          - output.objects[0].properties.securityRules[0].properties.destinationPortRange == '22'
+          - azure_securitygroups[0].properties.securityRules[0].properties.destinationPortRange == '22'
 
 - name: Should create default security group and default public ip for windows host
   azure_rm_networkinterface:
@@ -378,8 +376,8 @@
 - name: Security group should allow RDP access on custom port
   assert:
       that:
-          - output.objects[0].properties.securityRules[0].properties.destinationPortRange == '9000'
-          - output.objects[0].properties.securityRules[1].properties.destinationPortRange == '9005-9010'
+          - azure_securitygroups[0].properties.securityRules[0].properties.destinationPortRange == '9000'
+          - azure_securitygroups[0].properties.securityRules[1].properties.destinationPortRange == '9005-9010'
 
 - name: Gather facts for one nic
   azure_rm_networkinterface_facts:
@@ -392,7 +390,7 @@
 
 - assert:
       that:
-          - output.objects | length == 1
+          - azure_networkinterfaces | length == 1
 
 - name: Gather facts for all nics in resource groups
   azure_rm_networkinterface_facts:
@@ -404,7 +402,7 @@
 
 - assert:
       that:
-          - output.objects | length >= 3
+          - azure_networkinterfaces | length >= 3
 
 - name: Gather facts for all nics
   azure_rm_networkinterface_facts:
@@ -415,7 +413,7 @@
 
 - assert:
       that:
-          - output.objects | length >= 3
+          - azure_networkinterfaces | length >= 3
 
 - name: Delete nic
   azure_rm_networkinterface:

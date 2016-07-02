@@ -81,13 +81,13 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_publicipaddresses | length == 1
 
 - name: Purge all tags
   azure_rm_publicipaddress:
       resource_group: "{{ resource_group }}"
       name: testing01
-      purge_tags: yes
+      tags: {}
   register: output
 
 - debug: var=output
@@ -107,7 +107,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_publicipaddresses | length == 1
 
 - name: Gather facts for all public ips
   azure_rm_publicipaddress_facts:
@@ -118,14 +118,14 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length > 0
+      that: azure_publicipaddresses | length > 0
 
 - name: Remove all public ips
   azure_rm_publicipaddress:
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state:  absent
-  with_items: "{{ output.objects }}"
+  with_items: "{{ azure_publicaddresses }}"
 
 - name: Gather facts for all public ips
   azure_rm_publicipaddress_facts:
@@ -136,4 +136,4 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 0
+      that: azure_publicipaddresses | length == 0

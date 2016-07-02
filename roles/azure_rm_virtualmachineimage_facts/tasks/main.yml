@@ -11,7 +11,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_vmimages | length == 1
 
 - name: List available versions
   azure_rm_virtualmachineimage_facts:
@@ -25,7 +25,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length > 0
+      that: azure_vmimages | length > 0
 
 - name: List available offers
   azure_rm_virtualmachineimage_facts:
@@ -37,7 +37,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length > 0
+      that: azure_vmimages | length > 0
 
 
 - name: List available publishers
@@ -49,4 +49,4 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length > 0
+      that: azure_vmimages | length > 0

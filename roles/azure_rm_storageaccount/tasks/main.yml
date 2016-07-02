@@ -17,7 +17,7 @@
  - name: Delete storage account
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}" 
-       name: teststorageacct001
+       name: teststorageacct002
        state: absent
    register: output
 
@@ -27,7 +27,7 @@
  - name: Create new storage account
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}" 
-       name: teststorageacct001
+       name: teststorageacct002
        account_type: Standard_LRS
        tags:
            test: test
@@ -55,12 +55,12 @@
    when: playbook_debug
 
  - assert:
-       that: output.objects | length == 1
+       that: azure_storageaccounts | length >= 1
 
  - name: Change account type 
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}" 
-       name: teststorageacct001
+       name: teststorageacct002
        account_type: Premium_LRS
    register: change_account
    ignore_errors: yes 
@@ -73,12 +73,10 @@
 
  - name: Change account type and add custom domain
    azure_rm_storageaccount:
-       resource_group: "{{ resource_group }}" 
-       name: teststorageacct001
+       resource_group: "{{ resource_group }}"
+       name: teststorageacct002
        account_type: Standard_GRS
-       custom_domain:
-           name: "ansible.com"
-           use_sub_domain: no  
+       custom_domain: { name: ansible.com, use_sub_domain: no }
    register: change_account
    ignore_errors: yes
 
@@ -92,7 +90,7 @@
  - name: Update account tags
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}"
-       name: teststorageacct001
+       name: teststorageacct002
        tags:
            testing: testing
            delete: never
@@ -104,17 +102,16 @@
 
  - assert:
        that:
-           - "output.state.tags | length == 4"
+           - "output.state.tags | length == 3"
            - "output.state.tags.galaxy == 'no'"
 
  - name: Update account tags
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}"
-       name: teststorageacct001
+       name: teststorageacct002
        tags:
            testing: testing
            delete: never
-       purge_tags: yes
    register: output
 
  - debug: var=output
@@ -129,7 +126,7 @@
  - name: Gather facts
    azure_rm_storageaccount_facts:
        resource_group: "{{ resource_group }}"
-       name: teststorageacct001
+       name: teststorageacct002
    register: output
 
  - debug: var=output
@@ -137,7 +134,7 @@
 
  - assert:
        that:
-           - "output.objects | length == 1"
+           - "azure_storageaccounts| length == 1"
 
  - name: Gather facts
    azure_rm_storageaccount_facts:
@@ -149,12 +146,12 @@
 
  - assert:
        that:
-           - "output.objects | length > 0"
+           - "azure_storageaccounts | length > 0"
 
  - name: Delete acccount
    azure_rm_storageaccount:
        resource_group: "{{ resource_group }}" 
-       name: teststorageacct001
+       name: teststorageacct002
        state: absent
    register: output
 

@@ -45,7 +45,7 @@
   when: playbook_debug
 
 - assert:
-      that: output.objects | length == 1
+      that: azure_securitygroups | length == 1
 
 - name: Add/Update rules on existing security group
   azure_rm_securitygroup:
@@ -107,7 +107,7 @@
 
 - assert:
       that:
-          - output.state.tags | length == 4
+          - output.state.tags | length == 3
           - output.state.tags.delete == 'never'
 
 - name: Purge tags
@@ -117,7 +117,6 @@
       tags:
           testing: testing
           delete: on-exit
-      purge_tags: yes
   register: output
 
 - debug: var=output
@@ -139,7 +138,7 @@
 
 - assert:
       that:
-          - output.objects | length == 1
+          - azure_securitygroups | length == 1
 
 - name: Gather facts for all accounts
   azure_rm_securitygroup_facts:
@@ -151,14 +150,14 @@
 
 - assert:
       that:
-          - output.objects | length > 0
+          - azure_securitygroups | length > 0
 
 - name: Delete all security groups
   azure_rm_securitygroup:
       resource_group: "{{ resource_group }}"
       name: "{{ item.name }}"
       state: absent
-  with_items: "{{ output.objects }}"
+  with_items: "{{ azure_securitygroups }}"
 
 - name: Should have no security groups remaining
   azure_rm_securitygroup_facts:
@@ -170,5 +169,5 @@
 
 - assert:
       that:
-          - output.objects | length == 0
+          - azure_securitygroups | length == 0
 
