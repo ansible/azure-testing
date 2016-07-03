@@ -1,6 +1,6 @@
 ---
 resource_group: Testing
-playbook_debug: no 
+playbook_debug: yes 
 run_test: all 
 location: westus
 remove_vm: yes

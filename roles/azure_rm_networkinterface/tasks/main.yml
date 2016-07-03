@@ -229,7 +229,7 @@
 
 - assert:
       that:
-          - azure_networkinterfacersi | length >= 1
+          - azure_networkinterfaces | length >= 1
 
 - name: Gather facts for resource group and tags
   azure_rm_networkinterface_facts:
