@@ -68,7 +68,6 @@
     tags:
       testing: 'no'
       delete: 'on-exit'
-    debug: yes
   register: output
 
 - debug: var=output
